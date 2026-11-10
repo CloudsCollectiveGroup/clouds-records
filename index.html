@@ -1,0 +1,984 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Clouds Records</title>
+<meta name="theme-color" content="#F3EFE6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Clouds Records">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: ein Telefon-Rahmen (max 430px) auf Papiergrund, Seiten scrollen, schwarze Navi-Kapsel schwebt unten. Bewusst nur helles Thema (Richtung B). */
+:root{
+  --paper:#F3EFE6; --frame:#E4DDCE; --card:#FFFDF8; --ink:#141414; --ink2:#2A2A2A;
+  --mute:#5E5A52; --soft:#C9C3B6; --line:#D8D1C2; --cloud:#E6DFD0; --sun:#F2C94C;
+  --single:#2F5BD3; --ep:#C8431E; --album:#1E6E50; --danger:#B3261E;
+  --display:'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{background:var(--frame);color:var(--ink);font-family:var(--display);font-size:16px;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--single);outline-offset:2px;border-radius:6px}
+.app{max-width:430px;margin:0 auto;min-height:100%;background:var(--paper);position:relative;display:flex;flex-direction:column;overflow-x:hidden}
+#view{flex:1;padding-bottom:110px;position:relative}
+.mono{font-family:var(--mono)}
+.lbl{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--mute)}
+.small{font-family:var(--mono);font-size:11px;color:var(--mute)}
+.pad{padding-inline:20px}
+.row{display:flex;align-items:center;gap:10px}
+.between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.stack{display:flex;flex-direction:column}
+h1,h2{margin:0;text-wrap:balance}
+.h-giant{font-weight:800;font-size:64px;line-height:.9;letter-spacing:-.03em}
+.h-big{font-weight:800;font-size:48px;line-height:.95;letter-spacing:-.03em}
+.h-sec{font-weight:800;font-size:26px;letter-spacing:-.02em}
+.cloudbg{position:absolute;top:-40px;right:-90px;pointer-events:none}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:20px 20px 0;position:relative;min-height:64px}
+.brand{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.14em}
+.back{min-height:44px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-family:var(--mono);font-size:12px;font-weight:700;background:none;border:0;padding:0 4px 0 0;cursor:pointer;text-transform:uppercase}
+.iconbtn{width:44px;height:44px;border-radius:22px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.iconbtn.ghost{background:transparent;color:var(--ink)}
+.sticker{font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 9px;background:var(--sun);color:var(--ink);border:1.5px solid var(--ink);border-radius:6px;display:inline-block;white-space:nowrap}
+.tilt{transform:rotate(-5deg)}.tilt3{transform:rotate(-3deg)}
+.chip{font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 9px;border-radius:6px;background:var(--card);color:var(--ink);white-space:nowrap;border:0}
+.pill{min-height:40px;padding:0 14px;border-radius:20px;border:1.5px solid var(--ink);background:var(--card);font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;white-space:nowrap}
+.pill.on{background:var(--ink);color:var(--paper)}
+.pill.sun{background:var(--sun)}
+.pill.dash{border-style:dashed;background:transparent}
+.legend{display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--mute);font-weight:500}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.boxes{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.box{width:14px;height:14px;border-radius:3px;border:1.5px solid currentColor;display:inline-block}
+.box.fill{background:currentColor}
+.box.wip{border-width:2px;background:repeating-linear-gradient(45deg,currentColor 0 2px,transparent 2px 5px)}
+.gap8{width:8px}
+.c-single{color:var(--single)}.c-ep{color:var(--ep)}.c-album{color:var(--album)}
+.list{display:flex;flex-direction:column;gap:12px;padding:16px 20px}
+.acard{display:flex;text-decoration:none;color:var(--ink);background:var(--card);border:1.5px solid var(--ink);border-radius:20px;overflow:hidden;min-height:104px;cursor:pointer;text-align:left;padding:0;width:100%;transition:transform .15s}
+.acard:hover{transform:translateY(-2px)}
+.acard .swatch{width:88px;flex:none;position:relative;overflow:hidden}
+.acard .swatch span{position:absolute;left:-6px;bottom:-34px;font-weight:800;font-size:124px;line-height:1}
+.acard .body{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.acard .name{font-weight:700;font-size:22px}
+.status{font-family:var(--mono);font-size:11px;font-weight:700}
+.pcard{display:flex;align-items:center;gap:14px;color:var(--paper);background:var(--ink);border-radius:20px;padding:14px 16px;border:0;cursor:pointer;width:100%;text-align:left}
+.avatar{width:52px;height:52px;border-radius:26px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;flex:none}
+.navbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(min(430px,100%) - 24px);display:grid;background:var(--ink);border-radius:22px;padding:6px;z-index:20;box-shadow:0 10px 30px rgba(20,20,20,.25)}
+.navbar button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:16px;background:transparent;border:0;color:var(--soft);font-size:12px;cursor:pointer}
+.navbar button.on{background:var(--sun);color:var(--ink);font-weight:700}
+.ahead{margin:0;padding:0 20px 26px;position:relative;overflow:hidden;color:#fff}
+.ahead .bigini{position:absolute;right:-30px;top:-20px;font-weight:800;font-size:260px;line-height:1;opacity:.28;pointer-events:none}
+.counters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
+.counter{background:rgba(255,253,248,.14);border:1.5px solid rgba(255,253,248,.5);border-radius:14px;padding:10px 12px}
+.counter b{display:block;font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.counter span{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em}
+.yearhead{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+.yearhead .lbl{color:var(--ink)}
+.yearhead i{flex:1;height:1.5px;background:var(--ink);opacity:.15}
+.rrow{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:8px 12px 8px 8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px}
+.rrow.now{border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.rrow.done{opacity:.6}
+.cover{width:64px;height:64px;border-radius:10px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;color:#fff;font-family:var(--mono);font-weight:700;font-size:11px}
+.cover svg{position:absolute;right:-18px;top:-18px}
+.rrow .t{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rhero{margin:8px 16px 0;height:300px;border-radius:24px;color:#fff;position:relative;overflow:hidden;border:1.5px solid var(--ink)}
+.rhero .vinyl{position:absolute;right:-120px;top:-40px;transition:transform 1.2s cubic-bezier(.2,.8,.2,1)}
+.rhero:hover .vinyl{transform:rotate(40deg)}
+.team{display:flex}
+.team span{width:36px;height:36px;border-radius:18px;border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-left:-8px}
+.team span:first-child{margin-left:0}
+.steps{padding:10px 20px 0;display:flex;flex-direction:column}
+.step{display:grid;grid-template-columns:48px 24px minmax(0,1fr);align-items:start}
+.step .ph{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--mute);padding-top:3px}
+.step .rail{display:flex;flex-direction:column;align-items:center}
+.dot{width:20px;height:20px;border-radius:10px;border:2px solid var(--ink);background:var(--paper);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:var(--paper)}
+.dot.ok{background:var(--ink)}
+.dot.cur{background:var(--sun)}
+.line{width:2px;height:26px;background:repeating-linear-gradient(180deg,var(--ink) 0 4px,transparent 4px 8px)}
+.line.solid{background:var(--ink)}
+.stxt{font-size:16px;padding:1px 0 0;background:none;border:0;text-align:left;cursor:pointer;min-height:30px}
+.stxt.ok{color:var(--mute);text-decoration:line-through}
+.stxt.cur{background:var(--card);border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;margin-bottom:10px;width:100%}
+.diamond{width:18px;height:18px;border-radius:4px;border:2px solid var(--ink);transform:rotate(45deg)}
+.vrow{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:10px 12px;text-decoration:none}
+.vrow.top{border-color:var(--ink)}
+.vrow .play{width:44px;height:44px;flex:none;border-radius:10px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center}
+.player{margin:16px 16px 0;background:var(--ink);color:var(--paper);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.bigplay{width:60px;height:60px;flex:none;border-radius:30px;background:var(--sun);color:var(--ink);display:flex;align-items:center;justify-content:center;text-decoration:none}
+.bubble{background:var(--card);border:1.5px solid var(--ink);border-radius:4px 16px 16px 16px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.composer{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--ink);border-radius:22px;padding:0 6px 0 10px;min-height:48px}
+.composer input{border:0;outline:none;background:transparent;font-size:15px;min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 20px 0}
+.tile{border:1.5px solid var(--ink);border-radius:18px;padding:14px;background:var(--card)}
+.tile b{display:block;font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.tile.hot{background:var(--sun)}
+.tile.dark{background:var(--ink);color:var(--paper)}
+.bar{height:10px;border-radius:5px;background:var(--cloud);overflow:hidden;border:1.5px solid var(--ink)}
+.bar i{display:block;height:100%}
+.empty{margin:16px 20px;border:1.5px dashed var(--ink);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.check{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--ink);border-radius:16px;padding:12px;cursor:pointer;width:100%;text-align:left}
+.check .box2{width:24px;height:24px;border-radius:7px;border:2px solid var(--ink);flex:none;display:flex;align-items:center;justify-content:center;color:var(--paper)}
+.check.ok .box2{background:var(--ink)}
+.check.ok .tt{text-decoration:line-through;color:var(--mute)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:14px 20px 2px;scrollbar-width:none}
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(20,20,20,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:min(430px,100%);max-height:88vh;overflow:auto;background:var(--paper);border-radius:26px 26px 0 0;border:1.5px solid var(--ink);border-bottom:0;padding:18px 20px calc(24px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}.acard,.rhero .vinyl{transition:none}}
+.grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.field label{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute)}
+.field input,.field select,.field textarea{min-height:46px;border:1.5px solid var(--ink);border-radius:12px;background:var(--card);padding:10px 12px;font-size:16px;width:100%}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.btn{min-height:50px;border-radius:25px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:700;font-size:16px;cursor:pointer;padding:0 20px}
+.btn.alt{background:transparent;color:var(--ink)}
+.btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:14px;font-family:var(--mono);font-size:12px;z-index:60;max-width:90%}
+.banner{margin:12px 16px 0;background:var(--sun);border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.skel{height:104px;border-radius:20px;background:var(--cloud);border:1.5px solid var(--line)}
+
+/* Login */
+.login{position:fixed;inset:0;z-index:50;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px}
+.login form{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.login h1{font-family:var(--display);font-weight:800;font-size:56px;line-height:.9;margin:0 0 4px;letter-spacing:-.02em}
+.login .sub{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--mute)}
+.login input{width:100%;box-sizing:border-box;font:inherit;font-size:17px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--ink);background:var(--card);color:var(--ink)}
+.login button{font:inherit;font-weight:700;font-size:17px;padding:15px;border-radius:999px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
+.login button:disabled{opacity:.5}
+.login .err{color:var(--danger);font-size:14px;min-height:18px}
+.acct{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 16px 0;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mute)}
+.acct button{font:inherit;background:none;border:1.5px solid var(--ink);border-radius:999px;padding:5px 10px;color:var(--ink);cursor:pointer}
+</style>
+
+<div class="app">
+  <main id="view" aria-live="polite"></main>
+  <nav id="nav" class="navbar" aria-label="Hauptnavigation"></nav>
+</div>
+<div id="sheetRoot"></div>
+<div id="toast" class="toast" hidden></div>
+<div id="login" class="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <span class="sub">CLOUDS RECORDS · NUR MIT ZUGANG</span>
+    <h1>Anmelden</h1>
+    <input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Benutzername" required>
+    <input name="password" type="password" autocomplete="current-password" placeholder="Passwort" required>
+    <div class="err" id="loginErr"></div>
+    <button type="submit">Weiter</button>
+  </form>
+</div>
+
+<script>
+/* ---------- Konstanten ---------- */
+const TYPE = {
+  'Single':      {c:'#2F5BD3', key:'single', short:'Single'},
+  'Vorab-Single':{c:'#2F5BD3', key:'single', short:'Vorab-Single'},
+  'EP':          {c:'#C8431E', key:'ep',     short:'EP'},
+  'Album':       {c:'#1E6E50', key:'album',  short:'Album'}
+};
+const STAGES = ['Idee','Geplant','Writing','Recording','Mix','Master','Distribution','Promo','Released'];
+const PHASES = ['T-12','T-10','T-8','T-6','T-4','T-2','T-0','Nach Release'];
+const PHASE_WEEKS = {'T-12':12,'T-10':10,'T-8':8,'T-6':6,'T-4':4,'T-2':2,'T-0':0,'Nach Release':-2};
+const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', T:'Team'};
+const OWNER_COL = {A:null, P:'#F2C94C', N:'#141414', T:'#5E5A52'};
+const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
+const TEMPLATE = [
+  ['T-12','Song geschrieben','A'],
+  ['T-12','Demo im System','A'],
+  ['T-12','Recording bei CloudStudios','A'],
+  ['T-8','Mix & Master final','P'],
+  ['T-8','Cover fertig','N'],
+  ['T-6','Distributor-Upload, ISRC','T'],
+  ['T-4','Spotify-Pitch & Promo-Plan','N'],
+  ['T-2','Pre-Save-Link & Content-Snippets','N'],
+  ['T-0','Release-Tag','T']
+];
+const COLORS = [
+  ['Blau','#2F5BD3','#5C80E0'],['Schwarz','#141414','#3A3A3A'],['Violett','#7A4FBF','#9670D1'],
+  ['Orange','#D98A1E','#E7A64B'],['Petrol','#1F7A8C','#4596A6'],['Rot','#C8431E','#DA6B4B'],
+  ['Grün','#1E6E50','#3F8D6F'],['Pink','#C2407A','#D46A98']
+];
+const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
+const COLS = ['people','releases','tasks','tracks','versions','comments'];
+
+/* ---------- Zustand ---------- */
+const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
+const loaded = new Set();
+let db = null, user = null, me = null, dbState = 'wait';
+const stack = [{r:'roster'}];
+let filterArtist = 'alle';
+let pendingRender = false;
+
+/* ---------- Helfer ---------- */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const parse = iso => { if(!iso) return null; const d = new Date(iso + 'T00:00:00'); return isNaN(d) ? null : d; };
+const fmt = iso => { const d = parse(iso); return d ? d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}) : null; };
+const daysTo = iso => { const d = parse(iso); return d ? Math.round((d - today())/864e5) : null; };
+const addWeeks = (iso, w) => { const d = parse(iso); if(!d) return null; d.setDate(d.getDate() - w*7); return d.toISOString().slice(0,10); };
+const stageIdx = s => STAGES.indexOf(s);
+const isActive = r => stageIdx(r.status) >= 2 && r.status !== 'Released';
+const vals = o => Object.values(o);
+const person = id => S.people[id];
+const relsOf = a => vals(S.releases).filter(r => r.artist === a).sort((x,y) => (x.year-y.year) || (x.order-y.order));
+const tasksOf = rid => vals(S.tasks).filter(t => t.release === rid).sort((x,y) => (PHASES.indexOf(x.phase)-PHASES.indexOf(y.phase)) || ((x.order||0)-(y.order||0)));
+const tracksOf = rid => vals(S.tracks).filter(t => t.release === rid).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+const versionsOf = tid => vals(S.versions).filter(v => v.track === tid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+const commentsOf = tid => vals(S.comments).filter(c => c.track === tid).sort((a,b) => (a.at||'').localeCompare(b.at||''));
+const taskDue = t => t.due || (S.releases[t.release]?.date ? addWeeks(S.releases[t.release].date, PHASE_WEEKS[t.phase] ?? 0) : null);
+const artists = () => vals(S.people).filter(p => p.role === 'Artist').sort((a,b) => (a.order||0)-(b.order||0));
+const producers = () => vals(S.people).filter(p => p.role === 'Produzent');
+const relName = r => r ? (r.type === 'Album' ? 'Album' : r.type === 'Vorab-Single' ? 'Vorab-Single' : `${TYPE[r.type].short} ${r.code.replace(/\D/g,'').padStart(2,'0')}`) : '';
+const relTitle = r => r.title ? r.title : relName(r);
+const uid = p => p + '-' + Math.random().toString(36).slice(2,9);
+const icon = {
+  plus:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  back:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  chev:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  check:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+  play:'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  up:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>',
+  edit:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  send:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  roster:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
+  timeline:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>',
+  tracks:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+  cockpit:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20V8"/></svg>',
+  home:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/></svg>',
+  exit:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l-5-5 5-5M5 12h11M14 4h5v16h-5"/></svg>',
+  folder:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/></svg>'
+};
+const cloudSvg = '<svg class="cloudbg" width="300" height="200" viewBox="0 0 300 200" aria-hidden="true"><path d="M70 160a55 55 0 0 1 8-109 70 70 0 0 1 132 14 48 48 0 0 1 20 95z" fill="#E6DFD0"/></svg>';
+const miniVinyl = '<svg width="54" height="54" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="26" fill="#141414"/><circle cx="27" cy="27" r="18" fill="none" stroke="#2A2A2A" stroke-width="1.5"/><circle cx="27" cy="27" r="9" fill="#F2C94C"/></svg>';
+
+/* ---------- Vertragslogik ---------- */
+function contractYear(p){
+  const s = parse(p.start); if(!s) return null;
+  const y = Math.floor((today() - s) / (365.25*864e5)) + 1;
+  return Math.max(1, Math.min(y, p.years || y));
+}
+function yearLabel(p){
+  const s = parse(p.start);
+  if(!s) return `${p.years} J · START OFFEN`;
+  if(s > today()) return `START ${fmt(p.start)}`;
+  return `JAHR ${contractYear(p)}/${p.years}`;
+}
+function yearRange(p, y){
+  const s = parse(p.start); if(!s) return '';
+  const a = s.getFullYear() + y - 1;
+  return ` · ${a}/${String(a+1).slice(2)}`;
+}
+function counts(p){
+  const rs = relsOf(p.id).filter(r => r.pflicht);
+  const by = t => rs.filter(r => r.type === t);
+  return ['Single','EP','Album'].map(t => ({type:t, need: t==='Single'?p.singles:t==='EP'?p.eps:p.albums, list: by(t)}));
+}
+function boxesHTML(p){
+  return counts(p).map((g,i) => {
+    const cls = TYPE[g.type].key;
+    let out = '';
+    for(let k=0;k<(g.need||0);k++){
+      const r = g.list[k];
+      const st = !r ? '' : r.status === 'Released' ? ' fill' : isActive(r) ? ' wip' : '';
+      out += `<span class="box c-${cls}${st}"></span>`;
+    }
+    return (i ? '<span class="gap8"></span>' : '') + out;
+  }).join('');
+}
+function countLine(p){
+  const pl = (n,a,b) => `${n} ${n===1?a:b}`;
+  return `${pl(p.singles||0,'SINGLE','SINGLES')} · ${pl(p.eps||0,'EP','EPS')} · ${pl(p.albums||0,'ALBUM','ALBEN')}`;
+}
+function currentRelease(a){
+  const rs = relsOf(a);
+  return rs.find(isActive) || null;
+}
+function nextPlanned(a){
+  return relsOf(a).find(r => r.status !== 'Released') || null;
+}
+/* Verteilungs-Vorschlag: Jahr 1 Singles, EPs in den mittleren Jahren, Album im letzten Jahr */
+function planReleases(p){
+  const Y = Math.max(1, p.years|0), out = [];
+  let s = 0;
+  const firstSingles = Math.min(p.singles, Y >= 5 ? 2 : 3);
+  const middle = []; for(let y=2;y<Y;y++) middle.push(y);
+  const mid = middle.length ? middle : [Y];
+  const push = (type, code, year, order) => out.push({type, code, year, order});
+  for(let i=0;i<firstSingles;i++){ s++; push('Single','S0'+s,1,s); }
+  const rest = p.singles - firstSingles;
+  const base = Math.floor(rest / mid.length), rem = rest % mid.length;
+  mid.forEach((y,i) => { const n = base + (i >= mid.length - rem ? 1 : 0); for(let k=0;k<n;k++){ s++; push('Single','S0'+s,y,10+s); } });
+  for(let e=0;e<p.eps;e++){
+    const y = p.eps === 1 ? mid[0] : mid[Math.round(e*(mid.length-1)/(p.eps-1))];
+    push('EP','EP0'+(e+1),y,5+e);
+  }
+  for(let a=0;a<p.albums;a++) push('Album', p.albums>1 ? 'LP'+(a+1) : 'LP', Y, 50+a);
+  return out;
+}
+function relDoc(p, x){
+  const n = parseInt(x.code.replace(/\D/g,'')) || 1;
+  const countsTo = x.type === 'Single' ? `Single ${n}/${p.singles}` : x.type === 'EP' ? `EP ${n}/${p.eps}` : `Album ${p.albums>1?n+'/'+p.albums:'1/1'}`;
+  return {artist:p.id, code:x.code, type:x.type, year:x.year, order:x.order, pflicht:true, countsTo, status:'Geplant', date:'', title:''};
+}
+
+/* ---------- Schreiben ---------- */
+async function put(col, id, data, merge=true){
+  if(!db){ toast('Speichern nicht möglich: Datenbank nicht verbunden'); return false; }
+  try{
+    const ref = db.collection(col).doc(id);
+    if(merge && S[col][id]) await ref.update(data); else await ref.set(data);
+    return true;
+  }catch(e){ toast(e.code === 'not_granted' ? 'Keine Schreibrechte für diese Ansicht' : 'Nicht gespeichert: ' + (e.message||e.code)); return false; }
+}
+async function del(col, id){
+  if(!db) return false;
+  try{ await db.collection(col).doc(id).delete(); return true; }catch(e){ toast('Nicht gelöscht: ' + (e.message||e.code)); return false; }
+}
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600);
+}
+
+/* ---------- Navigation ---------- */
+const cur = () => stack[stack.length-1];
+function go(r, p={}){ stack.push({r, ...p}); render(); window.scrollTo(0,0); }
+function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
+function tab(r, p={}){ stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
+const isPreview = () => !!cur().preview;
+
+function renderNav(){
+  const c = cur(), nav = $('#nav');
+  let items;
+  if(c.preview){
+    const a = c.preview;
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['exit','Team',icon.exit,{}]];
+  } else {
+    const firstArtist = c.id && S.people[c.id]?.role === 'Artist' ? c.id : (S.releases[c.id]?.artist || artists()[0]?.id);
+    items = [['roster','Roster',icon.roster,{}],['artist','Timeline',icon.timeline,{id:firstArtist}],['tracks','Tracks',icon.tracks,{}],['cockpit','Cockpit',icon.cockpit,{}]];
+  }
+  nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
+  const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
+  nav.innerHTML = items.map(([r,l,ic],i) => `<button data-i="${i}" class="${r===active?'on':''}" ${r===active?'aria-current="page"':''}>${ic}${l}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const [r,,,p] = items[+b.dataset.i];
+    if(r === 'exit'){ tab('roster'); return; }
+    if(r === 'artist' && !p.id) return;
+    tab(r, p);
+  });
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const ae = document.activeElement;
+  if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
+  pendingRender = false;
+  const c = cur();
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart}[c.r] || vRoster;
+  let html;
+  try{ html = fn(c); }catch(e){ console.error(e); html = `<div class="empty"><b>Ansicht nicht verfügbar</b><span class="small">Der Datensatz fehlt oder wurde gelöscht.</span><button class="pill" data-act="home">Zum Roster</button></div>`; }
+  $('#view').innerHTML = html;
+  renderNav();
+  bind();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if(pendingRender) render(); }, 50));
+
+function banner(){
+  if(dbState === 'off') return `<div class="banner"><span>KEINE VERBINDUNG ZUR DATENBANK. BITTE SEITE NEU LADEN.</span></div>`;
+  if(cur().r === 'roster' && account) return `<div class="acct"><span>ANGEMELDET · ${esc(account.name.toUpperCase())}</span><button data-act="logout">ABMELDEN</button></div>`;
+  return '';
+}
+function previewBanner(){
+  if(!isPreview()) return '';
+  const p = person(cur().preview);
+  return `<div class="banner"><span>VORSCHAU · SO SIEHT ${esc((p?.name||'').toUpperCase())} DIE APP</span><button class="chip" data-act="exitpreview">BEENDEN</button></div>`;
+}
+
+/* Roster */
+function vRoster(){
+  const arts = artists(), prods = producers();
+  const ready = loaded.has('people');
+  let cards;
+  if(!ready && dbState !== 'off') cards = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  else if(!arts.length) cards = `<div class="empty" style="margin:0"><b style="font-size:20px">Noch keine Artists im Roster</b><span class="small">Lege den ersten Artist über das Plus oben rechts an. Die Pflicht-Releases werden aus dem Vertrag erzeugt.</span><button class="pill sun" data-act="addperson">${icon.plus} Artist anlegen</button></div>`;
+  else cards = arts.map(p => {
+    const yr = contractYear(p);
+    const r = currentRelease(p.id), nx = nextPlanned(p.id);
+    const st = r ? `<div class="status" style="color:${TYPE[r.type].c}">● ${esc(relName(r).toUpperCase())} · ${esc(r.status.toUpperCase())}</div>`
+             : `<div class="status" style="color:var(--mute)">○ ${nx && nx.date ? 'NÄCHSTES: ' + esc(relName(nx).toUpperCase()) + ' · ' + fmt(nx.date) : 'FAHRPLAN OFFEN'}</div>`;
+    return `<button class="acard" data-go="artist" data-id="${esc(p.id)}" aria-label="${esc(p.name)} öffnen">
+      <div class="swatch" style="background:${esc(p.color)}"><span style="color:${esc(p.color2)}">${esc((p.name||'?')[0])}</span></div>
+      <div class="body">
+        <div class="between" style="align-items:baseline"><span class="name">${esc(p.name)}</span><span class="small">${yearLabel(p)}</span></div>
+        ${st}
+        <div class="boxes" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div>
+        <div class="mono" style="font-size:10px;color:var(--mute)">${countLine(p)}</div>
+      </div></button>`;
+  }).join('');
+  const prodCards = prods.map(p => `<button class="pcard" data-go="producer" data-id="${esc(p.id)}">
+      <div class="avatar" style="background:var(--sun);color:var(--ink)">${esc(p.name[0])}</div>
+      <div class="stack" style="flex:1;gap:4px"><span style="font-weight:700;font-size:19px">${esc(p.name)}</span><span class="mono" style="font-size:11px;color:var(--soft)">${esc((p.contractStatus||'Vertrag in Abstimmung').toUpperCase())} · ${openFor('P')} OFFEN</span></div>${icon.chev}</button>`).join('');
+  return `${cloudSvg}
+    <div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></div>
+    ${banner()}
+    <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Roster</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
+    <div class="pad legend" style="padding-top:16px"><span><i class="sw" style="background:var(--single)"></i>SINGLE</span><span><i class="sw" style="background:var(--ep)"></i>EP</span><span><i class="sw" style="background:var(--album)"></i>ALBUM</span><span><i class="box wip c-single" style="width:10px;height:10px"></i>LÄUFT</span></div>
+    <div class="list">${cards}
+      ${prods.length ? '<div class="lbl" style="padding-top:8px">PRODUZENTEN</div>' + prodCards : ''}
+      ${ready ? `<div class="small" style="padding-top:6px">${totalLine()}</div>` : ''}
+    </div>`;
+}
+function totalLine(){
+  const rs = vals(S.releases).filter(r => r.pflicht);
+  const done = rs.filter(r => r.status === 'Released').length;
+  return `${rs.length} PFLICHT-RELEASES IM ROSTER · ${done} VERÖFFENTLICHT`;
+}
+function openFor(owner){ return vals(S.tasks).filter(t => t.owner === owner && !t.done).length; }
+
+/* Artist · Timeline */
+function vArtist(c){
+  const p = person(c.id);
+  if(!p) throw new Error('missing');
+  const rs = relsOf(p.id), yr = contractYear(p);
+  const cs = counts(p);
+  const done = t => cs.find(x => x.type===t).list.filter(r => r.status==='Released').length;
+  const curR = currentRelease(p.id);
+  const years = [...new Set(rs.map(r => r.year))].sort((a,b)=>a-b);
+  const pfl = rs.filter(r => r.pflicht).length, vor = rs.length - pfl;
+  const startTxt = p.start ? `VERTRAG ${parse(p.start).getFullYear()}–${parse(p.start).getFullYear()+p.years}` : 'VERTRAGSBEGINN OFFEN';
+  const darkText = p.color === '#F2C94C';
+  const head = `<div class="ahead" style="background:${esc(p.color)};${darkText?'color:var(--ink)':''}">
+      <span class="bigini" aria-hidden="true" style="color:${esc(p.color2)};opacity:1">${esc(p.name[0])}</span>
+      <div class="between" style="padding-top:12px;position:relative">
+        ${isPreview() ? '<span class="brand" style="color:inherit">CLOUDS RECORDS</span>' : `<button class="back" style="color:inherit" data-act="back">${icon.back}ROSTER</button>`}
+        ${isPreview() ? '' : `<div class="row" style="gap:8px"><button class="chip" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button></div>`}
+      </div>
+      <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:18px;position:relative">ARTIST · ${startTxt} · ${yearLabel(p)}</div>
+      <h1 class="h-giant" style="position:relative;margin-top:6px;font-size:68px">${esc(p.name)}</h1>
+      <div class="counters" style="position:relative">
+        <div class="counter"><b>${done('Single')}/${p.singles}</b><span>SINGLES</span></div>
+        <div class="counter"><b>${done('EP')}/${p.eps}</b><span>EPS</span></div>
+        <div class="counter"><b>${done('Album')}/${p.albums}</b><span>${p.albums===1?'ALBUM':'ALBEN'}</span></div>
+      </div></div>`;
+  const body = years.map(y => `
+    <div class="yearhead"><span class="lbl">JAHR ${y}${yearRange(p,y)}</span><i></i></div>
+    ${rs.filter(r => r.year === y).map(r => relRow(r, r === curR)).join('')}`).join('');
+  return `${head}${banner()}${previewBanner()}
+    <div class="pad" style="padding-top:22px">
+      <div class="between"><h2 class="h-sec">Projekte</h2><span class="small">${pfl} PFLICHT${vor?` + ${vor} VORAB`:''}</span></div>
+      ${rs.length ? body : `<div class="empty" style="margin:16px 0"><b>Noch keine Releases</b><span class="small">Pflicht-Releases aus dem Vertrag erzeugen.</span><button class="pill sun" data-act="genrels" data-id="${esc(p.id)}">Releases erzeugen</button></div>`}
+      ${isPreview() ? '' : `<div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="pill dash" data-act="addvorab" data-id="${esc(p.id)}">${icon.plus} Vorab-Single</button><a class="pill dash" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.folder} Audio-Ordner</a></div>`}
+    </div>`;
+}
+function relRow(r, now){
+  const T = TYPE[r.type], ts = tasksOf(r.id), dn = ts.filter(t=>t.done).length;
+  const statusTxt = r.status.toUpperCase() + (ts.length && isActive(r) ? ` · ${dn}/${ts.length}` : '');
+  const parent = r.countsTo && r.type === 'Vorab-Single' ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">ZÄHLT ZU ${esc(r.countsTo.toUpperCase())}</span>` : '';
+  return `<button class="rrow ${now?'now':''} ${r.status==='Released'?'done':''}" data-go="release" data-id="${esc(r.id)}">
+    <span class="cover" style="background:${T.c}">${miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
+    <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(relTitle(r))}${now?'<span class="sticker tilt3" style="padding:3px 6px;font-size:10px">JETZT</span>':''}</span>
+      <span class="small" style="font-weight:700;color:${isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}</span>${parent}</span>
+    <span class="small" style="text-align:right">${r.date ? fmt(r.date) : 'DATUM<br>OFFEN'}</span></button>`;
+}
+
+/* Release-Detail */
+function vRelease(c){
+  const r = S.releases[c.id]; if(!r) throw new Error('missing');
+  const p = person(r.artist), T = TYPE[r.type];
+  const ts = tasksOf(r.id), dn = ts.filter(t=>t.done).length, curT = ts.find(t=>!t.done);
+  const d = daysTo(r.date);
+  const countdown = d == null ? '' : d > 0 ? `NOCH ${d} TAGE` : d === 0 ? 'HEUTE' : `SEIT ${-d} TAGEN DRAUSSEN`;
+  const prod = producers()[0];
+  const steps = ts.map((t,i) => {
+    const ok = t.done, isCur = t === curT, last = i === ts.length - 1;
+    const isRel = t.phase === 'T-0';
+    const due = taskDue(t);
+    const dueTxt = due ? fmt(due) : '';
+    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name[0]) : t.owner}` : '';
+    const late = !ok && due && daysTo(due) < 0;
+    return `<div class="step">
+      <span class="ph" style="${isCur?`color:${T.c}`:''}">${esc(t.phase)}</span>
+      <span class="rail">${isRel ? `<button class="dot ${ok?'ok':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}" style="border-radius:4px;transform:rotate(45deg);${ok?'':`background:${T.c}`}">${ok?'<span style="transform:rotate(-45deg);display:flex">'+icon.check+'</span>':''}</button>`
+        : `<button class="dot ${ok?'ok':isCur?'cur':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}">${ok?icon.check:''}</button>`}
+        ${last?'':`<span class="line ${ok?'solid':''}" style="${isCur?'height:56px':''}"></span>`}</span>
+      <button class="stxt ${ok?'ok':isCur?'cur':''}" data-act="edittask" data-id="${esc(t.id)}" style="${isRel&&!ok?'font-weight:800;font-size:18px':''}">
+        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>`
+                : `${esc(t.title)} <span class="small">${ownerTxt}${dueTxt&&!ok?' · '+dueTxt:''}</span>${late?' <span class="small" style="color:var(--danger);font-weight:700">ÜBERFÄLLIG</span>':''}`}
+      </button></div>`;
+  }).join('');
+  const trs = tracksOf(r.id);
+  const trackList = trs.map(t => {
+    const v = versionsOf(t.id)[0];
+    return `<button class="vrow top" data-go="track" data-id="${esc(t.id)}" style="width:100%;text-align:left;cursor:pointer;font:inherit">
+      <span class="play" style="background:${T.c};color:#fff">${icon.play}</span>
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc((t.stage||'').toUpperCase())}${v?' · '+esc(v.label.toUpperCase()):' · NOCH KEINE VERSION'}</span></span>${icon.chev}</button>`;
+  }).join('');
+  return `${banner()}${previewBanner()}
+    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(p.name)}</button><span class="small">${r.pflicht ? 'ZÄHLT ALS ' + esc((r.countsTo||'').toUpperCase()) : 'VORAB · ZÄHLT ZU ' + esc((r.countsTo||'').toUpperCase())}</span></div>
+    <div class="rhero" style="background:${T.c}">
+      <svg class="vinyl" width="320" height="320" viewBox="0 0 320 320" aria-hidden="true"><circle cx="160" cy="160" r="158" fill="#141414"/><circle cx="160" cy="160" r="130" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="110" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="90" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="52" fill="#F2C94C"/><circle cx="160" cy="160" r="6" fill="#F3EFE6"/><text x="160" y="166" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#141414" dy="-14">${esc(r.code)}</text></svg>
+      <div class="between" style="position:absolute;left:20px;right:16px;top:14px"><span class="mono" style="font-size:12px;font-weight:700;letter-spacing:.12em">${esc(relName(r).toUpperCase())}</span>
+        ${isPreview()?'':`<button class="iconbtn" style="width:40px;height:40px;background:rgba(20,20,20,.35);border-color:transparent;position:relative" data-act="editrel" data-id="${esc(r.id)}" aria-label="Release bearbeiten">${icon.edit}</button>`}</div>
+      <div style="position:absolute;left:20px;bottom:20px;right:20px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-weight:800;font-size:46px;line-height:.95;letter-spacing:-.03em;text-wrap:balance">${esc(r.title || '[Titel offen]')}</div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <span class="chip">${r.date ? 'RELEASE ' + fmt(r.date) : 'RELEASE-DATUM OFFEN'}</span>
+          <span class="chip" style="background:var(--ink);color:var(--paper)">${esc(r.status.toUpperCase())}</span>
+          ${countdown ? `<span class="sticker tilt3">${countdown}</span>` : ''}
+        </div></div></div>
+    <div class="pad between" style="padding-top:16px">
+      <div class="team">
+        <span title="${esc(p.name)}" style="background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span>
+        <span title="${esc(prod?.name||'Produzent')}" style="background:var(--sun);color:var(--ink)">${esc((prod?.name||'P')[0])}</span>
+        <span title="Nikolina" style="background:var(--ink);color:var(--paper)">N</span>
+      </div>
+      <span class="small">${dn} / ${ts.length} SCHRITTE</span></div>
+    <div class="pad between" style="padding-top:18px"><h2 class="h-sec">Fahrplan</h2>${ts.length && !isPreview() ? `<button class="pill" data-act="addtask" data-id="${esc(r.id)}">${icon.plus} Schritt</button>` : ''}</div>
+    ${ts.length ? `<div class="steps">${steps}</div>` :
+      `<div class="empty"><b>Noch kein Fahrplan</b><span class="small">Standard: 9 Schritte von T-12 bis zum Release-Tag. Fälligkeiten rechnen sich aus dem Release-Datum.</span>${isPreview()?'':`<button class="pill sun" data-act="template" data-id="${esc(r.id)}">Standard-Fahrplan anlegen</button>`}</div>`}
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Tracks & Audio</h2><button class="pill" data-act="addtrack" data-id="${esc(r.id)}">${icon.plus} Track</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">
+      ${trackList || '<span class="small">Noch kein Track angelegt.</span>'}
+      <a class="pill dash" style="justify-content:center;min-height:50px" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Audio in SharePoint hochladen</a>
+    </div>`;
+}
+
+/* Track */
+function wave(seed, color){
+  let h = 0; for(const ch of seed) h = (h*31 + ch.charCodeAt(0)) >>> 0;
+  let x = '';
+  for(let i=0;i<50;i++){ h = (h*1103515245 + 12345) >>> 0; const v = 6 + (h % 46); x += `<rect x="${i*7}" y="${(56-v)/2}" width="4" height="${v}" rx="2" fill="${i<22?color:'#4A4740'}"/>`; }
+  return `<svg width="100%" height="56" viewBox="0 0 350 56" preserveAspectRatio="none" aria-hidden="true">${x}<rect x="152" y="0" width="3" height="56" fill="#F2C94C"/></svg>`;
+}
+function vTrack(c){
+  const t = S.tracks[c.id]; if(!t) throw new Error('missing');
+  const r = S.releases[t.release], p = person(r.artist), T = TYPE[r.type];
+  const vs = versionsOf(t.id), top = vs[0], cm = commentsOf(t.id);
+  const vlist = vs.map((v,i) => {
+    const inner = `<span class="play" style="${i===0?`background:${T.c};color:#fff`:''}">${icon.play}</span>
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="font-weight:700;font-size:16px">${esc(v.label)}</span><span class="small">${esc((v.kind||'').toUpperCase())} · ${esc(OWNERS[v.by]?.toUpperCase()||'')} · ${v.at?fmt(v.at.slice(0,10)):''}</span></span>
+      ${i===0?'<span class="sticker" style="font-size:10px;padding:3px 6px;transform:rotate(-4deg)">AKTUELL</span>':''}`;
+    return v.link ? `<a class="vrow ${i===0?'top':''}" href="${esc(v.link)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="vrow ${i===0?'top':''}">${inner}</div>`;
+  }).join('');
+  const comments = cm.map(x => `<div class="row" style="align-items:flex-start">
+      <span class="sticker" style="padding:4px 7px;flex:none">${esc(x.time||'—')}</span>
+      <div class="bubble"><span class="mono" style="font-size:11px;font-weight:700;color:${T.c}" data-uid="${esc(x.author||'')}">${esc(x.authorName||'')}</span><span style="font-size:15px;line-height:1.35">${esc(x.text)}</span></div></div>`).join('');
+  return `${banner()}${previewBanner()}
+    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(relName(r))}</button><span class="small">${esc(p.name.toUpperCase())} · PROD. ${esc((t.producer||'offen').toUpperCase())}</span></div>
+    <div class="pad between" style="padding-top:8px;align-items:flex-end"><h1 class="h-big" style="min-width:0">${esc(t.title)}</h1>${isPreview()?'':`<button class="iconbtn ghost" data-act="edittrack" data-id="${esc(t.id)}" aria-label="Track bearbeiten">${icon.edit}</button>`}</div>
+    <div class="player">
+      <div class="row" style="gap:14px">${top?.link ? `<a class="bigplay" href="${esc(top.link)}" target="_blank" rel="noopener" aria-label="${esc(top.label)} in SharePoint abspielen">${icon.play}</a>` : `<span class="bigplay" style="opacity:.5">${icon.play}</span>`}
+        <div class="stack" style="gap:4px;min-width:0"><span style="font-weight:800;font-size:22px">${esc(top?.label || 'Noch keine Version')}</span><span class="mono" style="font-size:11px;color:var(--soft)">${top ? esc((top.kind||'').toUpperCase()) + ' · ÖFFNET IN SHAREPOINT' : 'LADE DIE ERSTE VERSION IN SHAREPOINT HOCH'}</span></div></div>
+      ${wave(t.id + (top?.id||''), T.c)}
+      <div class="between mono" style="font-size:11px;color:var(--soft)"><span>${esc((t.stage||'').toUpperCase())}</span><span style="color:var(--sun)">${cm.length} KOMMENTAR${cm.length===1?'':'E'}</span><span>${vs.length} VERSION${vs.length===1?'':'EN'}</span></div>
+    </div>
+    <div class="pad between" style="padding-top:22px"><h2 class="h-sec">Versionen</h2><button class="pill sun" data-act="addversion" data-id="${esc(t.id)}">${icon.up} Version</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:12px">${vlist || '<span class="small">Datei in den Audio-Ordner laden, dann hier den SharePoint-Link als Version eintragen.</span>'}
+      <a class="small" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">AUDIO-ORDNER ${esc(p.name.toUpperCase())} ÖFFNEN →</a></div>
+    <div class="pad" style="padding-top:22px"><h2 class="h-sec">Feedback</h2></div>
+    <div class="pad stack" style="gap:10px;padding-top:12px">${comments || '<span class="small">Noch kein Feedback. Zeitstempel + Kommentar, damit der Produzent genau weiß, wo.</span>'}
+      <form class="composer" data-form="comment" data-id="${esc(t.id)}">
+        <label for="c-time" style="position:absolute;width:1px;height:1px;overflow:hidden">Zeitstempel</label>
+        <input id="c-time" name="time" placeholder="1:28" inputmode="numeric" style="width:52px;font-family:var(--mono);font-size:13px;font-weight:700;flex:none">
+        <label for="c-text" style="position:absolute;width:1px;height:1px;overflow:hidden">Kommentar</label>
+        <input id="c-text" name="text" placeholder="Kommentar …" style="flex:1">
+        <button class="iconbtn" style="width:38px;height:38px" aria-label="Senden">${icon.send}</button>
+      </form></div>`;
+}
+
+/* Alle Tracks */
+function vTracks(c){
+  const only = c.artist;
+  const list = vals(S.tracks).filter(t => !only || S.releases[t.release]?.artist === only);
+  const groups = {};
+  list.forEach(t => { const r = S.releases[t.release]; if(!r) return; (groups[r.artist] ||= []).push(t); });
+  const order = artists().filter(a => groups[a.id]);
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="small">${list.length} TRACKS</span></div>${banner()}${previewBanner()}
+    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Tracks</h1></div>
+    <div class="list">${order.length ? order.map(a => `<div class="lbl" style="color:${esc(a.color)}">${esc(a.name.toUpperCase())}</div>` +
+      groups[a.id].map(t => { const r = S.releases[t.release], v = versionsOf(t.id)[0];
+        return `<button class="vrow" data-go="track" data-id="${esc(t.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:${TYPE[r.type].c};color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(r.code)}</span>
+          <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(relName(r).toUpperCase())} · ${esc((t.stage||'').toUpperCase())}${v?' · '+esc(v.label.toUpperCase()):''}</span></span>${icon.chev}</button>`; }).join('')).join('')
+      : `<div class="empty" style="margin:0"><b>Noch keine Tracks</b><span class="small">Tracks legst du im jeweiligen Release unter „Tracks & Audio“ an.</span></div>`}</div>`;
+}
+
+/* Cockpit */
+function vCockpit(){
+  const open = vals(S.tasks).filter(t => !t.done);
+  const overdue = open.filter(t => { const d = taskDue(t); return d && daysTo(d) < 0; });
+  const studio = open.filter(t => /recording/i.test(t.title));
+  const radar = vals(S.releases).filter(r => r.date && daysTo(r.date) >= 0 && daysTo(r.date) <= 90).sort((a,b) => a.date.localeCompare(b.date));
+  const months = [0,1,2].map(i => { const d = today(); d.setDate(1); d.setMonth(d.getMonth()+i); return d; });
+  const radarHTML = months.map(m => {
+    const items = radar.filter(r => { const d = parse(r.date); return d.getMonth() === m.getMonth() && d.getFullYear() === m.getFullYear(); });
+    return `<div class="stack" style="gap:8px;min-width:0"><span class="lbl" style="color:var(--ink)">${m.toLocaleDateString('de-DE',{month:'short'}).toUpperCase().replace('.','')}</span>
+      ${items.map(r => `<button class="rrow" data-go="release" data-id="${esc(r.id)}" style="grid-template-columns:1fr;padding:8px;margin:0;gap:4px"><span class="cover" style="width:100%;height:44px;background:${TYPE[r.type].c}"><span style="position:relative">${esc(r.code)}</span></span><span style="font-weight:700;font-size:14px">${esc(person(r.artist)?.name||'')}</span><span class="small">${fmt(r.date)}</span></button>`).join('') || '<span class="small">—</span>'}</div>`;
+  }).join('');
+  const contracts = artists().map(p => {
+    const rs = relsOf(p.id).filter(r => r.pflicht), dn = rs.filter(r => r.status==='Released').length, act = rs.filter(isActive).length;
+    const pct = rs.length ? Math.round(dn / rs.length * 100) : 0, pa = rs.length ? Math.round(act / rs.length * 100) : 0;
+    const yr = contractYear(p);
+    return `<button class="vrow" data-go="artist" data-id="${esc(p.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;flex-wrap:wrap">
+      <span class="avatar" style="width:40px;height:40px;font-size:17px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span>
+      <span class="stack" style="flex:1;gap:6px;min-width:0"><span class="between"><b>${esc(p.name)}</b><span class="small">${yearLabel(p)} · ${dn}/${rs.length}</span></span>
+        <span class="bar" aria-label="${dn} von ${rs.length} veröffentlicht"><i style="width:${Math.max(pct,0)}%;background:${esc(p.color)};float:left"></i><i style="width:${pa}%;background:repeating-linear-gradient(45deg,${esc(p.color)} 0 2px,transparent 2px 5px);float:left"></i></span></span></button>`;
+  }).join('');
+  const missing = artists().filter(p => !p.start);
+  const overdueList = overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="sticker tilt">NUR TEAM</span></div>${banner()}
+    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Cockpit</h1></div>
+    <div class="tiles">
+      <div class="tile ${overdue.length?'hot':''}"><b>${overdue.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
+      <div class="tile dark"><b>${studio.length}</b><span class="lbl" style="color:var(--soft)">STUDIO-SLOTS NÖTIG</span></div>
+      <div class="tile"><b>${radar.length}</b><span class="lbl" style="color:var(--ink)">RELEASES · 90 TAGE</span></div>
+      <div class="tile"><b>${open.length}</b><span class="lbl" style="color:var(--ink)">OFFENE SCHRITTE</span></div>
+    </div>
+    ${overdueList ? `<div class="pad" style="padding-top:22px"><h2 class="h-sec">Überfällig</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${overdueList}</div>` : ''}
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Release-Radar</h2><span class="small">NÄCHSTE 90 TAGE</span></div>
+    <div class="pad" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding-top:12px">${radarHTML}</div>
+    ${radar.length ? '' : '<div class="pad small" style="padding-top:8px">Noch kein Release mit Datum in den nächsten 90 Tagen. Datum im Release über den Stift setzen.</div>'}
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Verträge</h2><span class="small">VERÖFFENTLICHT / LÄUFT</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
+    ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}`;
+}
+
+/* Produzent */
+function vProducer(c){
+  const p = person(c.id); if(!p) throw new Error('missing');
+  let list = vals(S.tasks).filter(t => t.owner === 'P' && !t.done);
+  const arts = [...new Set(list.map(t => S.releases[t.release]?.artist).filter(Boolean))];
+  if(filterArtist !== 'alle') list = list.filter(t => S.releases[t.release]?.artist === filterArtist);
+  list.sort((a,b) => (taskDue(a)||'9999').localeCompare(taskDue(b)||'9999'));
+  const week = list.filter(t => { const d = taskDue(t); return d && daysTo(d) <= 7; }).length;
+  const trackCount = vals(S.tracks).filter(t => (t.producer||'').toLowerCase() === p.name.toLowerCase()).length;
+  const cards = list.map((t,i) => {
+    const r = S.releases[t.release], a = person(r?.artist); if(!r||!a) return '';
+    const due = taskDue(t), d = daysTo(due);
+    const when = due ? (d < 0 ? `${-d} TAGE ÜBER` : d === 0 ? 'HEUTE' : `IN ${d} TAGEN`) : 'OHNE DATUM';
+    if(i === 0) return `<div style="background:var(--ink);color:var(--paper);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div class="between"><span class="sticker tilt3">${when}</span><span class="cover" style="width:44px;height:44px;background:${TYPE[r.type].c};padding:4px"><span style="position:relative">${esc(r.code)}</span></span></div>
+      <div class="stack" style="gap:4px"><span class="mono" style="font-size:11px;color:var(--soft)">${esc(a.name.toUpperCase())} · ${esc(relName(r).toUpperCase())}</span><span style="font-weight:800;font-size:26px;line-height:1.05">${esc(t.title)}</span></div>
+      <div class="row" style="flex-wrap:wrap"><a class="pill sun" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Version hochladen</a><button class="pill" style="background:transparent;color:var(--paper);border-color:var(--paper)" data-act="toggle" data-id="${esc(t.id)}">${icon.check} Erledigt</button></div></div>`;
+    return `<div class="vrow"><span class="play" style="background:${TYPE[r.type].c};color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(r.code)}</span>
+      <button class="stack" data-go="release" data-id="${esc(r.id)}" style="flex:1;gap:2px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0"><b>${esc(t.title)}</b><span class="small">${esc(a.name.toUpperCase())} · ${when}</span></button>
+      <button class="dot" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} abhaken"></button></div>`;
+  }).join('');
+  return `${cloudSvg}
+    <div class="topbar"><button class="back" data-act="back">${icon.back}ROSTER</button><button class="chip" data-act="editperson" data-id="${esc(p.id)}" style="border:1.5px solid var(--ink)">VERTRAG</button></div>${banner()}
+    <div class="pad" style="padding-top:10px;position:relative"><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Lieferungen</h1></div>
+    <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="tile"><b style="font-size:34px">${list.length}</b><span class="lbl" style="color:var(--ink)">OFFEN</span></div>
+      <div class="tile ${week?'hot':''}"><b style="font-size:34px">${week}</b><span class="lbl" style="color:var(--ink)">7 TAGE</span></div>
+      <div class="tile"><b style="font-size:34px">${trackCount}</b><span class="lbl" style="color:var(--ink)">TRACKS</span></div></div>
+    <div class="chips"><button class="pill ${filterArtist==='alle'?'on':''}" data-act="filter" data-id="alle">Alle</button>${arts.map(id => `<button class="pill ${filterArtist===id?'on':''}" data-act="filter" data-id="${esc(id)}">${esc(person(id)?.name||'')}</button>`).join('')}</div>
+    <div class="pad stack" style="gap:10px;padding-top:12px">${cards || `<div class="empty" style="margin:0"><b>Nichts offen</b><span class="small">Alle Schritte mit Zuständigkeit „Produzent“ sind erledigt.</span></div>`}</div>`;
+}
+
+/* Artist-Start (Vorschau der Artist-App) */
+function vArtistStart(c){
+  const p = person(c.id); if(!p) throw new Error('missing');
+  const r = currentRelease(p.id) || nextPlanned(p.id);
+  const allTasks = vals(S.tasks).filter(t => S.releases[t.release]?.artist === p.id && (t.owner === 'A' || t.owner === 'T'));
+  const next = r ? tasksOf(r.id).find(t => !t.done && t.owner === 'A') : null;
+  const week = allTasks.filter(t => S.releases[t.release] === r).slice(0,5);
+  const yr = contractYear(p);
+  return `${cloudSvg}${previewBanner()}
+    <div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="small">${yearLabel(p)}</span></div>
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant" style="font-size:58px">Hey ${esc(p.name)}.</h1>
+      <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div>
+    ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">DEIN NÄCHSTER SCHRITT</span></div>
+    <div style="margin:10px 16px 0;background:${TYPE[r.type].c};color:#fff;border:1.5px solid var(--ink);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div class="between"><span class="mono" style="font-size:11px;font-weight:700">${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="sticker tilt3">${fmt(r.date)}</span>`:''}</div>
+      <span style="font-weight:800;font-size:28px;line-height:1.05">${esc(next?.title || 'Fahrplan folgt vom Team')}</span>
+      <div class="row" style="flex-wrap:wrap"><button class="pill sun" data-go="release" data-id="${esc(r.id)}">Zum Release</button><a class="pill" style="background:transparent;color:#fff;border-color:#fff" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Upload</a></div></div>` : ''}
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Deine Aufgaben</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>`;
+}
+
+/* ---------- Interaktion ---------- */
+function bind(){
+  const v = $('#view');
+  v.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const c = cur(); go(el.dataset.go, {id:el.dataset.id, preview:c.preview}); }));
+  v.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); act(el.dataset.act, el.dataset.id); }));
+  v.querySelectorAll('form[data-form="comment"]').forEach(f => f.addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = f.text.value.trim(); if(!text) return;
+    const time = f.time.value.trim();
+    let name = 'Team';
+    try{ if(user){ const m = await user.me(); name = m?.name || 'Team'; } }catch(_){}
+    const id = uid('c');
+    f.text.value = ''; f.time.value = ''; f.text.blur();
+    await put('comments', id, {track:f.dataset.id, time, text, author: me || '', authorName: isPreview() ? (person(cur().preview)?.name || name) : name, at:new Date().toISOString()}, false);
+  }));
+}
+async function act(a, id){
+  if(a === 'logout') return logout();
+  if(a === 'back') return back();
+  if(a === 'home') return tab('roster');
+  if(a === 'exitpreview') return tab('roster');
+  if(a === 'preview') return tab('artiststart', {id, preview:id});
+  if(a === 'filter'){ filterArtist = id; return render(); }
+  if(a === 'toggle'){ const t = S.tasks[id]; if(t) await put('tasks', id, {done: !t.done}); return; }
+  if(a === 'addperson') return sheetPerson();
+  if(a === 'editperson') return sheetPerson(id);
+  if(a === 'editrel') return sheetRelease(id);
+  if(a === 'edittask') return isPreview() ? null : sheetTask(S.tasks[id]?.release, id);
+  if(a === 'addtask') return sheetTask(id);
+  if(a === 'addtrack') return sheetTrack(id);
+  if(a === 'edittrack') return sheetTrack(S.tracks[id]?.release, id);
+  if(a === 'addversion') return sheetVersion(id);
+  if(a === 'addvorab') return sheetVorab(id);
+  if(a === 'template') return applyTemplate(id);
+  if(a === 'genrels') return genReleases(id);
+}
+async function applyTemplate(rid){
+  if(!db) return toast('Datenbank nicht verbunden');
+  for(let i=0;i<TEMPLATE.length;i++){
+    const [phase,title,owner] = TEMPLATE[i];
+    await put('tasks', uid('t'), {release:rid, artist:S.releases[rid].artist, phase, title, owner, done:false, order:i, due:''}, false);
+  }
+  toast('Standard-Fahrplan angelegt');
+}
+async function genReleases(pid){
+  const p = person(pid); if(!p || !db) return;
+  for(const x of planReleases(p)) await put('releases', `${pid}-${x.code}`, relDoc(p, x), false);
+  toast(`${planReleases(p).length} Pflicht-Releases erzeugt`);
+}
+
+/* ---------- Sheets ---------- */
+function sheet(title, fields, onSave, extra=''){
+  const root = $('#sheetRoot');
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(title)}"><form class="sheet" id="sheetForm"><div class="grab"></div>
+    <h2 class="h-sec" style="margin-bottom:16px">${esc(title)}</h2>${fields}
+    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn" type="submit" style="flex:1">Speichern</button><button class="btn alt" type="button" data-close>Abbrechen</button></div>${extra}</form></div>`;
+  const scrim = root.firstElementChild, form = $('#sheetForm');
+  const close = () => { root.innerHTML = ''; };
+  scrim.addEventListener('click', e => { if(e.target === scrim) close(); });
+  form.querySelector('[data-close]').onclick = close;
+  form.addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
+  form.onsubmit = async e => { e.preventDefault(); const fd = Object.fromEntries(new FormData(form)); if(await onSave(fd, form) !== false) close(); };
+  setTimeout(() => form.querySelector('input,select')?.focus(), 60);
+  return form;
+}
+const F = (name, label, val='', type='text', attrs='') => `<div class="field"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(val)}" ${attrs}></div>`;
+const Sel = (name, label, opts, val) => `<div class="field"><label for="f-${name}">${label}</label><select id="f-${name}" name="${name}">${opts.map(o => { const [v,l] = Array.isArray(o)?o:[o,o]; return `<option value="${esc(v)}" ${String(v)===String(val)?'selected':''}>${esc(l)}</option>`; }).join('')}</select></div>`;
+
+function sheetPerson(id){
+  const p = id ? person(id) : {role:'Artist', years:4, singles:6, eps:2, albums:1, color:'#2F5BD3'};
+  const isNew = !id;
+  const relCount = id ? relsOf(id).length : 0;
+  const fields = `${F('name','NAME',p.name,'text','required')}
+    <div class="grid2">${Sel('role','ROLLE',['Artist','Produzent'],p.role)}${Sel('color','FARBE',COLORS.map(c=>[c[1],c[0]]),p.color)}</div>
+    <div class="grid2">${F('start','VERTRAGSBEGINN',p.start||'','date')}${F('years','LAUFZEIT (JAHRE)',p.years,'number','min="1" max="10"')}</div>
+    <div class="grid3">${F('singles','SINGLES',p.singles??0,'number','min="0"')}${F('eps','EPS',p.eps??0,'number','min="0"')}${F('albums','ALBEN',p.albums??0,'number','min="0"')}</div>
+    ${F('mail','MANAGEMENT-MAIL',p.mail||'','email','placeholder="name@cloudstudioshh.de"')}
+    ${p.role==='Produzent' ? F('contractStatus','VERTRAGSSTATUS',p.contractStatus||'Vertrag in Abstimmung') : ''}
+    <div class="field"><label for="f-notes">NOTIZEN</label><textarea id="f-notes" name="notes" rows="3">${esc(p.notes||'')}</textarea></div>
+    ${isNew ? '<p class="small" style="margin:0 0 8px">Bei Artists werden die Pflicht-Releases nach dem Verteilungsvorschlag direkt angelegt. Keine Doppelzählung: Vorab-Singles zählen zur EP bzw. zum Album.</p>' : relCount ? '<p class="small" style="margin:0 0 8px">Geänderte Release-Zahlen passen bestehende Releases nicht automatisch an.</p>' : ''}`;
+  sheet(isNew ? 'Neu im Roster' : `${p.name} · Vertrag`, fields, async fd => {
+    const col = COLORS.find(c => c[1] === fd.color) || COLORS[0];
+    const doc = {name:fd.name.trim(), role:fd.role, color:col[1], color2:col[2], start:fd.start||'', years:+fd.years||4, singles:+fd.singles||0, eps:+fd.eps||0, albums:+fd.albums||0, mail:fd.mail||'', notes:fd.notes||''};
+    if(fd.contractStatus !== undefined) doc.contractStatus = fd.contractStatus;
+    if(!doc.name) return false;
+    const pid = id || doc.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'') || uid('p');
+    if(isNew){ doc.order = vals(S.people).length + 1; if(S.people[pid]){ toast('Name existiert schon'); return false; } }
+    if(!await put('people', pid, doc, !isNew)) return false;
+    if(isNew && doc.role === 'Artist'){ S.people[pid] = {id:pid, ...doc}; await genReleases(pid); }
+    toast(isNew ? `${doc.name} angelegt` : 'Vertrag gespeichert');
+  });
+}
+function sheetRelease(id){
+  const r = S.releases[id];
+  const fields = `${F('title','ARBEITSTITEL',r.title||'','text','placeholder="Titel offen"')}
+    <div class="grid2">${Sel('status','STATUS',STAGES,r.status)}${F('date','RELEASE-DATUM',r.date||'','date')}</div>
+    <div class="grid2">${F('year','VERTRAGSJAHR',r.year,'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>`;
+  const extra = r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">Vorab-Single entfernen</button>`;
+  const form = sheet(`${relName(r)} bearbeiten`, fields, async fd => {
+    return await put('releases', id, {title:fd.title.trim(), status:fd.status, date:fd.date||'', year:+fd.year||r.year, countsTo:fd.countsTo}) ? undefined : false;
+  }, extra);
+  const d = form.querySelector('#delRel');
+  if(d) d.onclick = async () => { if(d.dataset.sure){ await del('releases', id); $('#sheetRoot').innerHTML=''; back(); } else { d.dataset.sure = 1; d.textContent = 'Wirklich entfernen? Erneut tippen'; } };
+}
+function sheetVorab(pid){
+  const p = person(pid), parents = relsOf(pid).filter(r => r.type === 'EP' || r.type === 'Album');
+  const n = relsOf(pid).filter(r => r.type === 'Vorab-Single').length + 1;
+  const fields = `${F('title','ARBEITSTITEL','','text','placeholder="Titel offen"')}${Sel('parent','ZÄHLT ZU',parents.map(r=>[r.id,relName(r)]),parents[0]?.id)}`;
+  sheet('Vorab-Single', fields, async fd => {
+    const par = S.releases[fd.parent]; if(!par) return false;
+    await put('releases', `${pid}-V${n}`, {artist:pid, code:'V'+n, type:'Vorab-Single', year:par.year, order:par.order-0.5, pflicht:false, countsTo:relName(par), status:'Geplant', date:'', title:fd.title.trim()}, false);
+    toast('Vorab-Single angelegt · zählt zu ' + relName(par));
+  });
+}
+function sheetTask(rid, id){
+  const t = id ? S.tasks[id] : {phase:'T-8', owner:'A', title:''};
+  const fields = `${F('title','SCHRITT',t.title,'text','required')}
+    <div class="grid2">${Sel('phase','PHASE',PHASES,t.phase)}${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),t.owner)}</div>
+    ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}`;
+  const extra = id ? `<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
+  const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async fd => {
+    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, due:fd.due||''};
+    if(!doc.title) return false;
+    if(id) return await put('tasks', id, doc) ? undefined : false;
+    return await put('tasks', uid('t'), {...doc, release:rid, artist:S.releases[rid].artist, done:false, order:tasksOf(rid).length}, false) ? undefined : false;
+  }, extra);
+  const d = form.querySelector('#delTask');
+  if(d) d.onclick = async () => { if(d.dataset.sure){ await del('tasks', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+function sheetTrack(rid, id){
+  const t = id ? S.tracks[id] : {title:'', producer: producers()[0]?.name || '', stage:'Writing'};
+  const fields = `${F('title','SONGTITEL',t.title,'text','required')}
+    <div class="grid2">${F('producer','PRODUZENT',t.producer)}${Sel('stage','STAND',['Idee','Writing','Recording','Mix','Master','Fertig'],t.stage)}</div>`;
+  sheet(id ? 'Track bearbeiten' : 'Neuer Track', fields, async fd => {
+    const doc = {title:fd.title.trim(), producer:fd.producer.trim(), stage:fd.stage};
+    if(!doc.title) return false;
+    if(id) return await put('tracks', id, doc) ? undefined : false;
+    return await put('tracks', uid('tr'), {...doc, release:rid}, false) ? undefined : false;
+  });
+}
+function sheetVersion(tid){
+  const t = S.tracks[tid], r = S.releases[t.release], p = person(r.artist);
+  const n = versionsOf(tid).length + 1;
+  const fields = `<p class="small" style="margin:0 0 12px">Datei zuerst in den <a href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">Audio-Ordner ${esc(p.name)}</a> laden, dann in SharePoint „Link kopieren“ und hier einfügen.</p>
+    <div class="grid2">${F('label','BEZEICHNUNG','Mix v'+n,'text','required')}${Sel('kind','ART',KINDS,'Mix')}</div>
+    ${Sel('by','VON',Object.entries(OWNERS),'P')}
+    ${F('link','SHAREPOINT-LINK','','url','placeholder="https://cloudsgroup.sharepoint.com/…"')}`;
+  sheet('Neue Version', fields, async fd => {
+    if(fd.link && !/^https:\/\//.test(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    return await put('versions', uid('v'), {track:tid, label:fd.label.trim(), kind:fd.kind, by:fd.by, link:fd.link||'', at:new Date().toISOString()}, false) ? undefined : false;
+  });
+}
+
+/* ---------- Start: Supabase-Anbindung ----------
+   Die App spricht intern eine kleine Dokumenten-API (collection/doc/onSnapshot).
+   Hier wird sie auf eine Supabase-Tabelle "docs" (col, id, data) abgebildet.
+   Login: Benutzername + Passwort; intern wird daraus benutzername@EMAIL_DOMAIN. */
+let sb = null, account = null;
+const CFG = window.CLOUDS_CONFIG || {};
+
+function makeDb(client){
+  const cache = {};        // col -> {id: data}
+  const subs = {};         // col -> [callback]
+  const emit = col => (subs[col]||[]).forEach(cb => cb({docs: Object.entries(cache[col]||{}).map(([id,d]) => ({id, data: () => d}))}));
+  const setLocal = (col, id, d) => { (cache[col] ||= {}); if(d === null) delete cache[col][id]; else cache[col][id] = d; emit(col); };
+  let channel = null;
+  const ensureChannel = () => {
+    if(channel) return;
+    channel = client.channel('docs-live')
+      .on('postgres_changes', {event:'*', schema:'public', table:'docs'}, p => {
+        const row = p.new && p.new.col ? p.new : p.old;
+        if(!row || !row.col) return;
+        if(p.eventType === 'DELETE') setLocal(row.col, row.id, null);
+        else setLocal(row.col, row.id, p.new.data || {});
+      })
+      .subscribe();
+  };
+  const fail = error => { const e = new Error(error.message || 'Fehler'); e.code = error.code === '42501' ? 'not_granted' : error.code; throw e; };
+  return {
+    collection(col){
+      return {
+        doc(id){
+          return {
+            async set(data){
+              const {error} = await client.from('docs').upsert({col, id, data});
+              if(error) fail(error);
+              setLocal(col, id, data);
+            },
+            async update(patch){
+              const {data, error} = await client.rpc('doc_merge', {p_col: col, p_id: id, p_patch: patch});
+              if(error) fail(error);
+              setLocal(col, id, data || {...(cache[col]?.[id]||{}), ...patch});
+            },
+            async delete(){
+              const {error} = await client.from('docs').delete().eq('col', col).eq('id', id);
+              if(error) fail(error);
+              setLocal(col, id, null);
+            }
+          };
+        },
+        limit(n){
+          return {
+            onSnapshot(cb, onErr){
+              (subs[col] ||= []).push(cb);
+              ensureChannel();
+              client.from('docs').select('id,data').eq('col', col).limit(n).then(({data, error}) => {
+                if(error){ onErr && onErr(error); return; }
+                cache[col] = {}; (data||[]).forEach(r => cache[col][r.id] = r.data || {});
+                emit(col);
+              });
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
+function showLogin(msg){
+  $('#login').hidden = false;
+  $('#loginErr').textContent = msg || '';
+}
+async function logout(){
+  try{ await sb.auth.signOut(); }catch(_){}
+  location.reload();
+}
+function accountFrom(u){
+  const uname = (u.email||'').split('@')[0];
+  return {id: u.id, name: u.user_metadata?.name || (uname.charAt(0).toUpperCase() + uname.slice(1)), username: uname};
+}
+async function boot(session){
+  account = accountFrom(session.user);
+  me = account.id;
+  user = {me: async () => ({name: account.name}), id: async () => account.id};
+  db = makeDb(sb);
+  dbState = 'on';
+  $('#login').hidden = true;
+  COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
+    const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
+    S[c] = o; loaded.add(c); render();
+  }, err => { toast('Daten konnten nicht geladen werden: ' + err.message); }));
+  render();
+}
+
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, btn = f.querySelector('button');
+  const uname = f.username.value.trim().toLowerCase().replace(/\s+/g,'');
+  if(!uname || !f.password.value) return;
+  const email = uname.includes('@') ? uname : `${uname}@${CFG.EMAIL_DOMAIN}`;
+  btn.disabled = true; $('#loginErr').textContent = '';
+  const {data, error} = await sb.auth.signInWithPassword({email, password: f.password.value});
+  btn.disabled = false;
+  if(error){ $('#loginErr').textContent = 'Benutzername oder Passwort stimmt nicht.'; return; }
+  f.password.value = '';
+  boot(data.session);
+});
+
+render();
+(async () => {
+  if(!window.supabase || !CFG.SUPABASE_URL || /DEIN-PROJEKT/.test(CFG.SUPABASE_URL)){
+    dbState = 'off'; render();
+    showLogin('Die App ist noch nicht mit der Datenbank verbunden (config.js).');
+    return;
+  }
+  sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true}});
+  const {data:{session}} = await sb.auth.getSession();
+  if(session) boot(session); else showLogin();
+})();
+</script>
+
+</body></html>
