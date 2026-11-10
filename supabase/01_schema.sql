@@ -19,6 +19,7 @@ create policy "team liest"    on public.docs for select to authenticated using (
 create policy "team schreibt" on public.docs for insert to authenticated with check (true);
 create policy "team ändert"   on public.docs for update to authenticated using (true) with check (true);
 create policy "team löscht"   on public.docs for delete to authenticated using (true);
+revoke all on public.docs from anon;
 
 create or replace function public.touch_docs() returns trigger language plpgsql as $$
 begin new.updated_at := now(); new.updated_by := auth.uid(); return new; end $$;
@@ -30,6 +31,7 @@ create or replace function public.doc_merge(p_col text, p_id text, p_patch jsonb
 returns jsonb language sql security invoker as $$
   update public.docs set data = data || p_patch where col = p_col and id = p_id returning data;
 $$;
+revoke execute on function public.doc_merge(text, text, jsonb) from public, anon;
 grant execute on function public.doc_merge(text, text, jsonb) to authenticated;
 
 -- Live-Aktualisierung zwischen allen Geräten

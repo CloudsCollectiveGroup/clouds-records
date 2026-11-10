@@ -69,7 +69,7 @@ insert into public.docs (col, id, data) values
 ('tasks', 't-nzb7ttb', '{"artist": "hakuna", "done": false, "due": "2026-10-19", "order": 5, "owner": "T", "phase": "T-6", "release": "hakuna-S01", "title": "Distributor-Upload, ISRC, Kacper"}'::jsonb),
 ('tasks', 't-rbll5cp', '{"artist": "hakuna", "done": true, "due": "2026-10-01", "order": 3, "owner": "P", "phase": "T-8", "release": "hakuna-S01", "title": "Mix & Master final"}'::jsonb),
 ('tasks', 't-xcs8f5x', '{"artist": "hakuna", "done": false, "due": "", "order": 8, "owner": "T", "phase": "T-0", "release": "hakuna-S01", "title": "Release-Tag"}'::jsonb),
-('tracks', 'tr-q4knbqk', '{"producer": "Anuj", "release": "sarah-S01", "stage": "Fertig", "title": "Baklava"}'::jsonb),
+('tracks', 'tr-q4knbqk', '{"producer": "Anuj", "release": "hakuna-S01", "stage": "Fertig", "title": "Baklava"}'::jsonb),
 ('versions', 'v-2mnpkpv', '{"at": "2026-10-12T14:29:31.395Z", "by": "P", "kind": "Master", "label": "Master v9", "link": "https://cloudsgroup.sharepoint.com/sites/CloudsRecords/_layouts/15/stream.aspx?id=%2Fsites%2FCloudsRecords%2FAudio%2FHakuna%2FBaklava%20Master%209%2Ewav&referrer=StreamWebApp%2EWeb&referrerScenario=AddressBarCopied%2Eview%2E1561703b%2D8c9f%2D462a%2D81ea%2Dd7f5a5e33af2", "track": "tr-q4knbqk"}'::jsonb),
 ('comments', 'c-nu9sfrb', '{"at": "2026-10-12T14:30:02.063Z", "author": "legacy-cem", "authorName": "Cem Satiroglu", "text": "Version 9: Stimme zu hoch", "time": "", "track": "tr-q4knbqk"}'::jsonb)
 on conflict (col, id) do update set data = excluded.data;
