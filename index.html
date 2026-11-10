@@ -357,9 +357,12 @@ function toast(msg){
 
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
-function go(r, p={}){ stack.push({r, ...p}); render(); window.scrollTo(0,0); }
+let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks'].includes(r) ? r : 'artiststart';
+  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
+function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
-function tab(r, p={}){ stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
+function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 const isPreview = () => !!cur().preview;
 
 function renderNav(){
@@ -367,7 +370,7 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['exit','Team',icon.exit,{}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}], lockedArtist ? ['logout','Abmelden',icon.exit,{}] : ['exit','Team',icon.exit,{}]];
   } else {
     const firstArtist = c.id && S.people[c.id]?.role === 'Artist' ? c.id : (S.releases[c.id]?.artist || artists()[0]?.id);
     items = [['roster','Roster',icon.roster,{}],['artist','Timeline',icon.timeline,{id:firstArtist}],['tracks','Tracks',icon.tracks,{}],['cockpit','Cockpit',icon.cockpit,{}]];
@@ -377,6 +380,7 @@ function renderNav(){
   nav.innerHTML = items.map(([r,l,ic],i) => `<button data-i="${i}" class="${r===active?'on':''}" ${r===active?'aria-current="page"':''}>${ic}${l}</button>`).join('');
   nav.querySelectorAll('button').forEach(b => b.onclick = () => {
     const [r,,,p] = items[+b.dataset.i];
+    if(r === 'logout'){ logout(); return; }
     if(r === 'exit'){ tab('roster'); return; }
     if(r === 'artist' && !p.id) return;
     tab(r, p);
@@ -406,6 +410,7 @@ function banner(){
 function previewBanner(){
   if(!isPreview()) return '';
   const p = person(cur().preview);
+  if(lockedArtist) return `<div class="acct"><span>ANGEMELDET · ${esc((account?.name||p?.name||'').toUpperCase())}</span><button data-act="logout">ABMELDEN</button></div>`;
   return `<div class="banner"><span>VORSCHAU · SO SIEHT ${esc((p?.name||'').toUpperCase())} DIE APP</span><button class="chip" data-act="exitpreview">BEENDEN</button></div>`;
 }
 
@@ -944,9 +949,14 @@ async function boot(session){
   account = accountFrom(session.user);
   me = account.id;
   user = {me: async () => ({name: account.name}), id: async () => account.id};
+  const {data: mem, error: memErr} = await sb.from('members').select('role, person').eq('user_id', account.id).maybeSingle();
+  if(memErr || !mem){ await sb.auth.signOut(); showLogin(memErr ? 'Verbindung fehlgeschlagen. Bitte erneut versuchen.' : 'Ihr Zugang ist noch nicht freigeschaltet.'); return; }
+  account.role = mem.role;
+  if(mem.role === 'artist'){ lockedArtist = mem.person; }
   db = makeDb(sb);
   dbState = 'on';
   $('#login').hidden = true;
+  if(lockedArtist){ stack.length = 0; stack.push({r:'artiststart', id: lockedArtist, preview: lockedArtist}); }
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
     const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
     S[c] = o; loaded.add(c); render();

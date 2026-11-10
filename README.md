@@ -17,6 +17,12 @@ Link verschicken, im Browser öffnen, anmelden. Am Handy: Teilen → „Zum Home
 5. Project Settings → API: URL und anon key in `config.js` eintragen
 6. GitHub → Settings → Pages → Branch `main`, Ordner `/`
 
-## Phase 2 (geplant)
-- Rollen: Artists sehen nur den eigenen Bereich (Zugriffsregeln je Artist)
+## Zugänge anlegen
+Supabase → Authentication → Users → Add user → Create new user, „Auto Confirm User“ an.
+Die Rolle ergibt sich automatisch aus dem Benutzernamen (`supabase/03_rollen.sql`):
+- `sarah@…`, `hakuna@…`, `mahir@…`, `aije@…`, `amir@…` → Artist, sieht nur den eigenen Bereich
+- `anuj@…` → Produzent, sieht alles, kann Verträge nicht ändern
+- jeder andere Name (z. B. `cem@…`, `nikolina@…`) → Team, sieht und ändert alles
+
+## Geplant
 - Audio/Cover-Upload über Supabase Storage (ab Pro-Paket)
