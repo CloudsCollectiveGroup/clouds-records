@@ -334,7 +334,7 @@ const ROOMS = ['Studio 1 · Vocals','Studio 2 · Mix/Master','BlackClouds (Studi
 const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
 /* Beats & Listening-Sessions (Produzenten) */
 const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Platziert'];
-const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Für Artists + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
+const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Clouds Crate + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
 const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Platziert':'var(--ep)'};
 const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love','Storytelling'];
 const genresOf = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.mood ? [b.mood] : []);
@@ -996,7 +996,10 @@ function vArtistStart(c){
     <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio</h2><button class="pill" data-act="addstudioartist" data-id="${esc(p.id)}">${icon.plus} Anfragen</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${studioOf(p.id).filter(x => x.status !== 'Abgelehnt' || x.date >= todayIso()).slice(-4).map(x => studioRow(x, false)).join('') || '<span class="small">Keine Studio-Anfragen. Über „Anfragen“ einen Slot bei CloudStudios wünschen.</span>'}</div>
     ${(() => { const rs = recsOf(p.id).filter(x => x.status !== 'Übernommen').slice(0,3); return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Recordings</h2><button class="pill" data-act="addrec" data-id="${esc(p.id)}">${icon.plus} Recording</button></div><div class="pad stack" style="gap:8px;padding-top:10px">${rs.map(recRow).join('') || '<span class="small">Noch keine Aufnahmen. Alles, was im Studio entsteht, hier mit Dropbox-Link ablegen.</span>'}${recsOf(p.id).length > 3 ? `<button class="pill" data-go="recordings" data-id="${esc(p.id)}" style="align-self:flex-start">Alle Recordings · ${recsOf(p.id).length}</button>` : ''}</div>`; })()}
-    ${!team ? (() => { const bs = vals(S.beats||{}).filter(b => b.status === 'Freigegeben' || (b.status === 'Reserviert' && b.reservedFor === p.id)).sort((a,b) => (b.at||'').localeCompare(a.at||'')).slice(0,8); return bs.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Beats für dich</h2><span class="small">${bs.length} FREIGEGEBEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${bs.map(b => beatRow(b, 'artist')).join('')}</div>` : ''; })() : ''}
+    ${!team ? (() => { const mine = vals(S.beats||{}).filter(b => isExclusive(b) && b.reservedFor === p.id).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+      const crate = vals(S.beats||{}).filter(b => b.status === 'Freigegeben').sort((a,b) => (b.at||'').localeCompare(a.at||''));
+      return `${mine.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Für dich gepickt</h2><span class="small">${mine.length} BEAT${mine.length===1?'':'S'}</span></div><div class="pad small" style="padding-top:6px">EXKLUSIV FÜR DICH ZUR SEITE GELEGT.</div><div class="pad stack" style="gap:8px;padding-top:10px">${mine.map(b => beatRow(b, 'mine')).join('')}</div>` : ''}
+      ${crate.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Clouds Crate</h2><span class="small">${crate.filter(b => !interestOf(b.id).length).length} FREI</span></div><div class="pad small" style="padding-top:6px">BEATS FÜR ALLE ARTISTS. MARKIER DIR EINEN – JEDER BEAT GEHT NUR AN EINEN.</div><div class="pad stack" style="gap:8px;padding-top:10px">${crate.map(b => beatRow(b, 'artist')).join('')}</div>` : ''}`; })() : ''}
     ${(() => { const up = vals(S.content||{}).filter(x => x.artist === p.id && x.status !== 'Live' && x.date && x.date >= todayIso()).sort((a,b) => a.date.localeCompare(b.date)).slice(0,3); return up.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Nächster Content</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${up.map(x => contentRow(x, false)).join('')}</div>` : ''; })()}`;
 }
 
@@ -1006,14 +1009,15 @@ function prodTop(p){
   return `<div class="topbar">${own ? `<span class="brand">CLOUDS RECORDS</span>` : `<button class="back" data-act="home">${icon.back}Artists</button>`}<span class="row" style="gap:8px">${dropboxFolder(p, 'DROPBOX', 'chip', 'background:var(--raise);color:var(--ink);text-decoration:none')}${own ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="logout">ABMELDEN</button>` : `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>`}</span></div>${banner()}`;
 }
 function beatRow(b, mode){
-  const ints = interestOf(b.id).map(x => person(x.artist)?.name).filter(Boolean);
+  const ints = interestOf(b.id).map(x => x.artistName || person(x.artist)?.name).filter(Boolean);
   const meta = [b.bpm ? b.bpm + ' BPM' : '', b.key || '', genresOf(b).join(', '), b.feat ? 'FEAT. ' + b.feat : ''].filter(Boolean).join(' · ').toUpperCase();
   const res = b.status === 'Reserviert' && b.reservedFor ? ' · FÜR ' + esc((person(b.reservedFor)?.name||'').toUpperCase()) : '';
   return `<div class="vrow" style="flex-wrap:wrap">
     <a class="play" href="${esc(safeUrl(b.link) || '#')}" target="_blank" rel="noopener" aria-label="${esc(b.title)} in Dropbox anhören" style="text-decoration:none">${icon.play}</a>
-    <button class="stack" data-act="${mode === 'artist' ? 'noop' : 'editbeat'}" data-id="${esc(b.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)"><b style="font-weight:600">${esc(b.title)}</b><span class="small">${esc(meta) || 'OHNE ANGABEN'}${res}</span>${ints.length && mode !== 'artist' ? `<span class="small" style="color:var(--sun)">INTERESSE: ${esc(ints.join(', ').toUpperCase())}</span>` : ''}</button>
-    ${mode === 'artist' ? `<button class="pill ${interestOf(b.id).some(x => x.artist === lockedArtist) ? 'on' : 'sun'}" data-act="interest" data-id="${esc(b.id)}" style="min-height:34px">${interestOf(b.id).some(x => x.artist === lockedArtist) ? 'Gemeldet' : 'Interesse'}</button>` : `<span class="status" style="color:${BSTATUS_COL[b.status]||'var(--mute)'}">● ${esc((BLABEL[b.status]||b.status||'').toUpperCase())}</span>`}
-    ${mode !== 'artist' && (b.bsLive || b.ytLive || b.mixNote) ? `<div class="row" style="width:100%;gap:6px;flex-wrap:wrap;padding-left:52px">${b.bsLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.bsLink)||'#')}" target="_blank" rel="noopener">BEATSTARS ✓</a>` : ''}${b.ytLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.ytLink)||'#')}" target="_blank" rel="noopener">YOUTUBE ✓</a>` : ''}${isExclusive(b) && (b.bsLive || b.ytLive) ? '<span class="small" style="color:var(--danger);font-weight:700">EXKLUSIV – IM STORE OFFLINE NEHMEN</span>' : ''}${b.mixNote ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ Mix: ${esc(b.mixNote)}</span>` : ''}</div>` : ''}</div>`;
+    <button class="stack" data-act="${mode === 'artist' || mode === 'mine' ? 'noop' : 'editbeat'}" data-id="${esc(b.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)"><b style="font-weight:600">${esc(b.title)}</b><span class="small">${esc(meta) || 'OHNE ANGABEN'}${res}</span>${ints.length && mode !== 'artist' && mode !== 'mine' ? `<span class="small" style="color:var(--sun)">MARKIERT VON: ${esc(ints.join(', ').toUpperCase())}</span>` : ''}</button>
+    ${mode === 'mine' ? '<span class="status" style="color:var(--sun)">● FÜR DICH</span>' : mode === 'artist' ? (() => { const cl = interestOf(b.id)[0]; const me2 = cl && cl.artist === lockedArtist;
+      return cl && !me2 ? `<span class="status" style="color:var(--mute)">● VERGEBEN · ${esc((cl.artistName || person(cl.artist)?.name || '').toUpperCase())}</span>` : `<button class="pill ${me2 ? 'on' : 'sun'}" data-act="interest" data-id="${esc(b.id)}" style="min-height:34px">${me2 ? 'Markiert ✓' : 'Markieren'}</button>`; })() : `<span class="status" style="color:${BSTATUS_COL[b.status]||'var(--mute)'}">● ${esc((BLABEL[b.status]||b.status||'').toUpperCase())}</span>`}
+    ${mode !== 'artist' && mode !== 'mine' && (b.bsLive || b.ytLive || b.mixNote) ? `<div class="row" style="width:100%;gap:6px;flex-wrap:wrap;padding-left:52px">${b.bsLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.bsLink)||'#')}" target="_blank" rel="noopener">BEATSTARS ✓</a>` : ''}${b.ytLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.ytLink)||'#')}" target="_blank" rel="noopener">YOUTUBE ✓</a>` : ''}${isExclusive(b) && (b.bsLive || b.ytLive) ? '<span class="small" style="color:var(--danger);font-weight:700">EXKLUSIV – IM STORE OFFLINE NEHMEN</span>' : ''}${b.mixNote ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ Mix: ${esc(b.mixNote)}</span>` : ''}</div>` : ''}</div>`;
 }
 function vBeats(c){
   const p = person(c.id); if(!p) throw new Error('missing');
@@ -1027,7 +1031,7 @@ function vBeats(c){
   const artistTiles = f === 'frei' && !selA ? `<div class="tilegrid" style="padding-top:12px">${artists().map(a => { const mine = forA(a.id), res = mine.filter(b => b.status === 'Reserviert' && b.reservedFor === a.id).length, int = mine.filter(b => interestOf(b.id).some(x => x.artist === a.id)).length;
       return `<button class="tilecard" data-act="bartist" data-id="${esc(a.id)}|${esc(p.id)}" aria-label="Beats für ${esc(a.name)}">
         <div class="tc-art" style="background:${esc(a.color)};aspect-ratio:16/10">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini" style="font-size:44px">${esc((a.name||'?')[0])}</span>`}${mine.length ? `<span class="tc-new">${mine.length}</span>` : ''}</div>
-        <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${res} RESERVIERT · ${int} INTERESSE</span></div></button>`; }).join('')}</div>` : '';
+        <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${res} EXKLUSIV · ${int} MARKIERT</span></div></button>`; }).join('')}</div>` : '';
   if(f === 'frei' && !selA) items = all.filter(b => b.status === 'Freigegeben');
   const next = sessionsOf(p.id).find(x => !x.done && x.date >= todayIso());
   const chip = (k,l) => `<button class="pill ${f===k?'on':''}" data-act="bfilter" data-id="${k}|${esc(p.id)}">${l} · ${lists[k].length}</button>`;
@@ -1035,7 +1039,7 @@ function vBeats(c){
     <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Beats</h1></div><button class="pill sun" data-act="addbeat" data-id="${esc(p.id)}">${icon.plus} Beat</button></div>
     ${next ? `<button class="vrow" data-go="sessions" data-id="${esc(p.id)}" style="margin:16px 20px 0;width:calc(100% - 40px);cursor:pointer;text-align:left;font:inherit;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="play" style="background:var(--sun);color:var(--on-sun)">${icon.timeline}</span><span class="stack" style="flex:1;gap:2px"><b>Listening-Session ${fmt(next.date)}${next.time ? ' · ' + esc(next.time) : ''}</b><span class="small">${lists.pool.length} NEUE BEATS WARTEN AUF FEEDBACK</span></span></button>` : ''}
     <div class="chips">${chip('arbeit','In Arbeit')}${chip('pool','Pool')}${chip('frei','Für Artists')}${chip('store','Store')}${chip('platziert','Platziert')}${chip('alle','Alle')}</div>
-    <div class="pad small" style="padding-top:10px">${f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: FÜR SIE/IHN RESERVIERT ODER INTERESSE GEMELDET.` : 'PRO ARTIST: RESERVIERTE BEATS UND GEMELDETES INTERESSE. DARUNTER: FÜR ALLE FREIGEGEBEN.') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">FÜR ALLE ARTISTS FREIGEGEBEN</span></div>' : ''}
+    <div class="pad small" style="padding-top:10px">${f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: EXKLUSIV GEPICKT ODER IM CRATE MARKIERT.` : 'PRO ARTIST: EXKLUSIV GEPICKTE UND IM CLOUDS CRATE MARKIERTE BEATS. DARUNTER: DER CLOUDS CRATE (FÜR ALLE ARTISTS).') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">CLOUDS CRATE · FÜR ALLE ARTISTS</span></div>' : ''}
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(b => beatRow(b)).join('') : `<div class="empty" style="margin:0"><b>${f === 'pool' ? 'Pool ist leer' : 'Keine Beats in dieser Ansicht'}</b><span class="small">Beat in Dropbox ablegen, Link kopieren und über „Beat“ eintragen. Neue Beats landen im internen Pool bis zur nächsten Listening-Session.</span></div>`}</div>`;
 }
 function vSessions(c){
@@ -1222,7 +1226,7 @@ function sheetSession(pid, id){
   const pool = beatsOf(x.producer).filter(b => b.status === 'Neu');
   const review = id && !x.done ? `<div class="lbl" style="margin:4px 0 8px">NEUE BEATS AUS DEM POOL (${pool.length})</div>
     <div class="stack" style="gap:8px;margin-bottom:12px">${pool.length ? pool.map(b => `<div class="vrow" style="padding:8px 10px;flex-wrap:wrap"><a class="play" href="${esc(safeUrl(b.link)||'#')}" target="_blank" rel="noopener" style="width:36px;height:36px;text-decoration:none">${icon.play}</a><span class="stack" style="flex:1;min-width:0"><b style="font-weight:600;font-size:15px">${esc(b.title)}</b><span class="small">${esc([b.bpm ? b.bpm + ' BPM' : '', b.key||''].filter(Boolean).join(' · '))}</span></span>
-      <select name="rv_${esc(b.id)}" style="min-height:36px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 8px"><option value="">offen</option><option value="Freigegeben">Für Artists + Store</option><option value="Store">Nur Store</option></select>
+      <select name="rv_${esc(b.id)}" style="min-height:36px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 8px"><option value="">offen</option><option value="Freigegeben">Clouds Crate + Store</option><option value="Store">Nur Store</option>${artists().map(a => `<option value="R:${esc(a.id)}">Exklusiv für ${esc(a.name)}</option>`).join('')}</select>
       <input name="mn_${esc(b.id)}" placeholder="Mix-Feedback (optional)" value="${esc(b.mixNote||'')}" style="flex-basis:100%;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:14px"></div>`).join('') : '<span class="small">Keine neuen Beats im Pool.</span>'}</div>` : '';
   const fields = `<div class="grid2">${F('date','DATUM',x.date||'','date','required')}${F('time','UHRZEIT',x.time||'','time')}</div>
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="Ort, Teilnehmer, Schwerpunkt">${esc(x.note||'')}</textarea></div>
@@ -1234,7 +1238,7 @@ function sheetSession(pid, id){
     if(!id) return await put('sessions', uid('ls'), {...doc, producer:pid, done:false}, false) ? undefined : false;
     let fr = 0, vw = 0;
     for(const [k, v] of Object.entries(fd)) if(k.startsWith('mn_')){ const bid = k.slice(3), mn = (v||'').trim(); if(mn !== (S.beats[bid]?.mixNote||'')) await put('beats', bid, {mixNote:mn}); }
-    for(const [k, v] of Object.entries(fd)) if(k.startsWith('rv_') && v){ const bid = k.slice(3); if(await put('beats', bid, {status:v, session:id})) v === 'Freigegeben' ? fr++ : vw++; }
+    for(const [k, v] of Object.entries(fd)) if(k.startsWith('rv_') && v){ const bid = k.slice(3); const upd = v.startsWith('R:') ? {status:'Reserviert', reservedFor:v.slice(2), session:id} : {status:v, session:id}; if(await put('beats', bid, upd)) (v === 'Store' ? vw++ : fr++); }
     doc.done = fd.done === 'on';
     if(fr || vw) doc.result = `${fr} FÜR ARTISTS · ${vw} NUR STORE`;
     const ok = await put('sessions', id, doc);
@@ -1257,10 +1261,12 @@ async function sessionPlan(pid){
   toast('6 Monatstermine angelegt · jeweils erster Mittwoch, 18 Uhr');
 }
 async function toggleInterest(bid){
-  if(!lockedArtist){ toast('Interesse melden können nur Artists selbst'); return; }
-  const mine = interestOf(bid).find(x => x.artist === lockedArtist);
-  if(mine){ await del('interest', mine.id); return; }
-  if(await put('interest', uid('i'), {beat:bid, artist:lockedArtist, at:new Date().toISOString()}, false)) toast('Interesse gemeldet · das Team meldet sich');
+  if(!lockedArtist){ toast('Markieren können nur Artists selbst'); return; }
+  const cl = interestOf(bid)[0];
+  if(cl && cl.artist === lockedArtist){ await del('interest', cl.id); toast('Markierung entfernt'); return; }
+  if(cl){ toast('Schon vergeben an ' + (cl.artistName || 'einen anderen Artist')); return; }
+  const name = person(lockedArtist)?.name || account?.name || '';
+  if(await put('interest', uid('i'), {beat:bid, artist:lockedArtist, artistName:name, at:new Date().toISOString()}, false)) toast('Markiert · das Team meldet sich');
 }
 
 /* ---------- Interaktion ---------- */
@@ -1603,7 +1609,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111940';
+const APP_VERSION = '202611112000';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
