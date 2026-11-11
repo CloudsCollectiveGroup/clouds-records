@@ -25,7 +25,9 @@ Die Rolle ergibt sich automatisch aus dem Benutzernamen (`supabase/03_rollen.sql
 - jeder andere Name (z. B. `cem@…`, `nikolina@…`) → Team, sieht und ändert alles
 
 ## Audio & Cover
-- MP3/M4A bis 50 MB direkt in der App hochladen und abspielen (Track → „Version“), privat in Supabase Storage
-- Cover im Release über „Bearbeiten“, wird automatisch auf max. 1400 px verkleinert
-- WAV-Masters > 50 MB weiter im SharePoint-Archiv; mit Supabase Pro bis 500 GB pro Datei möglich
-- Rechte wie bei den Daten: Artists nur eigener Ordner, Cover nur Team
+- Audio liegt in Dropbox (volle WAV-Qualität). In der App pro Version nur der Dropbox-Link (Track → „Version“).
+- Pro Artist ein Dropbox-Ordner-Link im Vertrag (Feld „Dropbox-Ordner“), erscheint als Knopf in Timeline/Track.
+- Cover im Release über „Bearbeiten“ (Supabase Storage, privat, nur Team, automatisch auf 1400 px verkleinert).
+
+## Neue Version ausrollen
+`APP_VERSION` in index.html und `version.json` auf denselben neuen Wert setzen – geöffnete Apps laden sich dann selbst neu.
