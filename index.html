@@ -933,13 +933,24 @@ function sheetTask(rid, id){
 }
 function sheetTrack(rid, id){
   const t = id ? S.tracks[id] : {title:'', producer: producers()[0]?.name || '', stage:'Writing'};
+  const n = id ? versionsOf(id).length + 1 : 1;
   const fields = `${F('title','SONGTITEL',t.title,'text','required')}
-    <div class="grid2">${F('producer','PRODUZENT',t.producer)}${Sel('stage','STAND',['Idee','Writing','Recording','Mix','Master','Fertig'],t.stage)}</div>`;
+    <div class="grid2">${F('producer','PRODUZENT',t.producer)}${Sel('stage','STAND',['Idee','Writing','Recording','Mix','Master','Fertig'],t.stage)}</div>
+    ${F('link', id ? 'NEUE VERSION · DROPBOX-LINK (OPTIONAL)' : 'DROPBOX-LINK (OPTIONAL)','','url','placeholder="https://www.dropbox.com/…"')}
+    <p class="small" style="margin:-4px 0 12px">Mit Link wird automatisch „Version ${n}“ angelegt. Weitere Versionen später im Track über „Version“.</p>`;
+  const kindFor = st => ({Idee:'Demo', Writing:'Demo', Recording:'Vocals', Mix:'Mix', Master:'Master', Fertig:'Master'})[st] || 'Mix';
   sheet(id ? 'Track bearbeiten' : 'Neuer Track', fields, async fd => {
     const doc = {title:fd.title.trim(), producer:fd.producer.trim(), stage:fd.stage};
     if(!doc.title) return false;
-    if(id) return await put('tracks', id, doc) ? undefined : false;
-    return await put('tracks', uid('tr'), {...doc, release:rid}, false) ? undefined : false;
+    const link = (fd.link || '').trim();
+    if(link && !/^https:\/\//.test(link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const tid = id || uid('tr');
+    if(!(id ? await put('tracks', id, doc) : await put('tracks', tid, {...doc, release:rid}, false))) return false;
+    if(link){
+      const by = account?.role === 'artist' ? 'A' : 'P';
+      await put('versions', uid('v'), {track:tid, label:'Version ' + n, kind:kindFor(fd.stage), by, link, at:new Date().toISOString()}, false);
+      toast(id ? 'Gespeichert · Version ' + n + ' angelegt' : 'Track angelegt · Version 1 verlinkt');
+    }
   });
 }
 function sheetVersion(tid){
@@ -1068,7 +1079,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111018';
+const APP_VERSION = '202611111023';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
