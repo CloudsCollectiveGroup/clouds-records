@@ -541,14 +541,14 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Market',icon.cockpit,{id:a,preview:a}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beat Market',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c);
     if(pctx) items = [['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['roster','Artists',icon.roster,{}],['market','Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['roster','Artists',icon.roster,{}],['market','Beat Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -1645,7 +1645,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112050';
+const APP_VERSION = '202611112055';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
