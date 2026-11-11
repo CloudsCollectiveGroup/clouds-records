@@ -255,6 +255,18 @@ const helpersOf = x => Array.isArray(x?.helpers) ? x.helpers.filter(k => k !== x
 const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || k);
 const withHelpers = x => helpersOf(x).length ? ' + ' + helpersOf(x).map(k => ownerName(k, x)).join(' + ') : '';
 const HelpChips = x => `<div class="field"><span class="flabel">ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)</span><div class="gchips">${HELPER_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${esc(ownerName(k, x))}</span></label>`).join('')}</div></div>`;
+const checksOf = x => Array.isArray(x?.checks) ? x.checks.filter(c => c && c.t) : [];
+const checkTxt = x => { const c = checksOf(x); return c.length ? ` · ☑ ${c.filter(i => i.d).length}/${c.length}` : ''; };
+const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTERPUNKTE)</span><div class="stack" id="chkList" style="gap:6px">${checksOf(x).map((c,i) => chkRow(c, i)).join('')}</div>
+  <button class="pill" type="button" id="chkAdd" style="margin-top:8px;min-height:34px">${icon.plus} Punkt</button></div>`;
+const chkRow = (c, i) => `<div class="row chkrow" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>`;
+function bindChecks(form){
+  const list = form.querySelector('#chkList'); if(!list) return;
+  const wire = row => { row.querySelector('.chkdel').onclick = () => { row.remove(); form.dispatchEvent(new Event('input')); }; };
+  list.querySelectorAll('.chkrow').forEach(wire);
+  form.querySelector('#chkAdd').onclick = () => { list.insertAdjacentHTML('beforeend', chkRow({t:'', d:false})); const r = list.lastElementChild; wire(r); r.querySelector('input[name=chk_t]').focus(); };
+}
+const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => ({t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked})).filter(c => c.t);
 const readHelpers = (form, owner) => [...form.querySelectorAll('input[name=helpers]:checked')].map(i => i.value).filter(k => k !== owner);
 const OWNER_COL = {A:null, P:'#D4AF37', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
@@ -705,7 +717,7 @@ function vRelease(c){
     const isRel = t.phase === 'T-0';
     const due = taskDue(t);
     const dueTxt = due ? fmt(due) : '';
-    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '';
+    const ownerTxt = (t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '') + checkTxt(t);
     const late = !ok && due && daysTo(due) < 0;
     const noteTxt = t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '';
     return `<div class="step">
@@ -714,7 +726,7 @@ function vRelease(c){
         : `<button class="dot ${ok?'ok':isCur?'cur':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}">${ok?icon.check:''}</button>`}
         ${last?'':`<span class="line ${ok?'solid':''}" style="${isCur?'height:56px':''}"></span>`}</span>
       <button class="stxt ${ok?'ok':isCur?'cur':''}" data-act="edittask" data-id="${esc(t.id)}" style="${isRel&&!ok?'font-weight:700;font-size:18px':''}">
-        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${esc(withHelpers(t).toUpperCase())}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>${noteTxt}`
+        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${esc(withHelpers(t).toUpperCase())}${checkTxt(t)}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>${noteTxt}`
                 : `${esc(t.title)} <span class="small">${ownerTxt}${dueTxt&&!ok?' · '+dueTxt:''}</span>${late?' <span class="small" style="color:var(--danger);font-weight:700">ÜBERFÄLLIG</span>':''}${noteTxt}`}
       </button></div>`;
   }).join('');
@@ -1127,8 +1139,8 @@ const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) &&
 const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function pinItems(k){
   const out = [];
-  for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
-  for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
+  for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r) + checkTxt(t), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
+  for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
@@ -1220,7 +1232,7 @@ function vPMonth(c){
       <button class="dot ${x.done?'ok':''}" data-act="ptoggle" data-id="${esc(x.id)}" aria-label="${esc(x.title)} ${x.done?'zurücksetzen':'abhaken'}" style="flex:none;margin-top:2px">${x.done?icon.check:''}</button>
       <button class="stack" data-act="editplan" data-id="${esc(x.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)">
         <b style="font-weight:600;${x.done?'text-decoration:line-through;color:var(--mute)':''}">${esc(x.title)}</b>
-        <span class="small">${esc((ownerName(x.owner, x) + withHelpers(x)).toUpperCase())}${x.due ? ' · BIS ' + fmt(x.due) : ''}${late ? ' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>' : ''}</span>
+        <span class="small">${esc((ownerName(x.owner, x) + withHelpers(x)).toUpperCase())}${checkTxt(x)}${x.due ? ' · BIS ' + fmt(x.due) : ''}${late ? ' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>' : ''}</span>
         ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;white-space:pre-line">✎ ${esc(x.note.length > 120 ? x.note.slice(0,120) + ' …' : x.note)}</span>` : ''}</button></div>`; };
   const open = items.filter(x => !x.done), done = items.filter(x => x.done);
   return `${prodTop(p)}
@@ -1239,10 +1251,11 @@ function sheetPlan(pid, ym, id){
   const fields = `${F('title','TO-DO',x.title,'text','required placeholder="Beatstars-Konto einrichten"')}
     <div class="grid2">${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS).filter(([k]) => k !== 'A').map(([k,v]) => [k, k === 'P' ? (person(x.producer||pid)?.name || v) : v]),x.owner)}${F('due','BIS',x.due||'','date')}</div>
     ${HelpChips(x)}
+    ${CheckList(x)}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="Absprachen, Zugangsinfos (keine Passwörter), Ideen">${esc(x.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delPlan" style="width:100%;margin-top:10px">To-do löschen</button>` : '';
   sheet(id ? 'To-do bearbeiten' : 'Neues To-do · ' + ymLabel(ym), fields, async (fd, f) => {
-    const doc = {title:fd.title.trim(), owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim()};
+    const doc = {title:fd.title.trim(), owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim(), checks:readChecks(f)};
     if(!doc.title) return false;
     return (id ? await put('pplan', id, doc) : await put('pplan', uid('pp'), {...doc, producer:pid, month:ym, done:false, order:planOf(pid, ym).length}, false)) ? undefined : false;
   }, extra);
@@ -1499,6 +1512,7 @@ function sheet(title, fields, onSave, extra=''){
     try{ localStorage.removeItem(key); }catch(_){} close();
   };
   form.onsubmit = async e => { e.preventDefault(); const fd = Object.fromEntries(new FormData(form)); if(await onSave(fd, form) !== false){ try{ localStorage.removeItem(key); }catch(_){} close(); } };
+  bindChecks(form);
   setTimeout(() => form.querySelector('input:not([type=checkbox]),select')?.focus(), 60);
   return form;
 }
@@ -1571,10 +1585,11 @@ function sheetTask(rid, id){
     <div class="grid2">${Sel('phase','PHASE',PHASES,t.phase)}${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),t.owner)}</div>
     ${HelpChips(t)}
     ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}
+    ${CheckList(t)}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="z. B. Wünsche des Artists, Referenzen, Absprachen">${esc(t.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
   const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async (fd, f) => {
-    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim()};
+    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim(), checks:readChecks(f)};
     if(!doc.title) return false;
     if(id) return await put('tasks', id, doc) ? undefined : false;
     return await put('tasks', uid('t'), {...doc, release:rid, artist:S.releases[rid].artist, done:false, order:tasksOf(rid).length}, false) ? undefined : false;
@@ -1731,7 +1746,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112150';
+const APP_VERSION = '202611112210';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
