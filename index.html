@@ -153,6 +153,8 @@ h1,h2{margin:0;text-wrap:balance}
 .sheet{width:min(430px,100%);max-height:88vh;overflow:auto;background:var(--card);border-radius:24px 24px 0 0;border:1px solid var(--line2);border-bottom:0;padding:18px 20px calc(24px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 .flabel{display:block;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);margin-bottom:8px}
+.favbtn{flex:none;width:34px;height:34px;border-radius:17px;border:1px solid var(--line2);background:none;color:var(--mute);font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.favbtn.on{color:var(--sun);border-color:rgba(212,175,55,.5);background:var(--sun-bg)}
 .gchips{display:flex;flex-wrap:wrap;gap:6px}
 .gchip input{position:absolute;opacity:0;pointer-events:none}
 .gchip span{font-family:Inter,system-ui,sans-serif;letter-spacing:0;display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--line2);background:var(--paper);color:var(--ink2);font-size:13px;cursor:pointer;user-select:none}
@@ -346,7 +348,7 @@ const ymLabel = ym => { const [y,m] = ym.split('-').map(Number); return new Date
 const ymShift = (ym, d) => { const [y,m] = ym.split('-').map(Number); const x = new Date(y, m-1+d, 1); return x.getFullYear() + '-' + String(x.getMonth()+1).padStart(2,'0'); };
 const planOf = (pid, ym) => vals(S.pplan||{}).filter(x => x.producer === pid && x.month === ym).sort((a,b) => (a.done-b.done) || (a.due||'9999').localeCompare(b.due||'9999') || (a.order||0)-(b.order||0));
 const pcontentOf = pid => vals(S.pcontent||{}).filter(x => x.producer === pid).sort((a,b) => (a.date||'9999').localeCompare(b.date||'9999'));
-const beatsOf = pid => vals(S.beats||{}).filter(b => !pid || b.producer === pid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+const beatsOf = pid => vals(S.beats||{}).filter(b => !pid || b.producer === pid).sort((a,b) => ((b.fav?1:0)-(a.fav?1:0)) || (b.at||'').localeCompare(a.at||''));
 const sessionsOf = pid => vals(S.sessions||{}).filter(x => x.producer === pid).sort((a,b) => (a.date||'').localeCompare(b.date||''));
 const photoOf = p => /^img\/[\w.-]+\.(jpe?g|png|webp)$/i.test(p?.photo || '') ? p.photo : '';
 const interestOf = bid => vals(S.interest||{}).filter(x => x.beat === bid);
@@ -1014,6 +1016,7 @@ function beatRow(b, mode){
   const res = b.status === 'Reserviert' && b.reservedFor ? ' · FÜR ' + esc((person(b.reservedFor)?.name||'').toUpperCase()) : '';
   return `<div class="vrow" style="flex-wrap:wrap">
     <a class="play" href="${esc(safeUrl(b.link) || '#')}" target="_blank" rel="noopener" aria-label="${esc(b.title)} in Dropbox anhören" style="text-decoration:none">${icon.play}</a>
+    ${mode === 'artist' || mode === 'mine' ? '' : `<button class="favbtn ${b.fav ? 'on' : ''}" data-act="fav" data-id="${esc(b.id)}" aria-label="${b.fav ? 'Favorit entfernen' : 'Als Favorit markieren'}" title="Favorit">${b.fav ? '★' : '☆'}</button>`}
     <button class="stack" data-act="${mode === 'artist' || mode === 'mine' ? 'noop' : 'editbeat'}" data-id="${esc(b.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)"><b style="font-weight:600">${esc(b.title)}</b><span class="small">${esc(meta) || 'OHNE ANGABEN'}${res}</span>${ints.length && mode !== 'artist' && mode !== 'mine' ? `<span class="small" style="color:var(--sun)">MARKIERT VON: ${esc(ints.join(', ').toUpperCase())}</span>` : ''}</button>
     ${mode === 'mine' ? '<span class="status" style="color:var(--sun)">● FÜR DICH</span>' : mode === 'artist' ? (() => { const cl = interestOf(b.id)[0]; const me2 = cl && cl.artist === lockedArtist;
       return cl && !me2 ? `<span class="status" style="color:var(--mute)">● VERGEBEN · ${esc((cl.artistName || person(cl.artist)?.name || '').toUpperCase())}</span>` : `<button class="pill ${me2 ? 'on' : 'sun'}" data-act="interest" data-id="${esc(b.id)}" style="min-height:34px">${me2 ? 'Markiert ✓' : 'Markieren'}</button>`; })() : `<span class="status" style="color:${BSTATUS_COL[b.status]||'var(--mute)'}">● ${esc((BLABEL[b.status]||b.status||'').toUpperCase())}</span>`}
@@ -1023,7 +1026,7 @@ function vBeats(c){
   const p = person(c.id); if(!p) throw new Error('missing');
   const f = c.f || 'pool';
   const all = beatsOf(p.id);
-  const lists = {arbeit: all.filter(b => b.status === 'Idee' || b.status === 'Gemixt'), pool: all.filter(b => b.status === 'Neu'), frei: all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert'), store: all.filter(inStore), platziert: all.filter(b => b.status === 'Platziert'), alle: all};
+  const lists = {fav: all.filter(b => b.fav), arbeit: all.filter(b => b.status === 'Idee' || b.status === 'Gemixt'), pool: all.filter(b => b.status === 'Neu'), frei: all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert'), store: all.filter(inStore), platziert: all.filter(b => b.status === 'Platziert'), alle: all};
   let items = lists[f] || all;
   const forA = a => all.filter(b => (b.status === 'Reserviert' && b.reservedFor === a) || interestOf(b.id).some(x => x.artist === a));
   const selA = f === 'frei' && c.a && person(c.a) ? c.a : null;
@@ -1038,8 +1041,8 @@ function vBeats(c){
   return `${prodTop(p)}
     <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Beats</h1></div><button class="pill sun" data-act="addbeat" data-id="${esc(p.id)}">${icon.plus} Beat</button></div>
     ${next ? `<button class="vrow" data-go="sessions" data-id="${esc(p.id)}" style="margin:16px 20px 0;width:calc(100% - 40px);cursor:pointer;text-align:left;font:inherit;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="play" style="background:var(--sun);color:var(--on-sun)">${icon.timeline}</span><span class="stack" style="flex:1;gap:2px"><b>Listening-Session ${fmt(next.date)}${next.time ? ' · ' + esc(next.time) : ''}</b><span class="small">${lists.pool.length} NEUE BEATS WARTEN AUF FEEDBACK</span></span></button>` : ''}
-    <div class="chips">${chip('arbeit','In Arbeit')}${chip('pool','Pool')}${chip('frei','Für Artists')}${chip('store','Store')}${chip('platziert','Platziert')}${chip('alle','Alle')}</div>
-    <div class="pad small" style="padding-top:10px">${f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: EXKLUSIV GEPICKT ODER IM CRATE MARKIERT.` : 'PRO ARTIST: EXKLUSIV GEPICKTE UND IM CLOUDS CRATE MARKIERTE BEATS. DARUNTER: DER CLOUDS CRATE (FÜR ALLE ARTISTS).') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">CLOUDS CRATE · FÜR ALLE ARTISTS</span></div>' : ''}
+    <div class="chips">${lists.fav.length ? chip('fav','★ Favoriten') : ''}${chip('arbeit','In Arbeit')}${chip('pool','Pool')}${chip('frei','Für Artists')}${chip('store','Store')}${chip('platziert','Platziert')}${chip('alle','Alle')}</div>
+    <div class="pad small" style="padding-top:10px">${f === 'fav' ? 'FAVORITEN: PROJEKTE MIT HERZBLUT – HIER ZUERST WEITERARBEITEN.' : f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION. FAVORITEN STEHEN OBEN.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: EXKLUSIV GEPICKT ODER IM CRATE MARKIERT.` : 'PRO ARTIST: EXKLUSIV GEPICKTE UND IM CLOUDS CRATE MARKIERTE BEATS. DARUNTER: DER CLOUDS CRATE (FÜR ALLE ARTISTS).') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">CLOUDS CRATE · FÜR ALLE ARTISTS</span></div>' : ''}
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(b => beatRow(b)).join('') : `<div class="empty" style="margin:0"><b>${f === 'pool' ? 'Pool ist leer' : 'Keine Beats in dieser Ansicht'}</b><span class="small">Beat in Dropbox ablegen, Link kopieren und über „Beat“ eintragen. Neue Beats landen im internen Pool bis zur nächsten Listening-Session.</span></div>`}</div>`;
 }
 function vSessions(c){
@@ -1316,6 +1319,7 @@ async function act(a, id){
   if(a === 'addpc') return sheetPContent(id);
   if(a === 'editpc'){ const x = S.pcontent?.[id]; return x ? sheetPContent(x.producer, id) : null; }
   if(a === 'pcfilter'){ const [f, pid] = id.split('|'); return tab('pcontent', {id:pid, f}); }
+  if(a === 'fav'){ const b = S.beats?.[id]; if(b) await put('beats', id, {fav: !b.fav}); return; }
   if(a === 'bartist'){ const [aid, pid] = id.split('|'); return go('beats', {id:pid, f:'frei', a:aid}); }
   if(a === 'bfilter'){ const [f, pid] = id.split('|'); return tab('beats', {id:pid, f}); }
   if(a === 'addsession') return sheetSession(id);
@@ -1609,7 +1613,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112000';
+const APP_VERSION = '202611112010';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
