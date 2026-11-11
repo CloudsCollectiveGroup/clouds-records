@@ -329,6 +329,7 @@ const BSTATUS = ['Neu','Freigegeben','Reserviert','Platziert','Verworfen'];
 const BSTATUS_COL = {'Neu':'var(--sun)','Freigegeben':'var(--album)','Reserviert':'var(--single)','Platziert':'var(--ep)','Verworfen':'var(--mute)'};
 const beatsOf = pid => vals(S.beats||{}).filter(b => !pid || b.producer === pid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 const sessionsOf = pid => vals(S.sessions||{}).filter(x => x.producer === pid).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+const photoOf = p => /^img\/[\w.-]+\.(jpe?g|png|webp)$/i.test(p?.photo || '') ? p.photo : '';
 const interestOf = bid => vals(S.interest||{}).filter(x => x.beat === bid);
 function ctxProducer(c){ if(['producer','beats','sessions'].includes(c.r) && S.people[c.id]?.role === 'Produzent') return c.id; return null; }
 const studioOf = aid => vals(S.studio||{}).filter(x => !aid || x.artist === aid).sort((a,b) => (a.date||'').localeCompare(b.date||''));
@@ -589,6 +590,12 @@ function vRoster(){
         <div class="tc-bar"><i style="width:${rs.length ? Math.max(4, Math.round(dn/rs.length*100)) : 0}%;background:${esc(p.color)}"></i></div>
         <span class="small">${dn} von ${rs.length} Releases</span></div></button>`;
   }).join('');
+  const prodTiles = ready ? prods.map(p => { const all = beatsOf(p.id), neu = all.filter(b => b.status === 'Neu').length, img = photoOf(p);
+    return `<button class="tilecard" data-go="beats" data-id="${esc(p.id)}" aria-label="${esc(p.name)} öffnen">
+      <div class="tc-art" style="background:var(--sun)">${img ? `<img src="${esc(img)}" alt="">` : `<span class="tc-ini" style="color:var(--on-sun)">${esc((p.name||'?')[0])}</span>`}<span class="tc-yr">PRODUZENT</span>${neu ? `<span class="tc-new">${neu} NEU</span>` : ''}</div>
+      <div class="tc-body"><span class="tc-name">${esc(p.name)}</span><div class="status" style="color:var(--sun)">● ${all.length} BEATS · ${all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert').length} FÜR ARTISTS</div>
+        <div class="tc-bar"><i style="width:${all.length ? Math.max(4, Math.round(all.filter(b => b.status === 'Platziert').length/all.length*100)) : 0}%;background:var(--sun)"></i></div>
+        <span class="small">${all.filter(b => b.status === 'Platziert').length} platziert</span></div></button>`; }).join('') : '';
   const prodCards = prods.map(p => `<button class="pcard" data-go="beats" data-id="${esc(p.id)}">
       <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${esc(p.name[0])}</div>
       <div class="stack" style="flex:1;gap:4px"><span style="font-weight:700;font-size:19px">${esc(p.name)}</span><span class="mono" style="font-size:11px;color:var(--soft)">${beatsOf(p.id).length} BEATS · ${beatsOf(p.id).filter(b => b.status === 'Neu').length} NEU · ${openFor('P')} OFFEN</span></div>${icon.chev}</button>`).join('');
@@ -597,8 +604,7 @@ function vRoster(){
     ${banner()}
     <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Artists</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
     <div class="pad legend" style="padding-top:16px"><span><i class="sw" style="background:var(--single)"></i>SINGLE</span><span><i class="sw" style="background:var(--ep)"></i>EP</span><span><i class="sw" style="background:var(--album)"></i>ALBUM</span><span><i class="box wip c-single" style="width:10px;height:10px"></i>LÄUFT</span></div>
-    <div class="tilegrid">${cards}</div><div class="list" style="padding-top:4px">
-      ${prods.length ? '<div class="lbl" style="padding-top:8px">PRODUZENTEN</div>' + prodCards : ''}
+    <div class="tilegrid">${cards}${prodTiles}</div><div class="list" style="padding-top:4px">
       ${ready ? `<div class="small" style="padding-top:6px">${totalLine()}</div>` : ''}
     </div>`;
 }
@@ -994,14 +1000,22 @@ function vBeats(c){
   const f = c.f || 'pool';
   const all = beatsOf(p.id);
   const lists = {pool: all.filter(b => b.status === 'Neu'), frei: all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert'), platziert: all.filter(b => b.status === 'Platziert'), alle: all};
-  const items = lists[f] || all;
+  let items = lists[f] || all;
+  const forA = a => all.filter(b => (b.status === 'Reserviert' && b.reservedFor === a) || interestOf(b.id).some(x => x.artist === a));
+  const selA = f === 'frei' && c.a && person(c.a) ? c.a : null;
+  if(selA) items = forA(selA);
+  const artistTiles = f === 'frei' && !selA ? `<div class="tilegrid" style="padding-top:12px">${artists().map(a => { const mine = forA(a.id), res = mine.filter(b => b.status === 'Reserviert' && b.reservedFor === a.id).length, int = mine.filter(b => interestOf(b.id).some(x => x.artist === a.id)).length;
+      return `<button class="tilecard" data-act="bartist" data-id="${esc(a.id)}|${esc(p.id)}" aria-label="Beats für ${esc(a.name)}">
+        <div class="tc-art" style="background:${esc(a.color)};aspect-ratio:16/10">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini" style="font-size:44px">${esc((a.name||'?')[0])}</span>`}${mine.length ? `<span class="tc-new">${mine.length}</span>` : ''}</div>
+        <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${res} RESERVIERT · ${int} INTERESSE</span></div></button>`; }).join('')}</div>` : '';
+  if(f === 'frei' && !selA) items = all.filter(b => b.status === 'Freigegeben');
   const next = sessionsOf(p.id).find(x => !x.done && x.date >= todayIso());
   const chip = (k,l) => `<button class="pill ${f===k?'on':''}" data-act="bfilter" data-id="${k}|${esc(p.id)}">${l} · ${lists[k].length}</button>`;
   return `${prodTop(p)}
     <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Beats</h1></div><button class="pill sun" data-act="addbeat" data-id="${esc(p.id)}">${icon.plus} Beat</button></div>
     ${next ? `<button class="vrow" data-go="sessions" data-id="${esc(p.id)}" style="margin:16px 20px 0;width:calc(100% - 40px);cursor:pointer;text-align:left;font:inherit;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="play" style="background:var(--sun);color:var(--on-sun)">${icon.timeline}</span><span class="stack" style="flex:1;gap:2px"><b>Listening-Session ${fmt(next.date)}${next.time ? ' · ' + esc(next.time) : ''}</b><span class="small">${lists.pool.length} NEUE BEATS WARTEN AUF FEEDBACK</span></span></button>` : ''}
     <div class="chips">${chip('pool','Pool')}${chip('frei','Für Artists')}${chip('platziert','Platziert')}${chip('alle','Alle')}</div>
-    <div class="pad small" style="padding-top:10px">${f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS.' : f === 'frei' ? 'FREIGEGEBEN: ALLE ARTISTS SEHEN DIESE BEATS UND KÖNNEN INTERESSE MELDEN.' : ''}</div>
+    <div class="pad small" style="padding-top:10px">${f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: FÜR SIE/IHN RESERVIERT ODER INTERESSE GEMELDET.` : 'PRO ARTIST: RESERVIERTE BEATS UND GEMELDETES INTERESSE. DARUNTER: FÜR ALLE FREIGEGEBEN.') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">FÜR ALLE ARTISTS FREIGEGEBEN</span></div>' : ''}
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(b => beatRow(b)).join('') : `<div class="empty" style="margin:0"><b>${f === 'pool' ? 'Pool ist leer' : 'Keine Beats in dieser Ansicht'}</b><span class="small">Beat in Dropbox ablegen, Link kopieren und über „Beat“ eintragen. Neue Beats landen im internen Pool bis zur nächsten Listening-Session.</span></div>`}</div>`;
 }
 function vSessions(c){
@@ -1171,6 +1185,7 @@ async function act(a, id){
   if(a === 'addbeat') return sheetBeat(id);
   if(a === 'editbeat') return sheetBeat(null, id);
   if(a === 'rfilter'){ const [f, aid] = id.split('|'); return tab('recordings', {id:aid, f, preview:cur().preview}); }
+  if(a === 'bartist'){ const [aid, pid] = id.split('|'); return go('beats', {id:pid, f:'frei', a:aid}); }
   if(a === 'bfilter'){ const [f, pid] = id.split('|'); return tab('beats', {id:pid, f}); }
   if(a === 'addsession') return sheetSession(id);
   if(a === 'editsession') return sheetSession(null, id);
@@ -1445,7 +1460,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111650';
+const APP_VERSION = '202611111815';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
