@@ -250,6 +250,12 @@ const STAGES = ['Idee','Geplant','Writing','Recording','Mix','Master','Distribut
 const PHASES = ['T-12','T-10','T-8','T-6','T-4','T-2','T-0','Nach Release'];
 const PHASE_WEEKS = {'T-12':12,'T-10':10,'T-8':8,'T-6':6,'T-4':4,'T-2':2,'T-0':0,'Nach Release':-2};
 const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', K:'Kasper', C:'Cem', TH:'Thorben', T:'Team'};
+const HELPER_KEYS = ['C','K','N','TH','P'];
+const helpersOf = x => Array.isArray(x?.helpers) ? x.helpers.filter(k => k !== x.owner && OWNERS[k]) : [];
+const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || k);
+const withHelpers = x => helpersOf(x).length ? ' + ' + helpersOf(x).map(k => ownerName(k, x)).join(' + ') : '';
+const HelpChips = x => `<div class="field"><span class="flabel">ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)</span><div class="gchips">${HELPER_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${esc(ownerName(k, x))}</span></label>`).join('')}</div></div>`;
+const readHelpers = (form, owner) => [...form.querySelectorAll('input[name=helpers]:checked')].map(i => i.value).filter(k => k !== owner);
 const OWNER_COL = {A:null, P:'#D4AF37', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
 const TEMPLATE = [
@@ -699,7 +705,7 @@ function vRelease(c){
     const isRel = t.phase === 'T-0';
     const due = taskDue(t);
     const dueTxt = due ? fmt(due) : '';
-    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}` : '';
+    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '';
     const late = !ok && due && daysTo(due) < 0;
     const noteTxt = t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '';
     return `<div class="step">
@@ -708,7 +714,7 @@ function vRelease(c){
         : `<button class="dot ${ok?'ok':isCur?'cur':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}">${ok?icon.check:''}</button>`}
         ${last?'':`<span class="line ${ok?'solid':''}" style="${isCur?'height:56px':''}"></span>`}</span>
       <button class="stxt ${ok?'ok':isCur?'cur':''}" data-act="edittask" data-id="${esc(t.id)}" style="${isRel&&!ok?'font-weight:700;font-size:18px':''}">
-        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>${noteTxt}`
+        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${esc(withHelpers(t).toUpperCase())}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>${noteTxt}`
                 : `${esc(t.title)} <span class="small">${ownerTxt}${dueTxt&&!ok?' · '+dueTxt:''}</span>${late?' <span class="small" style="color:var(--danger);font-weight:700">ÜBERFÄLLIG</span>':''}${noteTxt}`}
       </button></div>`;
   }).join('');
@@ -792,13 +798,14 @@ function sheetContent(rid, id){
     <div class="grid2">${Sel('kind','ART',CKINDS,x.kind)}${Sel('channel','KANAL',CCHANNELS,x.channel)}</div>
     <div class="grid2">${F('date','DATUM',x.date||'','date')}${Sel('status','STATUS',CSTATUS,x.status)}</div>
     ${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),x.owner||'N')}
+    ${HelpChips(x)}
     ${F('link','DATEI ODER ENTWURF (DROPBOX-LINK)',x.link||'','url','placeholder="https://www.dropbox.com/…"')}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(x.note||'')}</textarea></div>
     ${x.link ? `<a class="small" href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener" style="font-weight:600;color:var(--sun)">DATEI ÖFFNEN →</a>` : ''}`;
   const extra = id ? `<button class="btn danger" type="button" id="delContent" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '';
-  sheet(id ? 'Beitrag bearbeiten' : `Neuer Beitrag · ${relName(r)}`, fields, async fd => {
+  sheet(id ? 'Beitrag bearbeiten' : `Neuer Beitrag · ${relName(r)}`, fields, async (fd, f) => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
-    const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, link:safeUrl(fd.link), note:(fd.note||'').trim()};
+    const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, helpers:readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
     return (id ? await put('content', id, doc) : await put('content', uid('c'), {...doc, release:r.id, artist:r.artist}, false)) ? undefined : false;
   }, extra);
   const d = $('#delContent');
@@ -1156,7 +1163,7 @@ function vPMonth(c){
       <button class="dot ${x.done?'ok':''}" data-act="ptoggle" data-id="${esc(x.id)}" aria-label="${esc(x.title)} ${x.done?'zurücksetzen':'abhaken'}" style="flex:none;margin-top:2px">${x.done?icon.check:''}</button>
       <button class="stack" data-act="editplan" data-id="${esc(x.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)">
         <b style="font-weight:600;${x.done?'text-decoration:line-through;color:var(--mute)':''}">${esc(x.title)}</b>
-        <span class="small">${esc((OWNERS[x.owner]||'').toUpperCase())}${x.due ? ' · BIS ' + fmt(x.due) : ''}${late ? ' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>' : ''}</span>
+        <span class="small">${esc((ownerName(x.owner, x) + withHelpers(x)).toUpperCase())}${x.due ? ' · BIS ' + fmt(x.due) : ''}${late ? ' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>' : ''}</span>
         ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;white-space:pre-line">✎ ${esc(x.note.length > 120 ? x.note.slice(0,120) + ' …' : x.note)}</span>` : ''}</button></div>`; };
   const open = items.filter(x => !x.done), done = items.filter(x => x.done);
   return `${prodTop(p)}
@@ -1174,10 +1181,11 @@ function sheetPlan(pid, ym, id){
   if(!x) return;
   const fields = `${F('title','TO-DO',x.title,'text','required placeholder="Beatstars-Konto einrichten"')}
     <div class="grid2">${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS).filter(([k]) => k !== 'A').map(([k,v]) => [k, k === 'P' ? (person(x.producer||pid)?.name || v) : v]),x.owner)}${F('due','BIS',x.due||'','date')}</div>
+    ${HelpChips(x)}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="Absprachen, Zugangsinfos (keine Passwörter), Ideen">${esc(x.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delPlan" style="width:100%;margin-top:10px">To-do löschen</button>` : '';
-  sheet(id ? 'To-do bearbeiten' : 'Neues To-do · ' + ymLabel(ym), fields, async fd => {
-    const doc = {title:fd.title.trim(), owner:fd.owner, due:fd.due||'', note:(fd.note||'').trim()};
+  sheet(id ? 'To-do bearbeiten' : 'Neues To-do · ' + ymLabel(ym), fields, async (fd, f) => {
+    const doc = {title:fd.title.trim(), owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim()};
     if(!doc.title) return false;
     return (id ? await put('pplan', id, doc) : await put('pplan', uid('pp'), {...doc, producer:pid, month:ym, done:false, order:planOf(pid, ym).length}, false)) ? undefined : false;
   }, extra);
@@ -1197,7 +1205,7 @@ function vPContent(c){
   const row = x => { const b = S.beats?.[x.beat];
     return `<button class="vrow" data-act="editpc" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
       <span class="play" style="flex-direction:column;gap:0;font-family:var(--mono);font-size:11px;font-weight:600;line-height:1.2">${x.date ? `<span>${parse(x.date).getDate()}.</span><span style="font-size:9px;color:var(--mute)">${parse(x.date).toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>` : '—'}</span>
-      <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(x.kind)}${b ? ' · ' + esc(b.title) : ''}</b><span class="small">${esc((OWNERS[x.owner]||'').toUpperCase())}${x.note ? ' · ' + esc(x.note.toUpperCase()) : ''}</span></span>
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(x.kind)}${b ? ' · ' + esc(b.title) : ''}</b><span class="small">${esc((ownerName(x.owner, x) + withHelpers(x)).toUpperCase())}${x.note ? ' · ' + esc(x.note.toUpperCase()) : ''}</span></span>
       <span class="status" style="color:${CSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'Idee').toUpperCase())}</span></button>`; };
   return `${prodTop(p)}
     <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Content</h1></div><button class="pill sun" data-act="addpc" data-id="${esc(p.id)}">${icon.plus} Beitrag</button></div>
@@ -1212,11 +1220,12 @@ function sheetPContent(pid, id){
   const fields = `<div class="grid2">${Sel('kind','ART',PCKINDS,x.kind)}${Sel('beat','BEAT',[['','— ohne Beat —'], ...bs],x.beat||'')}</div>
     <div class="grid2">${F('date','DATUM',x.date||'','date')}${Sel('status','STATUS',CSTATUS,x.status)}</div>
     ${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS).filter(([k]) => k !== 'A').map(([k,v]) => [k, k === 'P' ? (person(x.producer||pid)?.name || v) : v]),x.owner)}
+    ${HelpChips(x)}
     ${F('link','LINK (DROPBOX ODER LIVE)',x.link||'','url','placeholder="https://…"')}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(x.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delPc" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '';
-  sheet(id ? 'Beitrag bearbeiten' : 'Neuer Beitrag', fields, async fd => {
-    const doc = {kind:fd.kind, beat:fd.beat||'', date:fd.date||'', status:fd.status, owner:fd.owner, link:safeUrl(fd.link), note:(fd.note||'').trim()};
+  sheet(id ? 'Beitrag bearbeiten' : 'Neuer Beitrag', fields, async (fd, f) => {
+    const doc = {kind:fd.kind, beat:fd.beat||'', date:fd.date||'', status:fd.status, owner:fd.owner, helpers:readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
     return (id ? await put('pcontent', id, doc) : await put('pcontent', uid('pc'), {...doc, producer:pid, at:new Date().toISOString()}, false)) ? undefined : false;
   }, extra);
   const d = $('#delPc');
@@ -1490,11 +1499,12 @@ function sheetTask(rid, id){
   const t = id ? S.tasks[id] : {phase:'T-8', owner:'A', title:''};
   const fields = `${F('title','SCHRITT',t.title,'text','required')}
     <div class="grid2">${Sel('phase','PHASE',PHASES,t.phase)}${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),t.owner)}</div>
+    ${HelpChips(t)}
     ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="z. B. Wünsche des Artists, Referenzen, Absprachen">${esc(t.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
-  const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async fd => {
-    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, due:fd.due||'', note:(fd.note||'').trim()};
+  const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async (fd, f) => {
+    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim()};
     if(!doc.title) return false;
     if(id) return await put('tasks', id, doc) ? undefined : false;
     return await put('tasks', uid('t'), {...doc, release:rid, artist:S.releases[rid].artist, done:false, order:tasksOf(rid).length}, false) ? undefined : false;
@@ -1651,7 +1661,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112110';
+const APP_VERSION = '202611112120';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
