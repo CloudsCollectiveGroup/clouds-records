@@ -653,14 +653,15 @@ function vRelease(c){
     const dueTxt = due ? fmt(due) : '';
     const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name[0]) : t.owner}` : '';
     const late = !ok && due && daysTo(due) < 0;
+    const noteTxt = t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '';
     return `<div class="step">
       <span class="ph" style="${isCur?`color:${T.c}`:''}">${esc(t.phase)}</span>
       <span class="rail">${isRel ? `<button class="dot ${ok?'ok':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}" style="border-radius:4px;transform:rotate(45deg);${ok?'':`background:${T.c}`}">${ok?'<span style="transform:rotate(-45deg);display:flex">'+icon.check+'</span>':''}</button>`
         : `<button class="dot ${ok?'ok':isCur?'cur':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}">${ok?icon.check:''}</button>`}
         ${last?'':`<span class="line ${ok?'solid':''}" style="${isCur?'height:56px':''}"></span>`}</span>
       <button class="stxt ${ok?'ok':isCur?'cur':''}" data-act="edittask" data-id="${esc(t.id)}" style="${isRel&&!ok?'font-weight:700;font-size:18px':''}">
-        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>`
-                : `${esc(t.title)} <span class="small">${ownerTxt}${dueTxt&&!ok?' · '+dueTxt:''}</span>${late?' <span class="small" style="color:var(--danger);font-weight:700">ÜBERFÄLLIG</span>':''}`}
+        ${isCur ? `<span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc(OWNERS[t.owner]||'').toUpperCase()}${dueTxt?' · FÄLLIG '+dueTxt:''}${late?' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>':''}</span>${noteTxt}`
+                : `${esc(t.title)} <span class="small">${ownerTxt}${dueTxt&&!ok?' · '+dueTxt:''}</span>${late?' <span class="small" style="color:var(--danger);font-weight:700">ÜBERFÄLLIG</span>':''}${noteTxt}`}
       </button></div>`;
   }).join('');
   const trs = tracksOf(r.id);
@@ -1266,10 +1267,11 @@ function sheetTask(rid, id){
   const t = id ? S.tasks[id] : {phase:'T-8', owner:'A', title:''};
   const fields = `${F('title','SCHRITT',t.title,'text','required')}
     <div class="grid2">${Sel('phase','PHASE',PHASES,t.phase)}${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),t.owner)}</div>
-    ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}`;
+    ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="z. B. Wünsche des Artists, Referenzen, Absprachen">${esc(t.note||'')}</textarea></div>`;
   const extra = id ? `<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
   const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async fd => {
-    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, due:fd.due||''};
+    const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, due:fd.due||'', note:(fd.note||'').trim()};
     if(!doc.title) return false;
     if(id) return await put('tasks', id, doc) ? undefined : false;
     return await put('tasks', uid('t'), {...doc, release:rid, artist:S.releases[rid].artist, done:false, order:tasksOf(rid).length}, false) ? undefined : false;
@@ -1426,7 +1428,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111530';
+const APP_VERSION = '202611111630';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
