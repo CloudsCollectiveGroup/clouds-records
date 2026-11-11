@@ -238,7 +238,7 @@ const COLS = ['people','releases','tasks','tracks','versions','comments'];
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
 const loaded = new Set();
 let db = null, user = null, me = null, dbState = 'wait';
-const stack = [{r:'roster'}];
+const stack = [{r:'cockpit'}];
 let filterArtist = 'alle';
 let pendingRender = false;
 
@@ -437,6 +437,13 @@ function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 const isPreview = () => !!cur().preview;
 
+function ctxArtist(c){
+  if(c.r === 'artist' && S.people[c.id]?.role === 'Artist') return c.id;
+  if(c.r === 'release') return S.releases[c.id]?.artist || null;
+  if(c.r === 'track'){ const t = S.tracks[c.id]; return t ? S.releases[t.release]?.artist || null : null; }
+  if(c.r === 'tracks' && c.artist) return c.artist;
+  return null;
+}
 function renderNav(){
   const c = cur(), nav = $('#nav');
   let items;
@@ -444,8 +451,11 @@ function renderNav(){
     const a = c.preview;
     items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}], lockedArtist ? ['logout','Abmelden',icon.exit,{}] : ['exit','Team',icon.exit,{}]];
   } else {
-    const firstArtist = c.id && S.people[c.id]?.role === 'Artist' ? c.id : (S.releases[c.id]?.artist || artists()[0]?.id);
-    items = [['roster','Roster',icon.roster,{}],['artist','Timeline',icon.timeline,{id:firstArtist}],['tracks','Tracks',icon.tracks,{}],['cockpit','Cockpit',icon.cockpit,{}]];
+    /* Team: oben Dashboard + Artists; erst im Artist dessen Unterbereiche */
+    const ctx = ctxArtist(c);
+    items = ctx
+      ? [['cockpit','Dashboard',icon.cockpit,{}],['artist','Timeline',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['preview','Artist-Sicht',icon.home,{id:ctx}]]
+      : [['cockpit','Dashboard',icon.cockpit,{}],['roster','Artists',icon.roster,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -453,7 +463,8 @@ function renderNav(){
   nav.querySelectorAll('button').forEach(b => b.onclick = () => {
     const [r,,,p] = items[+b.dataset.i];
     if(r === 'logout'){ logout(); return; }
-    if(r === 'exit'){ tab('roster'); return; }
+    if(r === 'exit'){ tab('cockpit'); return; }
+    if(r === 'preview'){ tab('artiststart', {id:p.id, preview:p.id}); return; }
     if(r === 'artist' && !p.id) return;
     tab(r, p);
   });
@@ -476,7 +487,7 @@ document.addEventListener('focusout', () => setTimeout(() => { if(pendingRender)
 
 function banner(){
   if(dbState === 'off') return `<div class="banner"><span>KEINE VERBINDUNG ZUR DATENBANK. BITTE SEITE NEU LADEN.</span></div>`;
-  if(cur().r === 'roster' && account) return `<div class="acct"><span>ANGEMELDET · ${esc(account.name.toUpperCase())}</span><button data-act="logout">ABMELDEN</button></div>`;
+  if(['roster','cockpit'].includes(cur().r) && account) return `<div class="acct"><span>ANGEMELDET · ${esc(account.name.toUpperCase())}</span><button data-act="logout">ABMELDEN</button></div>`;
   return '';
 }
 function previewBanner(){
@@ -720,7 +731,8 @@ function vCockpit(){
   const missing = artists().filter(p => !p.start);
   const overdueList = overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
   return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="sticker tilt">NUR TEAM</span></div>${banner()}
-    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Cockpit</h1></div>
+    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Dashboard</h1></div>
+    <div class="chips" style="gap:14px;padding-top:16px" aria-label="Artists">${artists().map(p => `<button data-go="artist" data-id="${esc(p.id)}" style="background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;color:var(--ink)"><span class="avatar" style="width:56px;height:56px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span><span style="font-size:12px;color:var(--ink2)">${esc(p.name)}</span></button>`).join('')}</div>
     <div class="tiles">
       <div class="tile ${overdue.length?'hot':''}"><b>${overdue.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
       <div class="tile dark"><b>${studio.length}</b><span class="lbl" style="color:var(--soft)">STUDIO-SLOTS NÖTIG</span></div>
@@ -808,8 +820,8 @@ function bind(){
 async function act(a, id){
   if(a === 'logout') return logout();
   if(a === 'back') return back();
-  if(a === 'home') return tab('roster');
-  if(a === 'exitpreview') return tab('roster');
+  if(a === 'home') return tab('cockpit');
+  if(a === 'exitpreview') return tab('cockpit');
   if(a === 'preview') return tab('artiststart', {id, preview:id});
   if(a === 'filter'){ filterArtist = id; return render(); }
   if(a === 'toggle'){ const t = S.tasks[id]; if(t) await put('tasks', id, {done: !t.done}); return; }
@@ -1081,7 +1093,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111104';
+const APP_VERSION = '202611111108';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
