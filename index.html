@@ -336,7 +336,7 @@ const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgel
 const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Platziert'];
 const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Für Artists + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
 const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Platziert':'var(--ep)'};
-const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love'];
+const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love','Storytelling'];
 const genresOf = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.mood ? [b.mood] : []);
 const isExclusive = b => b.status === 'Reserviert' || b.status === 'Platziert';
 const inStore = b => ['Freigegeben','Store','Verworfen'].includes(b.status);
@@ -1603,7 +1603,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111930';
+const APP_VERSION = '202611111940';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
