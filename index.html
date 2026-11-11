@@ -76,6 +76,17 @@ h1,h2{margin:0;text-wrap:balance}
 .acard .body{flex:1;padding:0;display:flex;flex-direction:column;gap:6px;min-width:0}
 .acard .name{font-weight:600;font-size:18px}
 .status{font-family:var(--mono);font-size:11px;font-weight:600}
+.tilegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px 20px 8px}
+.tilecard{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;padding:0;cursor:pointer;text-align:left;color:var(--ink);transition:background .15s}
+.tilecard:hover{background:var(--raise)}
+.tc-art{aspect-ratio:1/1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tc-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tc-ini{font-size:64px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:-.04em}
+.tc-yr{position:absolute;left:8px;top:8px;font-family:var(--mono);font-size:10px;font-weight:600;background:rgba(0,0,0,.35);color:#fff;padding:3px 6px;border-radius:5px}
+.tc-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.tc-name{font-weight:600;font-size:17px}
+.tc-body .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-bar{height:4px;border-radius:2px;background:var(--raise);overflow:hidden}.tc-bar i{display:block;height:100%}
 .pcard{display:flex;align-items:center;gap:14px;color:var(--ink);background:var(--card);border-radius:18px;padding:14px;border:1px solid var(--line);cursor:pointer;width:100%;text-align:left}
 .avatar{width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;flex:none}
 .navbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(min(430px,100%) - 24px);display:grid;background:rgba(23,23,26,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line2);border-radius:22px;padding:6px;z-index:20}
@@ -238,7 +249,7 @@ const COLS = ['people','releases','tasks','tracks','versions','comments'];
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
 const loaded = new Set();
 let db = null, user = null, me = null, dbState = 'wait';
-const stack = [{r:'cockpit'}];
+const stack = [{r:'roster'}];
 let filterArtist = 'alle';
 let pendingRender = false;
 
@@ -438,7 +449,7 @@ function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ..
 const isPreview = () => !!cur().preview;
 
 function ctxArtist(c){
-  if(c.r === 'artist' && S.people[c.id]?.role === 'Artist') return c.id;
+  if((c.r === 'artist' || c.r === 'artiststart') && S.people[c.id]?.role === 'Artist') return c.id;
   if(c.r === 'release') return S.releases[c.id]?.artist || null;
   if(c.r === 'track'){ const t = S.tracks[c.id]; return t ? S.releases[t.release]?.artist || null : null; }
   if(c.r === 'tracks' && c.artist) return c.artist;
@@ -451,11 +462,11 @@ function renderNav(){
     const a = c.preview;
     items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}], lockedArtist ? ['logout','Abmelden',icon.exit,{}] : ['exit','Team',icon.exit,{}]];
   } else {
-    /* Team: oben Dashboard + Artists; erst im Artist dessen Unterbereiche */
+    /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c);
     items = ctx
-      ? [['cockpit','Dashboard',icon.cockpit,{}],['artist','Timeline',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['preview','Artist-Sicht',icon.home,{id:ctx}]]
-      : [['cockpit','Dashboard',icon.cockpit,{}],['roster','Artists',icon.roster,{}]];
+      ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}]]
+      : [['roster','Artists',icon.roster,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -463,7 +474,7 @@ function renderNav(){
   nav.querySelectorAll('button').forEach(b => b.onclick = () => {
     const [r,,,p] = items[+b.dataset.i];
     if(r === 'logout'){ logout(); return; }
-    if(r === 'exit'){ tab('cockpit'); return; }
+    if(r === 'exit'){ tab('artiststart', {id:c.preview}); return; }
     if(r === 'preview'){ tab('artiststart', {id:p.id, preview:p.id}); return; }
     if(r === 'artist' && !p.id) return;
     tab(r, p);
@@ -509,14 +520,13 @@ function vRoster(){
     const r = currentRelease(p.id), nx = nextPlanned(p.id);
     const st = r ? `<div class="status" style="color:${TYPE[r.type].c}">● ${esc(relName(r).toUpperCase())} · ${esc(r.status.toUpperCase())}</div>`
              : `<div class="status" style="color:var(--mute)">○ ${nx && nx.date ? 'NÄCHSTES: ' + esc(relName(nx).toUpperCase()) + ' · ' + fmt(nx.date) : 'FAHRPLAN OFFEN'}</div>`;
-    return `<button class="acard" data-go="artist" data-id="${esc(p.id)}" aria-label="${esc(p.name)} öffnen">
-      <div class="swatch" style="background:${esc(p.color)}"><span style="color:${esc(p.color2)}">${esc((p.name||'?')[0])}</span></div>
-      <div class="body">
-        <div class="between" style="align-items:baseline"><span class="name">${esc(p.name)}</span><span class="small">${yearLabel(p)}</span></div>
-        ${st}
-        <div class="boxes" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div>
-        <div class="mono" style="font-size:10px;color:var(--mute)">${countLine(p)}</div>
-      </div></button>`;
+    const rs = relsOf(p.id).filter(x => x.pflicht), dn = rs.filter(x => x.status === 'Released').length;
+    const cv = r ? coverUrl(r) : null;
+    return `<button class="tilecard" data-go="artiststart" data-id="${esc(p.id)}" aria-label="${esc(p.name)} öffnen">
+      <div class="tc-art" style="background:${esc(p.color)}">${cv ? `<img src="${esc(cv)}" alt="">` : `<span class="tc-ini">${esc((p.name||'?')[0])}</span>`}<span class="tc-yr">${yearLabel(p)}</span></div>
+      <div class="tc-body"><span class="tc-name">${esc(p.name)}</span>${st}
+        <div class="tc-bar"><i style="width:${rs.length ? Math.max(4, Math.round(dn/rs.length*100)) : 0}%;background:${esc(p.color)}"></i></div>
+        <span class="small">${dn} von ${rs.length} Releases</span></div></button>`;
   }).join('');
   const prodCards = prods.map(p => `<button class="pcard" data-go="producer" data-id="${esc(p.id)}">
       <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${esc(p.name[0])}</div>
@@ -524,9 +534,9 @@ function vRoster(){
   return `${cloudSvg}
     <div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></div>
     ${banner()}
-    <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Roster</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
+    <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Artists</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
     <div class="pad legend" style="padding-top:16px"><span><i class="sw" style="background:var(--single)"></i>SINGLE</span><span><i class="sw" style="background:var(--ep)"></i>EP</span><span><i class="sw" style="background:var(--album)"></i>ALBUM</span><span><i class="box wip c-single" style="width:10px;height:10px"></i>LÄUFT</span></div>
-    <div class="list">${cards}
+    <div class="tilegrid">${cards}</div><div class="list" style="padding-top:4px">
       ${prods.length ? '<div class="lbl" style="padding-top:8px">PRODUZENTEN</div>' + prodCards : ''}
       ${ready ? `<div class="small" style="padding-top:6px">${totalLine()}</div>` : ''}
     </div>`;
@@ -731,7 +741,7 @@ function vCockpit(){
   const missing = artists().filter(p => !p.start);
   const overdueList = overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
   return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="sticker tilt">NUR TEAM</span></div>${banner()}
-    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Dashboard</h1></div>
+    <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Label</h1></div>
     <div class="chips" style="gap:14px;padding-top:16px" aria-label="Artists">${artists().map(p => `<button data-go="artist" data-id="${esc(p.id)}" style="background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;color:var(--ink)"><span class="avatar" style="width:56px;height:56px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span><span style="font-size:12px;color:var(--ink2)">${esc(p.name)}</span></button>`).join('')}</div>
     <div class="tiles">
       <div class="tile ${overdue.length?'hot':''}"><b>${overdue.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
@@ -784,20 +794,22 @@ function vProducer(c){
 function vArtistStart(c){
   const p = person(c.id); if(!p) throw new Error('missing');
   const r = currentRelease(p.id) || nextPlanned(p.id);
-  const allTasks = vals(S.tasks).filter(t => S.releases[t.release]?.artist === p.id && (t.owner === 'A' || t.owner === 'T'));
-  const next = r ? tasksOf(r.id).find(t => !t.done && t.owner === 'A') : null;
+  const teamMode = !isPreview();
+  const allTasks = vals(S.tasks).filter(t => S.releases[t.release]?.artist === p.id && (teamMode || t.owner === 'A' || t.owner === 'T'));
+  const next = r ? tasksOf(r.id).find(t => !t.done && (!isPreview() || t.owner === 'A')) : null;
   const week = allTasks.filter(t => S.releases[t.release] === r).slice(0,5);
   const yr = contractYear(p);
+  const team = !isPreview();
   return `${cloudSvg}${previewBanner()}
-    <div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="small">${yearLabel(p)}</span></div>
-    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant" style="font-size:58px">Hey ${esc(p.name)}.</h1>
+    <div class="topbar">${team ? `<button class="back" data-act="home">${icon.back}Artists</button>` : `<span class="brand">CLOUDS RECORDS</span>`}<span class="row" style="gap:8px">${team ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>` : `<span class="small">${yearLabel(p)}</span>`}</span></div>
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant" style="font-size:44px">${team ? esc(p.name) : `Hey ${esc(p.name)}.`}</h1>${team ? `<div class="small" style="margin-top:6px">${yearLabel(p)}${dropboxFolder(p, ' · DROPBOX-ORDNER →', 'small', 'font-weight:600;color:var(--sun);text-decoration:none')}</div>` : ''}
       <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div>
-    ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">DEIN NÄCHSTER SCHRITT</span></div>
+    ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
     <div style="margin:10px 16px 0;background:${TYPE[r.type].c};color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700">${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="sticker tilt3">${fmt(r.date)}</span>`:''}</div>
-      <span style="font-weight:700;font-size:28px;line-height:1.05">${esc(next?.title || 'Fahrplan folgt vom Team')}</span>
+      <span style="font-weight:700;font-size:28px;line-height:1.05">${esc(next?.title || (team ? 'Noch kein Fahrplan' : 'Fahrplan folgt vom Team'))}</span>
       <div class="row" style="flex-wrap:wrap"><button class="pill sun" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill" style="background:transparent;color:#fff;border-color:#fff" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>` : ''}
-    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Deine Aufgaben</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">${team ? 'Aufgaben' : 'Deine Aufgaben'}</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>`;
 }
 
@@ -820,8 +832,8 @@ function bind(){
 async function act(a, id){
   if(a === 'logout') return logout();
   if(a === 'back') return back();
-  if(a === 'home') return tab('cockpit');
-  if(a === 'exitpreview') return tab('cockpit');
+  if(a === 'home') return tab('roster');
+  if(a === 'exitpreview'){ const id = cur().preview; return tab('artiststart', {id}); }
   if(a === 'preview') return tab('artiststart', {id, preview:id});
   if(a === 'filter'){ filterArtist = id; return render(); }
   if(a === 'toggle'){ const t = S.tasks[id]; if(t) await put('tasks', id, {done: !t.done}); return; }
@@ -1093,7 +1105,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111108';
+const APP_VERSION = '202611111119';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
