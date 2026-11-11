@@ -1082,6 +1082,18 @@ $('#loginForm').addEventListener('submit', async e => {
   boot(data.session);
 });
 
+/* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
+const APP_VERSION = '202611111016';
+async function checkUpdate(){
+  try{
+    const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
+    const j = await r.json();
+    if(j.v && j.v !== APP_VERSION){ location.replace(location.pathname + '?v=' + j.v); }
+  }catch(_){}
+}
+checkUpdate();
+document.addEventListener('visibilitychange', () => { if(!document.hidden) checkUpdate(); });
+
 render();
 (async () => {
   if(!window.supabase || !CFG.SUPABASE_URL || /DEIN-PROJEKT/.test(CFG.SUPABASE_URL)){
