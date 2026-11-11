@@ -336,7 +336,7 @@ const ROOMS = ['Studio 1 · Vocals','Studio 2 · Mix/Master','BlackClouds (Studi
 const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
 /* Beats & Listening-Sessions (Produzenten) */
 const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Platziert'];
-const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Clouds Crate + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
+const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Beat Market + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
 const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Platziert':'var(--ep)'};
 const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love','Storytelling'];
 const genresOf = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.mood ? [b.mood] : []);
@@ -520,8 +520,8 @@ function shrinkImage(file){
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
-const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings'].includes(r) ? r : 'artiststart';
-  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market'].includes(r) ? r : 'artiststart';
+  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
 function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
@@ -532,7 +532,7 @@ function ctxArtist(c){
   if(c.r === 'release') return S.releases[c.id]?.artist || null;
   if(c.r === 'track'){ const t = S.tracks[c.id]; return t ? S.releases[t.release]?.artist || null : null; }
   if(c.r === 'tracks' && c.artist) return c.artist;
-  if(c.r === 'recordings' && S.people[c.id]) return c.id;
+  if((c.r === 'recordings' || c.r === 'market') && S.people[c.id]) return c.id;
   return null;
 }
 function renderNav(){
@@ -540,7 +540,7 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}], lockedArtist ? ['logout','Abmelden',icon.exit,{}] : ['exit','Team',icon.exit,{}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Market',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c);
@@ -568,7 +568,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
-  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent}[c.r] || vRoster;
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
@@ -998,10 +998,8 @@ function vArtistStart(c){
     <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio</h2><button class="pill" data-act="addstudioartist" data-id="${esc(p.id)}">${icon.plus} Anfragen</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${studioOf(p.id).filter(x => x.status !== 'Abgelehnt' || x.date >= todayIso()).slice(-4).map(x => studioRow(x, false)).join('') || '<span class="small">Keine Studio-Anfragen. Über „Anfragen“ einen Slot bei CloudStudios wünschen.</span>'}</div>
     ${(() => { const rs = recsOf(p.id).filter(x => x.status !== 'Übernommen').slice(0,3); return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Recordings</h2><button class="pill" data-act="addrec" data-id="${esc(p.id)}">${icon.plus} Recording</button></div><div class="pad stack" style="gap:8px;padding-top:10px">${rs.map(recRow).join('') || '<span class="small">Noch keine Aufnahmen. Alles, was im Studio entsteht, hier mit Dropbox-Link ablegen.</span>'}${recsOf(p.id).length > 3 ? `<button class="pill" data-go="recordings" data-id="${esc(p.id)}" style="align-self:flex-start">Alle Recordings · ${recsOf(p.id).length}</button>` : ''}</div>`; })()}
-    ${!team ? (() => { const mine = vals(S.beats||{}).filter(b => isExclusive(b) && b.reservedFor === p.id).sort((a,b) => (b.at||'').localeCompare(a.at||''));
-      const crate = vals(S.beats||{}).filter(b => b.status === 'Freigegeben').sort((a,b) => (b.at||'').localeCompare(a.at||''));
-      return `${mine.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Für dich gepickt</h2><span class="small">${mine.length} BEAT${mine.length===1?'':'S'}</span></div><div class="pad small" style="padding-top:6px">EXKLUSIV FÜR DICH ZUR SEITE GELEGT.</div><div class="pad stack" style="gap:8px;padding-top:10px">${mine.map(b => beatRow(b, 'mine')).join('')}</div>` : ''}
-      ${crate.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Clouds Crate</h2><span class="small">${crate.filter(b => !interestOf(b.id).length).length} FREI</span></div><div class="pad small" style="padding-top:6px">BEATS FÜR ALLE ARTISTS. MARKIER DIR EINEN – JEDER BEAT GEHT NUR AN EINEN.</div><div class="pad stack" style="gap:8px;padding-top:10px">${crate.map(b => beatRow(b, 'artist')).join('')}</div>` : ''}`; })() : ''}
+    ${!team ? (() => { const mine = myBeats(p.id), open = vals(S.beats||{}).filter(b => b.status === 'Freigegeben' && !interestOf(b.id).length);
+      return mine.length || open.length ? `<button class="vrow" data-go="market" data-id="${esc(p.id)}" style="margin:26px 20px 0;width:calc(100% - 40px);cursor:pointer;text-align:left;font:inherit;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="play" style="background:var(--sun);color:var(--on-sun)">${icon.tracks}</span><span class="stack" style="flex:1;gap:2px"><b>Beat Market</b><span class="small">${mine.length} FÜR DICH GEPICKT · ${open.length} OFFEN FÜR ALLE</span></span>${icon.chev}</button>` : ''; })() : ''}
     ${(() => { const up = vals(S.content||{}).filter(x => x.artist === p.id && x.status !== 'Live' && x.date && x.date >= todayIso()).sort((a,b) => a.date.localeCompare(b.date)).slice(0,3); return up.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Nächster Content</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${up.map(x => contentRow(x, false)).join('')}</div>` : ''; })()}`;
 }
 
@@ -1042,7 +1040,7 @@ function vBeats(c){
     <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Beats</h1></div><button class="pill sun" data-act="addbeat" data-id="${esc(p.id)}">${icon.plus} Beat</button></div>
     ${next ? `<button class="vrow" data-go="sessions" data-id="${esc(p.id)}" style="margin:16px 20px 0;width:calc(100% - 40px);cursor:pointer;text-align:left;font:inherit;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="play" style="background:var(--sun);color:var(--on-sun)">${icon.timeline}</span><span class="stack" style="flex:1;gap:2px"><b>Listening-Session ${fmt(next.date)}${next.time ? ' · ' + esc(next.time) : ''}</b><span class="small">${lists.pool.length} NEUE BEATS WARTEN AUF FEEDBACK</span></span></button>` : ''}
     <div class="chips">${lists.fav.length ? chip('fav','★ Favoriten') : ''}${chip('arbeit','In Arbeit')}${chip('pool','Pool')}${chip('frei','Für Artists')}${chip('store','Store')}${chip('platziert','Platziert')}${chip('alle','Alle')}</div>
-    <div class="pad small" style="padding-top:10px">${f === 'fav' ? 'FAVORITEN: PROJEKTE MIT HERZBLUT – HIER ZUERST WEITERARBEITEN.' : f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION. FAVORITEN STEHEN OBEN.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: EXKLUSIV GEPICKT ODER IM CRATE MARKIERT.` : 'PRO ARTIST: EXKLUSIV GEPICKTE UND IM CLOUDS CRATE MARKIERTE BEATS. DARUNTER: DER CLOUDS CRATE (FÜR ALLE ARTISTS).') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">CLOUDS CRATE · FÜR ALLE ARTISTS</span></div>' : ''}
+    <div class="pad small" style="padding-top:10px">${f === 'fav' ? 'FAVORITEN: PROJEKTE MIT HERZBLUT – HIER ZUERST WEITERARBEITEN.' : f === 'arbeit' ? 'IDEEN UND BEATS IM MIX – NOCH NICHT FÜR DIE LISTENING-SESSION. FAVORITEN STEHEN OBEN.' : f === 'store' ? `FÜR BEATSTARS & YOUTUBE: ${lists.store.filter(b => b.bsLive && b.ytLive).length} KOMPLETT LIVE · ${lists.store.filter(b => !(b.bsLive && b.ytLive)).length} NOCH HOCHLADEN.` : f === 'pool' ? 'INTERN: NUR TEAM UND PRODUZENT SEHEN DIESE BEATS. ENTSCHEIDUNG IN DER LISTENING-SESSION.' : f === 'frei' ? (selA ? `<button class="back" data-act="bfilter" data-id="frei|${esc(p.id)}" style="margin-bottom:8px">${icon.back}Alle Artists</button><br>FÜR ${esc(person(selA).name.toUpperCase())}: EXKLUSIV GEPICKT ODER IM BEAT MARKET MARKIERT.` : 'PRO ARTIST: EXKLUSIV GEPICKTE UND IM BEAT MARKET MARKIERTE BEATS. DARUNTER: DER BEAT MARKET (FÜR ALLE ARTISTS).') : ''}</div>${artistTiles}${f === 'frei' && !selA ? '<div class="pad" style="padding-top:18px"><span class="lbl">BEAT MARKET · OFFEN FÜR ALLE ARTISTS</span></div>' : ''}
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(b => beatRow(b)).join('') : `<div class="empty" style="margin:0"><b>${f === 'pool' ? 'Pool ist leer' : 'Keine Beats in dieser Ansicht'}</b><span class="small">Beat in Dropbox ablegen, Link kopieren und über „Beat“ eintragen. Neue Beats landen im internen Pool bis zur nächsten Listening-Session.</span></div>`}</div>`;
 }
 function vSessions(c){
@@ -1110,6 +1108,22 @@ function sheetRecording(aid, id){
   }, extra);
   const d = $('#delRec');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('recordings', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+/* ---------- Artist: Beat Market ---------- */
+const myBeats = aid => vals(S.beats||{}).filter(b => isExclusive(b) && b.reservedFor === aid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+function vMarket(c){
+  const p = person(c.id); if(!p) throw new Error('missing');
+  const mine = myBeats(p.id);
+  const open = vals(S.beats||{}).filter(b => b.status === 'Freigegeben').sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || (b.at||'').localeCompare(a.at||''));
+  const marked = open.filter(b => interestOf(b.id).some(x => x.artist === p.id));
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="small">${open.filter(b => !interestOf(b.id).length).length} FREI</span></div>${banner()}${previewBanner()}
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Beat Market</h1><div class="small" style="margin-top:6px">BEATS VON ${esc(producers().map(x => x.name.toUpperCase()).join(' & ') || 'CLOUDS RECORDS')}</div></div>
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Für dich gepickt</h2><span class="small">${mine.length + marked.length}</span></div>
+    <div class="pad small" style="padding-top:6px">EXKLUSIV FÜR DICH ZUR SEITE GELEGT – UND WAS DU DIR MARKIERT HAST.</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${mine.map(b => beatRow(b, 'mine')).join('')}${marked.map(b => beatRow(b, 'artist')).join('')}${mine.length + marked.length ? '' : '<span class="small">Noch nichts für dich gepickt. Schau unten im Market und markier dir einen Beat.</span>'}</div>
+    <div class="pad between" style="padding-top:28px"><h2 class="h-sec">Offen für alle</h2><span class="small">${open.length - marked.length} BEATS</span></div>
+    <div class="pad small" style="padding-top:6px">MARKIER DIR EINEN BEAT – JEDER BEAT GEHT NUR AN EINEN ARTIST.</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${open.filter(b => !interestOf(b.id).some(x => x.artist === p.id)).map(b => beatRow(b, 'artist')).join('') || '<span class="small">Gerade keine offenen Beats. Neue kommen nach jeder Listening-Session.</span>'}</div>`;
 }
 /* ---------- Produzent: Monatsplan & Content ---------- */
 function vPMonth(c){
@@ -1229,7 +1243,7 @@ function sheetSession(pid, id){
   const pool = beatsOf(x.producer).filter(b => b.status === 'Neu');
   const review = id && !x.done ? `<div class="lbl" style="margin:4px 0 8px">NEUE BEATS AUS DEM POOL (${pool.length})</div>
     <div class="stack" style="gap:8px;margin-bottom:12px">${pool.length ? pool.map(b => `<div class="vrow" style="padding:8px 10px;flex-wrap:wrap"><a class="play" href="${esc(safeUrl(b.link)||'#')}" target="_blank" rel="noopener" style="width:36px;height:36px;text-decoration:none">${icon.play}</a><span class="stack" style="flex:1;min-width:0"><b style="font-weight:600;font-size:15px">${esc(b.title)}</b><span class="small">${esc([b.bpm ? b.bpm + ' BPM' : '', b.key||''].filter(Boolean).join(' · '))}</span></span>
-      <select name="rv_${esc(b.id)}" style="min-height:36px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 8px"><option value="">offen</option><option value="Freigegeben">Clouds Crate + Store</option><option value="Store">Nur Store</option>${artists().map(a => `<option value="R:${esc(a.id)}">Exklusiv für ${esc(a.name)}</option>`).join('')}</select>
+      <select name="rv_${esc(b.id)}" style="min-height:36px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 8px"><option value="">offen</option><option value="Freigegeben">Beat Market + Store</option><option value="Store">Nur Store</option>${artists().map(a => `<option value="R:${esc(a.id)}">Exklusiv für ${esc(a.name)}</option>`).join('')}</select>
       <input name="mn_${esc(b.id)}" placeholder="Mix-Feedback (optional)" value="${esc(b.mixNote||'')}" style="flex-basis:100%;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:14px"></div>`).join('') : '<span class="small">Keine neuen Beats im Pool.</span>'}</div>` : '';
   const fields = `<div class="grid2">${F('date','DATUM',x.date||'','date','required')}${F('time','UHRZEIT',x.time||'','time')}</div>
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="Ort, Teilnehmer, Schwerpunkt">${esc(x.note||'')}</textarea></div>
@@ -1613,7 +1627,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112010';
+const APP_VERSION = '202611112020';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
