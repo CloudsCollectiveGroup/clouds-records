@@ -277,7 +277,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -554,10 +554,10 @@ function renderNav(){
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c);
-    if(pctx) items = [['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
+    if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['roster','Artists',icon.roster,{}],['market','Beat Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['market','Beat Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -578,7 +578,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
-  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket}[c.r] || vRoster;
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
@@ -1120,6 +1120,63 @@ function sheetRecording(aid, id){
   const d = $('#delRec');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('recordings', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
+/* ---------- Pinnwand: alles, was bei mir liegt + Nachrichten ---------- */
+const USER_KEY = {cem:'C', kasper:'K', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
+const myKey = () => account?.role === 'producer' ? 'P' : (USER_KEY[account?.username] || null);
+const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) && x.helpers.includes(k)));
+const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+function pinItems(k){
+  const out = [];
+  for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
+  for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
+  for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
+  for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
+  return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
+}
+function vPin(c){
+  const k = c.k || myKey();
+  const since = SEEN.__pin || '';
+  const isNew = x => x.at && x.by && x.by !== me && x.at > since;
+  const items = k ? pinItems(k) : [];
+  const t0 = todayIso(), wk = isoAdd(t0, 7);
+  const over = items.filter(x => x.due && x.due < t0), week = items.filter(x => x.due && x.due >= t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
+  const notes = k ? notesFor(k).filter(n => !(n.doneBy||[]).includes(k)) : [];
+  const sent = vals(S.notes||{}).filter(n => n.fromId === me && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+  const row = x => `<button class="vrow" data-act="pingo" data-id="${esc(JSON.stringify(x.go))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;align-items:flex-start">
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.title)}${isNew(x) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
+      <span class="small">${esc(x.sub.toUpperCase())}${x.due ? ' · ' + (x.due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.due) + '</b>' : 'BIS ' + fmt(x.due)) : ''}</span>
+      ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</span>${icon.chev}</button>`;
+  const noteCard = n => `<div class="vrow" style="align-items:flex-start;border-color:rgba(212,175,55,.35);background:var(--sun-bg)">
+      <span class="stack" style="flex:1;gap:4px;min-width:0"><span class="small">VON ${esc((n.from||'').toUpperCase())} · ${n.at ? new Date(n.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}${n.due ? ' · BIS ' + fmt(n.due) : ''}${(n.to||[]).length > 1 ? ' · AN ' + esc(n.to.map(t => ownerName(t)).join(', ').toUpperCase()) : ''}</span>
+      <span style="font-size:15px;line-height:1.4;white-space:pre-line">${esc(n.text)}</span>${safeUrl(n.link) ? `<a class="small" href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">LINK ÖFFNEN →</a>` : ''}</span>
+      ${c.k && c.k !== myKey() ? '' : `<button class="pill sun" data-act="notedone" data-id="${esc(n.id)}" style="min-height:34px;flex:none">${icon.check} Erledigt</button>`}</div>`;
+  const sentCard = n => `<div class="vrow" style="align-items:flex-start"><span class="stack" style="flex:1;gap:3px;min-width:0"><span class="small">AN ${esc((n.to||[]).map(t => ownerName(t) + ((n.doneBy||[]).includes(t) ? ' ✓' : '')).join(', ').toUpperCase())}</span><span style="font-size:14px;white-space:pre-line">${esc(n.text)}</span></span><button class="iconbtn ghost" data-act="notedel" data-id="${esc(n.id)}" aria-label="Nachricht zurückziehen" style="width:34px;height:34px;flex:none">×</button></div>`;
+  const sec = (title, list, hot) => list.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec" ${hot ? 'style="color:var(--danger)"' : ''}>${title}</h2><span class="small">${list.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(row).join('')}</div>` : '';
+  const team = account?.role !== 'producer';
+  const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
+  setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></div>${banner()}
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
+    ${pick}
+    ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
+    ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
+    ${!notes.length && !items.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
+    ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
+}
+function sheetNote(){
+  const mk = myKey();
+  const fields = `<div class="field"><label for="f-text">NACHRICHT</label><textarea id="f-text" name="text" rows="4" required placeholder="z. B. Niki, bitte Cover für BIT bis Freitag"></textarea></div>
+    <div class="field"><span class="flabel">AN (MEHRFACH)</span><div class="gchips">${HELPER_KEYS.filter(x => x !== mk).map(x => `<label class="gchip"><input type="checkbox" name="to" value="${x}"><span>${esc(ownerName(x))}</span></label>`).join('')}</div></div>
+    <div class="grid2">${F('due','BIS (OPTIONAL)','','date')}${F('link','LINK (OPTIONAL)','','url','placeholder="https://…"')}</div>`;
+  sheet('Neue Nachricht', fields, async (fd, f) => {
+    const to = [...f.querySelectorAll('input[name=to]:checked')].map(i => i.value);
+    if(!to.length){ toast('Bitte mindestens eine Person antippen'); return false; }
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const ok = await put('notes', uid('n'), {text:(fd.text||'').trim(), to, due:fd.due||'', link:safeUrl(fd.link), from:account?.name || 'Team', fromKey: mk || '', fromId: me || '', doneBy:[], at:new Date().toISOString()}, false);
+    if(ok) toast('Angepinnt bei ' + to.map(x => ownerName(x)).join(', '));
+    return ok ? undefined : false;
+  });
+}
 /* ---------- Artist: Beat Market ---------- */
 const myBeats = aid => vals(S.beats||{}).filter(b => pickedFor(b, aid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function vMarketTeam(){
@@ -1367,6 +1424,11 @@ async function act(a, id){
   if(a === 'editpc'){ const x = S.pcontent?.[id]; return x ? sheetPContent(x.producer, id) : null; }
   if(a === 'pcfilter'){ const [f, pid] = id.split('|'); return tab('pcontent', {id:pid, f}); }
   if(a === 'fav'){ const b = S.beats?.[id]; if(!b || !me) return; const f = {...favsOf(b)}; if(f[me]) delete f[me]; else f[me] = account?.name || 'Team'; await put('beats', id, {favs:f}); return; }
+  if(a === 'addnote') return sheetNote();
+  if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
+  if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
+  if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
+  if(a === 'pingo'){ const g = JSON.parse(id); return g[0] === 'pmonth' ? go('pmonth', {id:g[1], m:g[2]}) : go(g[0], {id:g[1]}); }
   if(a === 'bartist'){ const [aid, pid] = id.split('|'); return go('beats', {id:pid, f:'frei', a:aid}); }
   if(a === 'bfilter'){ const [f, pid] = id.split('|'); return tab('beats', {id:pid, f}); }
   if(a === 'addsession') return sheetSession(id);
@@ -1661,7 +1723,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112120';
+const APP_VERSION = '202611112140';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
