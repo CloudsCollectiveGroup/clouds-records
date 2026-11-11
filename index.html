@@ -335,12 +335,13 @@ const contentOf = rid => vals(S.content||{}).filter(c => c.release === rid).sort
 const ROOMS = ['Studio 1 · Vocals','Studio 2 · Mix/Master','BlackClouds (Studio 4/5)','Egal'];
 const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
 /* Beats & Listening-Sessions (Produzenten) */
-const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Platziert'];
-const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Beat Market + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
-const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Platziert':'var(--ep)'};
+const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Duo','Platziert'];
+const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Beat Market + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Duo:'Duo / Feature-Idee', Platziert:'Platziert', Verworfen:'Nur Store'};
+const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Duo':'var(--ep)','Platziert':'var(--ep)'};
 const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love','Storytelling'];
 const genresOf = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.mood ? [b.mood] : []);
-const isExclusive = b => b.status === 'Reserviert' || b.status === 'Platziert';
+const isExclusive = b => b.status === 'Reserviert' || b.status === 'Duo' || b.status === 'Platziert';
+const pickedFor = (b, a) => isExclusive(b) && (b.reservedFor === a || (b.status === 'Duo' && b.reservedFor2 === a));
 const inStore = b => ['Freigegeben','Store','Verworfen'].includes(b.status);
 const PCKINDS = ['YouTube-Video','YouTube-Short','TikTok','Instagram-Reel','Beatstars-Upload','SoundCloud-Upload','Story','Post'];
 const ymNow = () => todayIso().slice(0,7);
@@ -1011,12 +1012,12 @@ function prodTop(p){
 function beatRow(b, mode){
   const ints = interestOf(b.id).map(x => x.artistName || person(x.artist)?.name).filter(Boolean);
   const meta = [b.bpm ? b.bpm + ' BPM' : '', b.key || '', genresOf(b).join(', '), b.feat ? 'FEAT. ' + b.feat : ''].filter(Boolean).join(' · ').toUpperCase();
-  const res = b.status === 'Reserviert' && b.reservedFor ? ' · FÜR ' + esc((person(b.reservedFor)?.name||'').toUpperCase()) : '';
+  const res = b.status === 'Duo' && b.reservedFor ? ' · DUO: ' + esc([person(b.reservedFor)?.name || b.resName, person(b.reservedFor2)?.name || b.res2Name].map(x => x || '').filter(Boolean).join(' & ').toUpperCase()) : b.status === 'Reserviert' && b.reservedFor ? ' · FÜR ' + esc((person(b.reservedFor)?.name||'').toUpperCase()) : '';
   return `<div class="vrow" style="flex-wrap:wrap">
     <a class="play" href="${esc(safeUrl(b.link) || '#')}" target="_blank" rel="noopener" aria-label="${esc(b.title)} in Dropbox anhören" style="text-decoration:none">${icon.play}</a>
     ${mode === 'artist' || mode === 'mine' ? '' : `<button class="favbtn ${b.fav ? 'on' : ''}" data-act="fav" data-id="${esc(b.id)}" aria-label="${b.fav ? 'Favorit entfernen' : 'Als Favorit markieren'}" title="Favorit">${b.fav ? '★' : '☆'}</button>`}
     <button class="stack" data-act="${mode === 'artist' || mode === 'mine' ? 'noop' : 'editbeat'}" data-id="${esc(b.id)}" style="flex:1;gap:3px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0;color:var(--ink)"><b style="font-weight:600">${esc(b.title)}</b><span class="small">${esc(meta) || 'OHNE ANGABEN'}${res}</span>${ints.length && mode !== 'artist' && mode !== 'mine' ? `<span class="small" style="color:var(--sun)">MARKIERT VON: ${esc(ints.join(', ').toUpperCase())}</span>` : ''}</button>
-    ${mode === 'mine' ? '<span class="status" style="color:var(--sun)">● FÜR DICH</span>' : mode === 'artist' ? (() => { const cl = interestOf(b.id)[0]; const me2 = cl && cl.artist === lockedArtist;
+    ${mode === 'mine' ? (b.status === 'Duo' ? `<span class="status" style="color:var(--sun)">● FEATURE-IDEE MIT ${esc(((b.reservedFor === lockedArtist || b.reservedFor === cur().preview) ? (b.res2Name || person(b.reservedFor2)?.name || '') : (b.resName || person(b.reservedFor)?.name || '')).toUpperCase())}</span>` : '<span class="status" style="color:var(--sun)">● FÜR DICH</span>') : mode === 'artist' ? (() => { const cl = interestOf(b.id)[0]; const me2 = cl && cl.artist === lockedArtist;
       return cl && !me2 ? `<span class="status" style="color:var(--mute)">● VERGEBEN · ${esc((cl.artistName || person(cl.artist)?.name || '').toUpperCase())}</span>` : `<button class="pill ${me2 ? 'on' : 'sun'}" data-act="interest" data-id="${esc(b.id)}" style="min-height:34px">${me2 ? 'Markiert ✓' : 'Markieren'}</button>`; })() : `<span class="status" style="color:${BSTATUS_COL[b.status]||'var(--mute)'}">● ${esc((BLABEL[b.status]||b.status||'').toUpperCase())}</span>`}
     ${mode !== 'artist' && mode !== 'mine' && (b.bsLive || b.ytLive || b.mixNote) ? `<div class="row" style="width:100%;gap:6px;flex-wrap:wrap;padding-left:52px">${b.bsLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.bsLink)||'#')}" target="_blank" rel="noopener">BEATSTARS ✓</a>` : ''}${b.ytLive ? `<a class="chip" style="background:var(--raise);color:var(--ink);text-decoration:none" href="${esc(safeUrl(b.ytLink)||'#')}" target="_blank" rel="noopener">YOUTUBE ✓</a>` : ''}${isExclusive(b) && (b.bsLive || b.ytLive) ? '<span class="small" style="color:var(--danger);font-weight:700">EXKLUSIV – IM STORE OFFLINE NEHMEN</span>' : ''}${b.mixNote ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ Mix: ${esc(b.mixNote)}</span>` : ''}</div>` : ''}</div>`;
 }
@@ -1024,12 +1025,12 @@ function vBeats(c){
   const p = person(c.id); if(!p) throw new Error('missing');
   const f = c.f || 'pool';
   const all = beatsOf(p.id);
-  const lists = {fav: all.filter(b => b.fav), arbeit: all.filter(b => b.status === 'Idee' || b.status === 'Gemixt'), pool: all.filter(b => b.status === 'Neu'), frei: all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert'), store: all.filter(inStore), platziert: all.filter(b => b.status === 'Platziert'), alle: all};
+  const lists = {fav: all.filter(b => b.fav), arbeit: all.filter(b => b.status === 'Idee' || b.status === 'Gemixt'), pool: all.filter(b => b.status === 'Neu'), frei: all.filter(b => b.status === 'Freigegeben' || b.status === 'Reserviert' || b.status === 'Duo'), store: all.filter(inStore), platziert: all.filter(b => b.status === 'Platziert'), alle: all};
   let items = lists[f] || all;
-  const forA = a => all.filter(b => (b.status === 'Reserviert' && b.reservedFor === a) || interestOf(b.id).some(x => x.artist === a));
+  const forA = a => all.filter(b => ((b.status === 'Reserviert' || b.status === 'Duo') && pickedFor(b, a)) || interestOf(b.id).some(x => x.artist === a));
   const selA = f === 'frei' && c.a && person(c.a) ? c.a : null;
   if(selA) items = forA(selA);
-  const artistTiles = f === 'frei' && !selA ? `<div class="tilegrid" style="padding-top:12px">${artists().map(a => { const mine = forA(a.id), res = mine.filter(b => b.status === 'Reserviert' && b.reservedFor === a.id).length, int = mine.filter(b => interestOf(b.id).some(x => x.artist === a.id)).length;
+  const artistTiles = f === 'frei' && !selA ? `<div class="tilegrid" style="padding-top:12px">${artists().map(a => { const mine = forA(a.id), res = mine.filter(b => (b.status === 'Reserviert' || b.status === 'Duo') && pickedFor(b, a.id)).length, int = mine.filter(b => interestOf(b.id).some(x => x.artist === a.id)).length;
       return `<button class="tilecard" data-act="bartist" data-id="${esc(a.id)}|${esc(p.id)}" aria-label="Beats für ${esc(a.name)}">
         <div class="tc-art" style="background:${esc(a.color)};aspect-ratio:16/10">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini" style="font-size:44px">${esc((a.name||'?')[0])}</span>`}${mine.length ? `<span class="tc-new">${mine.length}</span>` : ''}</div>
         <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${res} EXKLUSIV · ${int} MARKIERT</span></div></button>`; }).join('')}</div>` : '';
@@ -1110,7 +1111,7 @@ function sheetRecording(aid, id){
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('recordings', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
 /* ---------- Artist: Beat Market ---------- */
-const myBeats = aid => vals(S.beats||{}).filter(b => isExclusive(b) && b.reservedFor === aid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+const myBeats = aid => vals(S.beats||{}).filter(b => pickedFor(b, aid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function vMarket(c){
   const p = person(c.id); if(!p) throw new Error('missing');
   const mine = myBeats(p.id);
@@ -1216,6 +1217,7 @@ function sheetBeat(pid, id){
     <div class="field"><span class="flabel">GENRE & STIMMUNG (MEHRFACH)</span><div class="gchips">${GENRES.concat(genresOf(b).filter(g => !GENRES.includes(g))).map(g => `<label class="gchip"><input type="checkbox" name="genres" value="${esc(g)}" ${genresOf(b).includes(g) ? 'checked' : ''}><span>${esc(g)}</span></label>`).join('')}</div></div>
     ${F('feat','FEATURE-PRODUZENT (OPTIONAL)',b.feat||'','text','placeholder="z. B. Gastproduzent, der mitgewirkt hat"')}
     <div class="grid2">${Sel('status','STATUS',BSTATUS.map(k => [k, BLABEL[k]]),b.status === 'Verworfen' ? 'Store' : b.status)}${Sel('reservedFor','EXKLUSIV FÜR',[['','—'], ...arts],b.reservedFor||'')}</div>
+    ${Sel('reservedFor2','2. ARTIST (NUR BEI DUO / FEATURE-IDEE)',[['','—'], ...arts],b.reservedFor2||'')}
     ${id ? '' : '<p class="small" style="margin:-4px 0 12px">„Pool“ = fertig für die nächste Listening-Session.</p>'}
     <div class="lbl" style="margin:6px 0 8px">STORE</div>
     <div class="grid2" style="align-items:end"><label class="row" style="gap:8px;margin-bottom:12px"><input type="checkbox" name="bsLive" ${b.bsLive ? 'checked' : ''} style="width:20px;height:20px"> Beatstars live</label>${F('bsLink','BEATSTARS-LINK',b.bsLink||'','url','placeholder="https://www.beatstars.com/…"')}</div>
@@ -1228,9 +1230,10 @@ function sheetBeat(pid, id){
     if(!safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     const genres = [...form.querySelectorAll('input[name=genres]:checked')].map(i => i.value);
     const doc = {title:fd.title.trim(), link:safeUrl(fd.link), bpm:fd.bpm||'', key:(fd.key||'').trim(), genres, mood: genres.join(', '), feat:(fd.feat||'').trim(), note:(fd.note||'').trim(),
-      status:fd.status, reservedFor: (fd.status === 'Reserviert' || fd.status === 'Platziert') ? (fd.reservedFor||'') : '',
+      status:fd.status, reservedFor: (fd.status === 'Reserviert' || fd.status === 'Duo' || fd.status === 'Platziert') ? (fd.reservedFor||'') : '', reservedFor2: fd.status === 'Duo' || (fd.status === 'Platziert' && fd.reservedFor2) ? (fd.reservedFor2||'') : '', resName: person(fd.reservedFor)?.name || '', res2Name: person(fd.reservedFor2)?.name || '',
       bsLive: fd.bsLive === 'on', bsLink: safeUrl(fd.bsLink), ytLive: fd.ytLive === 'on', ytLink: safeUrl(fd.ytLink), mixNote:(fd.mixNote||'').trim()};
     if(fd.status === 'Reserviert' && !fd.reservedFor){ toast('Bitte wählen, für wen der Beat exklusiv ist'); return false; }
+    if(fd.status === 'Duo' && (!fd.reservedFor || !fd.reservedFor2 || fd.reservedFor === fd.reservedFor2)){ toast('Für Duo bitte zwei verschiedene Artists wählen'); return false; }
     const ok = id ? await put('beats', id, doc) : await put('beats', uid('b'), {...doc, producer:pid, at:new Date().toISOString()}, false);
     if(ok && isExclusive(doc) && (doc.bsLive || doc.ytLive)) toast('Exklusiv vergeben: Beat auf Beatstars/YouTube offline nehmen');
     return ok ? undefined : false;
@@ -1627,7 +1630,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112020';
+const APP_VERSION = '202611112030';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
