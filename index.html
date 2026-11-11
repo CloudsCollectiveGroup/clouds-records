@@ -1142,7 +1142,7 @@ function vPin(c){
   const over = items.filter(x => x.due && x.due < t0), week = items.filter(x => x.due && x.due >= t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
   const notes = k ? notesFor(k).filter(n => !(n.doneBy||[]).includes(k)) : [];
   const sent = vals(S.notes||{}).filter(n => n.fromId === me && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
-  const row = x => `<button class="vrow" data-act="pingo" data-id="${esc(JSON.stringify(x.go))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;align-items:flex-start">
+  const row = x => `<button class="vrow" data-act="pingo" data-id="${esc(JSON.stringify({g:x.go, src:x.src, id:x.id}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;align-items:flex-start">
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.title)}${isNew(x) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
       <span class="small">${esc(x.sub.toUpperCase())}${x.due ? ' · ' + (x.due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.due) + '</b>' : 'BIS ' + fmt(x.due)) : ''}</span>
       ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</span>${icon.chev}</button>`;
@@ -1428,7 +1428,15 @@ async function act(a, id){
   if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
   if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
   if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
-  if(a === 'pingo'){ const g = JSON.parse(id); return g[0] === 'pmonth' ? go('pmonth', {id:g[1], m:g[2]}) : go(g[0], {id:g[1]}); }
+  if(a === 'pingo'){ const {g, src, id:xid} = JSON.parse(id);
+    if(g[0] === 'pmonth') go('pmonth', {id:g[1], m:g[2]}); else go(g[0], {id:g[1]});
+    setTimeout(() => {
+      if(src === 'tasks' && S.tasks[xid]) sheetTask(S.tasks[xid].release, xid);
+      else if(src === 'pplan' && S.pplan?.[xid]) sheetPlan(S.pplan[xid].producer, S.pplan[xid].month, xid);
+      else if(src === 'content' && S.content?.[xid]) sheetContent(S.content[xid].release, xid);
+      else if(src === 'pcontent' && S.pcontent?.[xid]) sheetPContent(S.pcontent[xid].producer, xid);
+    }, 120);
+    return; }
   if(a === 'bartist'){ const [aid, pid] = id.split('|'); return go('beats', {id:pid, f:'frei', a:aid}); }
   if(a === 'bfilter'){ const [f, pid] = id.split('|'); return tab('beats', {id:pid, f}); }
   if(a === 'addsession') return sheetSession(id);
@@ -1723,7 +1731,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112140';
+const APP_VERSION = '202611112150';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
