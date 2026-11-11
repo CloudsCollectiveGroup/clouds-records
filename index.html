@@ -149,6 +149,19 @@ h1,h2{margin:0;text-wrap:balance}
 .btn{min-height:50px;border-radius:25px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:700;font-size:16px;cursor:pointer;padding:0 20px}
 .btn.alt{background:transparent;color:var(--ink)}
 .btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+.mini{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));width:calc(min(430px,100%) - 24px);box-sizing:border-box;background:var(--card);border:1.5px solid var(--ink);border-radius:18px;padding:10px 12px;z-index:19;display:flex;flex-direction:column;gap:6px;box-shadow:0 10px 30px rgba(20,20,20,.18)}
+.mini .mh{display:flex;align-items:center;gap:10px}
+.mini .mh b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mh span{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--mute);letter-spacing:.08em}
+.mini .mh button{margin-left:auto;flex:none;width:30px;height:30px;border-radius:15px;border:1.5px solid var(--ink);background:none;font-size:16px;line-height:1;cursor:pointer;color:var(--ink)}
+.mini audio{width:100%;height:36px}
+body.hasmini .app{padding-bottom:110px}
+body.hasmini .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+.rhero .rimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rhero .rshade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,0) 35%,rgba(0,0,0,.55) 100%)}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.upl{border:1.5px dashed var(--ink);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;background:var(--card)}
+.upl input[type=file]{font:inherit;font-size:14px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:14px;font-family:var(--mono);font-size:12px;z-index:60;max-width:90%}
 .banner{margin:12px 16px 0;background:var(--sun);border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .skel{height:104px;border-radius:20px;background:var(--cloud);border:1.5px solid var(--line)}
@@ -171,6 +184,7 @@ h1,h2{margin:0;text-wrap:balance}
   <nav id="nav" class="navbar" aria-label="Hauptnavigation"></nav>
 </div>
 <div id="sheetRoot"></div>
+<div id="mini" class="mini" hidden><div class="mh"><div class="stack" style="gap:2px;min-width:0;flex:1"><b id="miniTitle"></b><span id="miniSub"></span></div><button type="button" id="miniClose" aria-label="Player schließen">✕</button></div><audio id="miniAudio" controls preload="none" playsinline></audio></div>
 <div id="toast" class="toast" hidden></div>
 <div id="login" class="login" hidden>
   <form id="loginForm" autocomplete="on">
@@ -355,6 +369,60 @@ function toast(msg){
   clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600);
 }
 
+/* ---------- Medien (Supabase Storage) ---------- */
+const MAX_AUDIO = 50 * 1024 * 1024;
+const AUDIO_TYPES = {mp3:'audio/mpeg', m4a:'audio/mp4', aac:'audio/aac', wav:'audio/wav'};
+const urlCache = {}, urlPending = {};
+async function signedUrl(bucket, path){
+  const k = bucket + '/' + path, c = urlCache[k];
+  if(c && c.exp > Date.now()) return c.url;
+  const {data, error} = await sb.storage.from(bucket).createSignedUrl(path, 3600);
+  if(error) throw error;
+  urlCache[k] = {url: data.signedUrl, exp: Date.now() + 50*60e3};
+  return data.signedUrl;
+}
+/* Cover-URL synchron liefern, falls schon geladen; sonst laden und neu zeichnen */
+function coverUrl(r){
+  if(!r?.cover || !sb) return null;
+  const k = 'covers/' + r.cover, c = urlCache[k];
+  if(c && c.exp > Date.now()) return c.url;
+  if(!urlPending[k]){ urlPending[k] = signedUrl('covers', r.cover).then(() => render()).catch(() => {}).finally(() => delete urlPending[k]); }
+  return null;
+}
+const coverTag = r => { const u = coverUrl(r); return u ? `<img src="${esc(u)}" alt="" loading="lazy">` : ''; };
+async function playVersion(vid){
+  const v = S.versions[vid]; if(!v) return;
+  if(!v.file){ if(v.link) window.open(v.link, '_blank', 'noopener'); return; }
+  const t = S.tracks[v.track], r = t && S.releases[t.release];
+  try{
+    const url = await signedUrl('audio', v.file);
+    const a = $('#miniAudio');
+    $('#miniTitle').textContent = (t?.title || 'Track') + ' · ' + v.label;
+    $('#miniSub').textContent = ((person(r?.artist)?.name || '') + ' · ' + (v.kind || '')).toUpperCase();
+    $('#mini').hidden = false; document.body.classList.add('hasmini');
+    if(a.dataset.vid !== vid){ a.src = url; a.dataset.vid = vid; }
+    await a.play().catch(() => {});
+  }catch(e){ toast('Datei konnte nicht geladen werden'); }
+}
+async function uploadFile(bucket, path, file, type){
+  const {error} = await sb.storage.from(bucket).upload(path, file, {contentType: type, upsert: false, cacheControl: '3600'});
+  if(error) throw error;
+}
+/* Cover vor dem Hochladen auf max. 1400 px verkleinern (spart Speicher, lädt schneller) */
+function shrinkImage(file){
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const m = 1400, sc = Math.min(1, m / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      c.toBlob(b => b ? res(b) : rej(new Error('Bild')), 'image/jpeg', 0.86);
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('Bild konnte nicht gelesen werden')); };
+    img.src = u;
+  });
+}
+
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
@@ -495,7 +563,7 @@ function relRow(r, now){
   const statusTxt = r.status.toUpperCase() + (ts.length && isActive(r) ? ` · ${dn}/${ts.length}` : '');
   const parent = r.countsTo && r.type === 'Vorab-Single' ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">ZÄHLT ZU ${esc(r.countsTo.toUpperCase())}</span>` : '';
   return `<button class="rrow ${now?'now':''} ${r.status==='Released'?'done':''}" data-go="release" data-id="${esc(r.id)}">
-    <span class="cover" style="background:${T.c}">${miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
+    <span class="cover" style="background:${T.c}">${coverUrl(r) ? coverTag(r) : miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
     <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(relTitle(r))}${now?'<span class="sticker tilt3" style="padding:3px 6px;font-size:10px">JETZT</span>':''}</span>
       <span class="small" style="font-weight:700;color:${isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}</span>${parent}</span>
     <span class="small" style="text-align:right">${r.date ? fmt(r.date) : 'DATUM<br>OFFEN'}</span></button>`;
@@ -535,8 +603,8 @@ function vRelease(c){
   }).join('');
   return `${banner()}${previewBanner()}
     <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(p.name)}</button><span class="small">${r.pflicht ? 'ZÄHLT ALS ' + esc((r.countsTo||'').toUpperCase()) : 'VORAB · ZÄHLT ZU ' + esc((r.countsTo||'').toUpperCase())}</span></div>
-    <div class="rhero" style="background:${T.c}">
-      <svg class="vinyl" width="320" height="320" viewBox="0 0 320 320" aria-hidden="true"><circle cx="160" cy="160" r="158" fill="#141414"/><circle cx="160" cy="160" r="130" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="110" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="90" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="52" fill="#F2C94C"/><circle cx="160" cy="160" r="6" fill="#F3EFE6"/><text x="160" y="166" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#141414" dy="-14">${esc(r.code)}</text></svg>
+    <div class="rhero" style="background:${T.c}">${coverUrl(r) ? `<img class="rimg" src="${esc(coverUrl(r))}" alt=""><div class="rshade"></div>` : `
+      <svg class="vinyl" width="320" height="320" viewBox="0 0 320 320" aria-hidden="true"><circle cx="160" cy="160" r="158" fill="#141414"/><circle cx="160" cy="160" r="130" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="110" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="90" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="52" fill="#F2C94C"/><circle cx="160" cy="160" r="6" fill="#F3EFE6"/><text x="160" y="166" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#141414" dy="-14">${esc(r.code)}</text></svg>`}
       <div class="between" style="position:absolute;left:20px;right:16px;top:14px"><span class="mono" style="font-size:12px;font-weight:700;letter-spacing:.12em">${esc(relName(r).toUpperCase())}</span>
         ${isPreview()?'':`<button class="iconbtn" style="width:40px;height:40px;background:rgba(20,20,20,.35);border-color:transparent;position:relative" data-act="editrel" data-id="${esc(r.id)}" aria-label="Release bearbeiten">${icon.edit}</button>`}</div>
       <div style="position:absolute;left:20px;bottom:20px;right:20px;display:flex;flex-direction:column;gap:10px">
@@ -559,7 +627,8 @@ function vRelease(c){
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Tracks & Audio</h2><button class="pill" data-act="addtrack" data-id="${esc(r.id)}">${icon.plus} Track</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">
       ${trackList || '<span class="small">Noch kein Track angelegt.</span>'}
-      <a class="pill dash" style="justify-content:center;min-height:50px" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Audio in SharePoint hochladen</a>
+      <span class="small">${trackList ? 'Track öffnen → „Version“ → MP3 hochladen.' : 'Erst einen Track anlegen, dann darin die Audiodatei hochladen.'}</span>
+      <a class="small" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">WAV-ARCHIV IN SHAREPOINT →</a>
     </div>`;
 }
 
@@ -578,6 +647,7 @@ function vTrack(c){
     const inner = `<span class="play" style="${i===0?`background:${T.c};color:#fff`:''}">${icon.play}</span>
       <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="font-weight:700;font-size:16px">${esc(v.label)}</span><span class="small">${esc((v.kind||'').toUpperCase())} · ${esc(OWNERS[v.by]?.toUpperCase()||'')} · ${v.at?fmt(v.at.slice(0,10)):''}</span></span>
       ${i===0?'<span class="sticker" style="font-size:10px;padding:3px 6px;transform:rotate(-4deg)">AKTUELL</span>':''}`;
+    if(v.file) return `<button class="vrow ${i===0?'top':''}" data-act="playv" data-id="${esc(v.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">${inner}</button>`;
     return v.link ? `<a class="vrow ${i===0?'top':''}" href="${esc(v.link)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="vrow ${i===0?'top':''}">${inner}</div>`;
   }).join('');
   const comments = cm.map(x => `<div class="row" style="align-items:flex-start">
@@ -587,14 +657,14 @@ function vTrack(c){
     <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(relName(r))}</button><span class="small">${esc(p.name.toUpperCase())} · PROD. ${esc((t.producer||'offen').toUpperCase())}</span></div>
     <div class="pad between" style="padding-top:8px;align-items:flex-end"><h1 class="h-big" style="min-width:0">${esc(t.title)}</h1>${isPreview()?'':`<button class="iconbtn ghost" data-act="edittrack" data-id="${esc(t.id)}" aria-label="Track bearbeiten">${icon.edit}</button>`}</div>
     <div class="player">
-      <div class="row" style="gap:14px">${top?.link ? `<a class="bigplay" href="${esc(top.link)}" target="_blank" rel="noopener" aria-label="${esc(top.label)} in SharePoint abspielen">${icon.play}</a>` : `<span class="bigplay" style="opacity:.5">${icon.play}</span>`}
-        <div class="stack" style="gap:4px;min-width:0"><span style="font-weight:800;font-size:22px">${esc(top?.label || 'Noch keine Version')}</span><span class="mono" style="font-size:11px;color:var(--soft)">${top ? esc((top.kind||'').toUpperCase()) + ' · ÖFFNET IN SHAREPOINT' : 'LADE DIE ERSTE VERSION IN SHAREPOINT HOCH'}</span></div></div>
+      <div class="row" style="gap:14px">${top?.file ? `<button class="bigplay" style="border:0;cursor:pointer" data-act="playv" data-id="${esc(top.id)}" aria-label="${esc(top.label)} abspielen">${icon.play}</button>` : top?.link ? `<a class="bigplay" href="${esc(top.link)}" target="_blank" rel="noopener" aria-label="${esc(top.label)} in SharePoint abspielen">${icon.play}</a>` : `<span class="bigplay" style="opacity:.5">${icon.play}</span>`}
+        <div class="stack" style="gap:4px;min-width:0"><span style="font-weight:800;font-size:22px">${esc(top?.label || 'Noch keine Version')}</span><span class="mono" style="font-size:11px;color:var(--soft)">${top ? esc((top.kind||'').toUpperCase()) + (top.file ? ' · SPIELT IN DER APP' : ' · ÖFFNET IN SHAREPOINT') : 'LADE DIE ERSTE VERSION HOCH'}</span></div></div>
       ${wave(t.id + (top?.id||''), T.c)}
       <div class="between mono" style="font-size:11px;color:var(--soft)"><span>${esc((t.stage||'').toUpperCase())}</span><span style="color:var(--sun)">${cm.length} KOMMENTAR${cm.length===1?'':'E'}</span><span>${vs.length} VERSION${vs.length===1?'':'EN'}</span></div>
     </div>
     <div class="pad between" style="padding-top:22px"><h2 class="h-sec">Versionen</h2><button class="pill sun" data-act="addversion" data-id="${esc(t.id)}">${icon.up} Version</button></div>
-    <div class="pad stack" style="gap:8px;padding-top:12px">${vlist || '<span class="small">Datei in den Audio-Ordner laden, dann hier den SharePoint-Link als Version eintragen.</span>'}
-      <a class="small" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">AUDIO-ORDNER ${esc(p.name.toUpperCase())} ÖFFNEN →</a></div>
+    <div class="pad stack" style="gap:8px;padding-top:12px">${vlist || '<span class="small">Noch keine Version. Über „Version“ eine MP3 hochladen, sie spielt dann direkt hier.</span>'}
+      <a class="small" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">WAV-ARCHIV ${esc(p.name.toUpperCase())} IN SHAREPOINT →</a></div>
     <div class="pad" style="padding-top:22px"><h2 class="h-sec">Feedback</h2></div>
     <div class="pad stack" style="gap:10px;padding-top:12px">${comments || '<span class="small">Noch kein Feedback. Zeitstempel + Kommentar, damit der Produzent genau weiß, wo.</span>'}
       <form class="composer" data-form="comment" data-id="${esc(t.id)}">
@@ -676,9 +746,9 @@ function vProducer(c){
     const due = taskDue(t), d = daysTo(due);
     const when = due ? (d < 0 ? `${-d} TAGE ÜBER` : d === 0 ? 'HEUTE' : `IN ${d} TAGEN`) : 'OHNE DATUM';
     if(i === 0) return `<div style="background:var(--ink);color:var(--paper);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:12px">
-      <div class="between"><span class="sticker tilt3">${when}</span><span class="cover" style="width:44px;height:44px;background:${TYPE[r.type].c};padding:4px"><span style="position:relative">${esc(r.code)}</span></span></div>
+      <div class="between"><span class="sticker tilt3">${when}</span><span class="cover" style="width:44px;height:44px;background:${TYPE[r.type].c};padding:4px">${coverTag(r)}<span style="position:relative">${esc(r.code)}</span></span></div>
       <div class="stack" style="gap:4px"><span class="mono" style="font-size:11px;color:var(--soft)">${esc(a.name.toUpperCase())} · ${esc(relName(r).toUpperCase())}</span><span style="font-weight:800;font-size:26px;line-height:1.05">${esc(t.title)}</span></div>
-      <div class="row" style="flex-wrap:wrap"><a class="pill sun" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Version hochladen</a><button class="pill" style="background:transparent;color:var(--paper);border-color:var(--paper)" data-act="toggle" data-id="${esc(t.id)}">${icon.check} Erledigt</button></div></div>`;
+      <div class="row" style="flex-wrap:wrap">${tracksOf(r.id)[0] ? `<button class="pill sun" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Version hochladen</button>` : `<button class="pill sun" data-go="release" data-id="${esc(r.id)}">${icon.up} Zum Release</button>`}<button class="pill" style="background:transparent;color:var(--paper);border-color:var(--paper)" data-act="toggle" data-id="${esc(t.id)}">${icon.check} Erledigt</button></div></div>`;
     return `<div class="vrow"><span class="play" style="background:${TYPE[r.type].c};color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(r.code)}</span>
       <button class="stack" data-go="release" data-id="${esc(r.id)}" style="flex:1;gap:2px;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:0"><b>${esc(t.title)}</b><span class="small">${esc(a.name.toUpperCase())} · ${when}</span></button>
       <button class="dot" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} abhaken"></button></div>`;
@@ -710,7 +780,7 @@ function vArtistStart(c){
     <div style="margin:10px 16px 0;background:${TYPE[r.type].c};color:#fff;border:1.5px solid var(--ink);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:12px">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700">${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="sticker tilt3">${fmt(r.date)}</span>`:''}</div>
       <span style="font-weight:800;font-size:28px;line-height:1.05">${esc(next?.title || 'Fahrplan folgt vom Team')}</span>
-      <div class="row" style="flex-wrap:wrap"><button class="pill sun" data-go="release" data-id="${esc(r.id)}">Zum Release</button><a class="pill" style="background:transparent;color:#fff;border-color:#fff" href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener">${icon.up} Upload</a></div></div>` : ''}
+      <div class="row" style="flex-wrap:wrap"><button class="pill sun" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill" style="background:transparent;color:#fff;border-color:#fff" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>` : ''}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Deine Aufgaben</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>`;
 }
@@ -747,6 +817,7 @@ async function act(a, id){
   if(a === 'addtrack') return sheetTrack(id);
   if(a === 'edittrack') return sheetTrack(S.tracks[id]?.release, id);
   if(a === 'addversion') return sheetVersion(id);
+  if(a === 'playv') return playVersion(id);
   if(a === 'addvorab') return sheetVorab(id);
   if(a === 'template') return applyTemplate(id);
   if(a === 'genrels') return genReleases(id);
@@ -811,10 +882,23 @@ function sheetRelease(id){
   const r = S.releases[id];
   const fields = `${F('title','ARBEITSTITEL',r.title||'','text','placeholder="Titel offen"')}
     <div class="grid2">${Sel('status','STATUS',STAGES,r.status)}${F('date','RELEASE-DATUM',r.date||'','date')}</div>
-    <div class="grid2">${F('year','VERTRAGSJAHR',r.year,'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>`;
+    <div class="grid2">${F('year','VERTRAGSJAHR',r.year,'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>
+    <div class="upl"><label for="f-cover" class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em">COVER ${r.cover ? '(VORHANDEN, NEUES ERSETZT ES)' : '(JPG/PNG)'}</label>
+      <input id="f-cover" type="file" accept="image/jpeg,image/png,image/webp,image/heic"></div>`;
   const extra = r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">Vorab-Single entfernen</button>`;
-  const form = sheet(`${relName(r)} bearbeiten`, fields, async fd => {
-    return await put('releases', id, {title:fd.title.trim(), status:fd.status, date:fd.date||'', year:+fd.year||r.year, countsTo:fd.countsTo}) ? undefined : false;
+  const form = sheet(`${relName(r)} bearbeiten`, fields, async (fd, f) => {
+    const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year:+fd.year||r.year, countsTo:fd.countsTo};
+    const img = f.querySelector('#f-cover').files[0];
+    if(img){
+      const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Lädt hoch …';
+      try{
+        const blob = await shrinkImage(img);
+        const path = `${r.artist}/${id}-${Date.now()}.jpg`;
+        await uploadFile('covers', path, blob, 'image/jpeg');
+        upd.cover = path;
+      }catch(e){ btn.disabled = false; btn.textContent = 'Speichern'; toast('Cover-Upload fehlgeschlagen: ' + (e.message || e)); return false; }
+    }
+    return await put('releases', id, upd) ? undefined : false;
   }, extra);
   const d = form.querySelector('#delRel');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('releases', id); $('#sheetRoot').innerHTML=''; back(); } else { d.dataset.sure = 1; d.textContent = 'Wirklich entfernen? Erneut tippen'; } };
@@ -858,13 +942,32 @@ function sheetTrack(rid, id){
 function sheetVersion(tid){
   const t = S.tracks[tid], r = S.releases[t.release], p = person(r.artist);
   const n = versionsOf(tid).length + 1;
-  const fields = `<p class="small" style="margin:0 0 12px">Datei zuerst in den <a href="${SP_AUDIO + encodeURIComponent(p.name)}" target="_blank" rel="noopener" style="font-weight:700">Audio-Ordner ${esc(p.name)}</a> laden, dann in SharePoint „Link kopieren“ und hier einfügen.</p>
+  const fields = `<div class="upl"><label for="f-file" class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em">AUDIODATEI (MP3/M4A, MAX. 50 MB)</label>
+      <input id="f-file" name="file" type="file" accept=".mp3,.m4a,.aac,.wav,audio/*">
+      <span class="small">Für große WAV-Masters weiter das SharePoint-Archiv nutzen und unten den Link eintragen.</span></div>
     <div class="grid2">${F('label','BEZEICHNUNG','Mix v'+n,'text','required')}${Sel('kind','ART',KINDS,'Mix')}</div>
-    ${Sel('by','VON',Object.entries(OWNERS),'P')}
-    ${F('link','SHAREPOINT-LINK','','url','placeholder="https://cloudsgroup.sharepoint.com/…"')}`;
-  sheet('Neue Version', fields, async fd => {
+    ${Sel('by','VON',Object.entries(OWNERS), account?.role === 'artist' ? 'A' : 'P')}
+    ${F('link','ODER SHAREPOINT-LINK','','url','placeholder="https://cloudsgroup.sharepoint.com/…"')}`;
+  sheet('Neue Version', fields, async (fd, form) => {
+    const file = form.querySelector('#f-file').files[0];
+    if(!file && !fd.link){ toast('Bitte eine Datei wählen oder einen Link eintragen'); return false; }
     if(fd.link && !/^https:\/\//.test(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
-    return await put('versions', uid('v'), {track:tid, label:fd.label.trim(), kind:fd.kind, by:fd.by, link:fd.link||'', at:new Date().toISOString()}, false) ? undefined : false;
+    const vid = uid('v');
+    const doc = {track:tid, label:fd.label.trim(), kind:fd.kind, by:fd.by, link:fd.link||'', at:new Date().toISOString()};
+    if(file){
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const type = AUDIO_TYPES[ext] || file.type;
+      if(!/^audio\//.test(type || '')){ toast('Bitte eine Audiodatei wählen (MP3, M4A, WAV)'); return false; }
+      if(file.size > MAX_AUDIO){ toast(`Datei hat ${(file.size/1048576).toFixed(0)} MB, erlaubt sind 50 MB. Bitte als MP3 exportieren.`); return false; }
+      const btn = form.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Lädt hoch …';
+      const path = `${r.artist}/${tid}/${vid}.${ext || 'mp3'}`;
+      try{ await uploadFile('audio', path, file, type); }
+      catch(e){ btn.disabled = false; btn.textContent = 'Speichern'; toast('Upload fehlgeschlagen: ' + (e.message || e)); return false; }
+      Object.assign(doc, {file:path, size:file.size, mime:type, fileName:file.name});
+    }
+    const ok = await put('versions', vid, doc, false);
+    if(ok && file) toast('Hochgeladen · spielt jetzt in der App');
+    return ok ? undefined : false;
   });
 }
 
@@ -964,6 +1067,7 @@ async function boot(session){
   render();
 }
 
+$('#miniClose').onclick = () => { const a = $('#miniAudio'); a.pause(); a.removeAttribute('src'); a.load(); delete a.dataset.vid; $('#mini').hidden = true; document.body.classList.remove('hasmini'); };
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target, btn = f.querySelector('button');

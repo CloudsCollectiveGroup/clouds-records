@@ -24,5 +24,8 @@ Die Rolle ergibt sich automatisch aus dem Benutzernamen (`supabase/03_rollen.sql
 - `anuj@…` → Produzent, sieht alles, kann Verträge nicht ändern
 - jeder andere Name (z. B. `cem@…`, `nikolina@…`) → Team, sieht und ändert alles
 
-## Geplant
-- Audio/Cover-Upload über Supabase Storage (ab Pro-Paket)
+## Audio & Cover
+- MP3/M4A bis 50 MB direkt in der App hochladen und abspielen (Track → „Version“), privat in Supabase Storage
+- Cover im Release über „Bearbeiten“, wird automatisch auf max. 1400 px verkleinert
+- WAV-Masters > 50 MB weiter im SharePoint-Archiv; mit Supabase Pro bis 500 GB pro Datei möglich
+- Rechte wie bei den Daten: Artists nur eigener Ordner, Cover nur Team
