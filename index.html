@@ -548,7 +548,7 @@ function renderNav(){
     if(pctx) items = [['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['roster','Artists',icon.roster,{}],['content','Content',icon.tracks,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['roster','Artists',icon.roster,{}],['market','Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -1112,7 +1112,22 @@ function sheetRecording(aid, id){
 }
 /* ---------- Artist: Beat Market ---------- */
 const myBeats = aid => vals(S.beats||{}).filter(b => pickedFor(b, aid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+function vMarketTeam(){
+  const all = vals(S.beats||{});
+  const open = all.filter(b => b.status === 'Freigegeben').sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || ((b.fav?1:0)-(a.fav?1:0)) || (b.at||'').localeCompare(a.at||''));
+  const free = open.filter(b => !interestOf(b.id).length), taken = open.filter(b => interestOf(b.id).length);
+  const groups = artists().map(a => ({a, list: all.filter(b => pickedFor(b, a.id))})).filter(g => g.list.length);
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="small">${free.length} FREI · ${taken.length} MARKIERT</span></div>${banner()}
+    <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Beat Market</h1><span class="sticker tilt" style="margin-bottom:10px">LABEL-SICHT</span></div>
+    <div class="pad small" style="padding-top:6px">SO SEHEN DIE ARTISTS DEN MARKET – PLUS WER WAS MARKIERT HAT. BEAT ANTIPPEN ZUM BEARBEITEN.</div>
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Offen für alle</h2><span class="small">${free.length} FREI</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${free.map(b => beatRow(b)).join('') || '<span class="small">Keine freien Beats. Neue kommen über die Listening-Session.</span>'}</div>
+    ${taken.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von Artists markiert</h2><span class="small">${taken.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${taken.map(b => beatRow(b)).join('')}</div>` : ''}
+    <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Für Artists gepickt</h2><span class="small">EXKLUSIV & DUO</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${groups.length ? groups.map(g => `<div class="lbl" style="color:${esc(g.a.color)};padding-top:6px">${esc(g.a.name.toUpperCase())}</div>` + g.list.map(b => beatRow(b)).join('')).join('') : '<span class="small">Noch nichts exklusiv gepickt.</span>'}</div>`;
+}
 function vMarket(c){
+  if(!c.id && !lockedArtist) return vMarketTeam();
   const p = person(c.id); if(!p) throw new Error('missing');
   const mine = myBeats(p.id);
   const open = vals(S.beats||{}).filter(b => b.status === 'Freigegeben').sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || (b.at||'').localeCompare(a.at||''));
@@ -1630,7 +1645,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112030';
+const APP_VERSION = '202611112040';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
