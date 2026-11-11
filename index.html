@@ -239,7 +239,7 @@ const TYPE = {
 const STAGES = ['Idee','Geplant','Writing','Recording','Mix','Master','Distribution','Promo','Released'];
 const PHASES = ['T-12','T-10','T-8','T-6','T-4','T-2','T-0','Nach Release'];
 const PHASE_WEEKS = {'T-12':12,'T-10':10,'T-8':8,'T-6':6,'T-4':4,'T-2':2,'T-0':0,'Nach Release':-2};
-const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', T:'Team'};
+const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', K:'Kasper', C:'Cem', TH:'Thorben', T:'Team'};
 const OWNER_COL = {A:null, P:'#D4AF37', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
 const TEMPLATE = [
@@ -248,8 +248,8 @@ const TEMPLATE = [
   ['T-12','Recording bei CloudStudios','A'],
   ['T-8','Mix & Master final','P'],
   ['T-8','Cover fertig','N'],
-  ['T-6','Distributor-Upload, ISRC','T'],
-  ['T-4','Spotify-Pitch & Promo-Plan','N'],
+  ['T-6','Distributor-Upload, ISRC','K'],
+  ['T-4','Spotify-Pitch & Promo-Plan','K'],
   ['T-2','Pre-Save-Link & Content-Snippets','N'],
   ['T-0','Release-Tag','T']
 ];
@@ -668,7 +668,7 @@ function vRelease(c){
     const isRel = t.phase === 'T-0';
     const due = taskDue(t);
     const dueTxt = due ? fmt(due) : '';
-    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name[0]) : t.owner}` : '';
+    const ownerTxt = t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}` : '';
     const late = !ok && due && daysTo(due) < 0;
     const noteTxt = t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '';
     return `<div class="step">
@@ -705,7 +705,7 @@ function vRelease(c){
       <div class="team">
         <span title="${esc(p.name)}" style="background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span>
         <span title="${esc(prod?.name||'Produzent')}" style="background:var(--sun);color:var(--on-sun)">${esc((prod?.name||'P')[0])}</span>
-        <span title="Nikolina" style="background:var(--raise);color:var(--ink)">N</span>
+        ${[...new Set(ts.map(t => t.owner))].filter(o => o && !['A','P','T'].includes(o) && OWNERS[o]).map(o => `<span title="${esc(OWNERS[o])}" style="background:var(--raise);color:var(--ink)">${esc(OWNERS[o][0])}</span>`).join('')}
       </div>
       <span class="small">${dn} / ${ts.length} SCHRITTE</span></div>
     <div class="pad between" style="padding-top:18px"><h2 class="h-sec">Fahrplan</h2>${ts.length && !isPreview() ? `<button class="pill" data-act="addtask" data-id="${esc(r.id)}">${icon.plus} Schritt</button>` : ''}</div>
@@ -1445,7 +1445,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111645';
+const APP_VERSION = '202611111650';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
