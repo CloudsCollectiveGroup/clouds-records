@@ -152,6 +152,14 @@ h1,h2{margin:0;text-wrap:balance}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;display:flex;align-items:flex-end;justify-content:center}
 .sheet{width:min(430px,100%);max-height:88vh;overflow:auto;background:var(--card);border-radius:24px 24px 0 0;border:1px solid var(--line2);border-bottom:0;padding:18px 20px calc(24px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
+.flabel{display:block;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);margin-bottom:8px}
+.gchips{display:flex;flex-wrap:wrap;gap:6px}
+.gchip input{position:absolute;opacity:0;pointer-events:none}
+.gchip span{font-family:Inter,system-ui,sans-serif;letter-spacing:0;display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--line2);background:var(--paper);color:var(--ink2);font-size:13px;cursor:pointer;user-select:none}
+.gchip input:checked+span{background:var(--sun);color:var(--on-sun);border-color:var(--sun);font-weight:600}
+.gchip input:focus-visible+span{outline:2px solid var(--sun);outline-offset:2px}
+.draftnote{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--sun-bg);border:1px solid rgba(212,175,55,.35);border-radius:12px;padding:8px 12px;margin:-4px 0 14px;font-size:13px}
+.draftnote button{background:none;border:0;color:var(--sun);font-weight:700;cursor:pointer;font-size:13px}
 /* Tablet & Desktop: volle Breite nutzen */
 @media (min-width:700px){
   .app{max-width:none}
@@ -328,6 +336,8 @@ const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgel
 const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Reserviert','Platziert'];
 const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Für Artists + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Platziert:'Platziert', Verworfen:'Nur Store'};
 const BSTATUS_COL = {'Idee':'var(--mute)','Gemixt':'var(--soft)','Neu':'var(--sun)','Freigegeben':'var(--album)','Store':'var(--single)','Verworfen':'var(--single)','Reserviert':'var(--ep)','Platziert':'var(--ep)'};
+const GENRES = ['Hip-Hop','Trap','Drill','Boom Bap','Cloud Rap','Rage','R&B','Pop','Afrobeats','Amapiano','Dancehall','Reggaeton','Latin','Jersey Club','UK Garage','House','Lo-Fi','Soul','Rock','Orchestral','Dark','Melodic','Chill','Sad','Aggressive','Love'];
+const genresOf = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.mood ? [b.mood] : []);
 const isExclusive = b => b.status === 'Reserviert' || b.status === 'Platziert';
 const inStore = b => ['Freigegeben','Store','Verworfen'].includes(b.status);
 const PCKINDS = ['YouTube-Video','YouTube-Short','TikTok','Instagram-Reel','Beatstars-Upload','SoundCloud-Upload','Story','Post'];
@@ -997,7 +1007,7 @@ function prodTop(p){
 }
 function beatRow(b, mode){
   const ints = interestOf(b.id).map(x => person(x.artist)?.name).filter(Boolean);
-  const meta = [b.bpm ? b.bpm + ' BPM' : '', b.key || '', b.mood || ''].filter(Boolean).join(' · ').toUpperCase();
+  const meta = [b.bpm ? b.bpm + ' BPM' : '', b.key || '', genresOf(b).join(', '), b.feat ? 'FEAT. ' + b.feat : ''].filter(Boolean).join(' · ').toUpperCase();
   const res = b.status === 'Reserviert' && b.reservedFor ? ' · FÜR ' + esc((person(b.reservedFor)?.name||'').toUpperCase()) : '';
   return `<div class="vrow" style="flex-wrap:wrap">
     <a class="play" href="${esc(safeUrl(b.link) || '#')}" target="_blank" rel="noopener" aria-label="${esc(b.title)} in Dropbox anhören" style="text-decoration:none">${icon.play}</a>
@@ -1181,7 +1191,9 @@ function sheetBeat(pid, id){
   const arts = artists().map(a => [a.id, a.name]);
   const fields = `${F('title','TITEL',b.title||'','text','required placeholder="Nachtluft Type Beat"')}
     ${F('link','DROPBOX-LINK',b.link||'','url','required placeholder="https://www.dropbox.com/…"')}
-    <div class="grid3">${F('bpm','BPM',b.bpm||'','number','min="40" max="220"')}${F('key','TONART',b.key||'','text','placeholder="A-Moll"')}${F('mood','STIMMUNG',b.mood||'','text','placeholder="Dark, R&B"')}</div>
+    <div class="grid2">${F('bpm','BPM',b.bpm||'','number','min="40" max="220"')}${F('key','TONART',b.key||'','text','placeholder="A-Moll"')}</div>
+    <div class="field"><span class="flabel">GENRE & STIMMUNG (MEHRFACH)</span><div class="gchips">${GENRES.concat(genresOf(b).filter(g => !GENRES.includes(g))).map(g => `<label class="gchip"><input type="checkbox" name="genres" value="${esc(g)}" ${genresOf(b).includes(g) ? 'checked' : ''}><span>${esc(g)}</span></label>`).join('')}</div></div>
+    ${F('feat','FEATURE-PRODUZENT (OPTIONAL)',b.feat||'','text','placeholder="z. B. Gastproduzent, der mitgewirkt hat"')}
     <div class="grid2">${Sel('status','STATUS',BSTATUS.map(k => [k, BLABEL[k]]),b.status === 'Verworfen' ? 'Store' : b.status)}${Sel('reservedFor','EXKLUSIV FÜR',[['','—'], ...arts],b.reservedFor||'')}</div>
     ${id ? '' : '<p class="small" style="margin:-4px 0 12px">„Pool“ = fertig für die nächste Listening-Session.</p>'}
     <div class="lbl" style="margin:6px 0 8px">STORE</div>
@@ -1191,9 +1203,10 @@ function sheetBeat(pid, id){
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(b.note||'')}</textarea></div>
     ${id && interestOf(id).length ? `<p class="small" style="color:var(--sun);margin:0 0 12px">INTERESSE: ${esc(interestOf(id).map(x => person(x.artist)?.name).filter(Boolean).join(', ').toUpperCase())}</p>` : ''}`;
   const extra = id ? `<button class="btn danger" type="button" id="delBeat" style="width:100%;margin-top:10px">Beat löschen</button>` : '';
-  sheet(id ? 'Beat bearbeiten' : 'Neuer Beat', fields, async fd => {
+  sheet(id ? 'Beat bearbeiten' : 'Neuer Beat', fields, async (fd, form) => {
     if(!safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
-    const doc = {title:fd.title.trim(), link:safeUrl(fd.link), bpm:fd.bpm||'', key:(fd.key||'').trim(), mood:(fd.mood||'').trim(), note:(fd.note||'').trim(),
+    const genres = [...form.querySelectorAll('input[name=genres]:checked')].map(i => i.value);
+    const doc = {title:fd.title.trim(), link:safeUrl(fd.link), bpm:fd.bpm||'', key:(fd.key||'').trim(), genres, mood: genres.join(', '), feat:(fd.feat||'').trim(), note:(fd.note||'').trim(),
       status:fd.status, reservedFor: (fd.status === 'Reserviert' || fd.status === 'Platziert') ? (fd.reservedFor||'') : '',
       bsLive: fd.bsLive === 'on', bsLink: safeUrl(fd.bsLink), ytLive: fd.ytLive === 'on', ytLink: safeUrl(fd.ytLink), mixNote:(fd.mixNote||'').trim()};
     if(fd.status === 'Reserviert' && !fd.reservedFor){ toast('Bitte wählen, für wen der Beat exklusiv ist'); return false; }
@@ -1333,15 +1346,33 @@ async function genReleases(pid){
 function sheet(title, fields, onSave, extra=''){
   const root = $('#sheetRoot');
   root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(title)}"><form class="sheet" id="sheetForm"><div class="grab"></div>
-    <h2 class="h-sec" style="margin-bottom:16px">${esc(title)}</h2>${fields}
+    <h2 class="h-sec" style="margin-bottom:16px">${esc(title)}</h2><div id="draftSlot"></div>${fields}
     <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn" type="submit" style="flex:1">Speichern</button><button class="btn alt" type="button" data-close>Abbrechen</button></div>${extra}</form></div>`;
-  const scrim = root.firstElementChild, form = $('#sheetForm');
+  const form = $('#sheetForm');
+  /* Entwürfe: jede Eingabe wird lokal gesichert; Schließen nur über „Abbrechen“ */
+  const snap = () => [...form.elements].filter(e => e.name && e.type !== 'file').map(e => [e.name, e.value, e.type === 'checkbox' || e.type === 'radio' ? e.checked : null]);
+  const initial = JSON.stringify(snap());
+  let h = 0; for(const ch of title + initial) h = (h*31 + ch.charCodeAt(0)) >>> 0;
+  const key = 'cr_draft_' + h.toString(36);
+  const dirty = () => JSON.stringify(snap()) !== initial;
+  const apply = data => { const els = [...form.elements].filter(e => e.name && e.type !== 'file');
+    data.forEach(([n, v, c], i) => { const e = els[i]; if(!e || e.name !== n) return; if(c === null) e.value = v; else e.checked = c; }); };
+  let saved = null; try{ saved = JSON.parse(localStorage.getItem(key) || 'null'); }catch(_){}
+  if(saved && saved.data && JSON.stringify(saved.data) !== initial){
+    apply(saved.data);
+    $('#draftSlot').innerHTML = `<div class="draftnote"><span>Entwurf vom ${new Date(saved.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} wiederhergestellt</span><button type="button" id="draftDrop">Verwerfen</button></div>`;
+    $('#draftDrop').onclick = () => { apply(JSON.parse(initial)); try{ localStorage.removeItem(key); }catch(_){} $('#draftSlot').innerHTML = ''; };
+  }
+  const store = () => { try{ if(dirty()) localStorage.setItem(key, JSON.stringify({at:Date.now(), data:snap()})); else localStorage.removeItem(key); }catch(_){} };
+  form.addEventListener('input', store); form.addEventListener('change', store);
   const close = () => { root.innerHTML = ''; };
-  scrim.addEventListener('click', e => { if(e.target === scrim) close(); });
-  form.querySelector('[data-close]').onclick = close;
-  form.addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
-  form.onsubmit = async e => { e.preventDefault(); const fd = Object.fromEntries(new FormData(form)); if(await onSave(fd, form) !== false) close(); };
-  setTimeout(() => form.querySelector('input,select')?.focus(), 60);
+  const cancel = form.querySelector('[data-close]');
+  cancel.onclick = () => {
+    if(dirty() && !cancel.dataset.sure){ cancel.dataset.sure = 1; cancel.textContent = 'Änderungen verwerfen?'; cancel.style.color = 'var(--danger)'; setTimeout(() => { if(cancel.isConnected){ delete cancel.dataset.sure; cancel.textContent = 'Abbrechen'; cancel.style.color = ''; } }, 4000); return; }
+    try{ localStorage.removeItem(key); }catch(_){} close();
+  };
+  form.onsubmit = async e => { e.preventDefault(); const fd = Object.fromEntries(new FormData(form)); if(await onSave(fd, form) !== false){ try{ localStorage.removeItem(key); }catch(_){} close(); } };
+  setTimeout(() => form.querySelector('input:not([type=checkbox]),select')?.focus(), 60);
   return form;
 }
 const F = (name, label, val='', type='text', attrs='') => `<div class="field"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(val)}" ${attrs}></div>`;
@@ -1572,7 +1603,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611111900';
+const APP_VERSION = '202611111930';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
