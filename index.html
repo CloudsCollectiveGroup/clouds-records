@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
-<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<style>:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);background:#0E0E10}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#0E0E10;color:#F4F4F5}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head><body>
@@ -27,14 +27,16 @@
   --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme:dark;
 }
+/* Vollbild als Home-Bildschirm-App: alles in der App-Farbe, auch hinter Statusleiste und Home-Balken */
+html{background:var(--paper);min-height:100%}
 html,body{height:100%}
-body{background:var(--raise);color:var(--ink);font-family:var(--display);font-size:16px;-webkit-font-smoothing:antialiased}
+body{background:var(--paper);overscroll-behavior-y:none;color:var(--ink);font-family:var(--display);font-size:16px;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:inherit}
 :focus-visible{outline:2px solid var(--sun);outline-offset:2px;border-radius:6px}
-.app{max-width:430px;margin:0 auto;min-height:100%;background:var(--paper);position:relative;display:flex;flex-direction:column;overflow-x:hidden}
-#view{flex:1;padding-bottom:110px;position:relative}
+.app{max-width:430px;margin:0 auto;min-height:100%;min-height:calc(100dvh - env(safe-area-inset-top,0px));box-sizing:border-box;background:var(--paper);position:relative;display:flex;flex-direction:column;overflow-x:hidden}
+#view{flex:1;padding-bottom:calc(110px + env(safe-area-inset-bottom,0px));position:relative}
 .mono{font-family:var(--mono)}
 .lbl{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--mute)}
 .small{font-family:var(--mono);font-size:11px;color:var(--mute)}
@@ -2039,7 +2041,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121800';
+const APP_VERSION = '202611121815';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
