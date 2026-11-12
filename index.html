@@ -2114,8 +2114,9 @@ function vPMonth(c){
         <span class="small">${esc((ownerName(x.owner, x) + withHelpers(x)).toUpperCase())}${checkTxt(x)}${x.due ? ' · BIS ' + fmt(x.due) : ''}${late ? ' · <b style="color:var(--danger)">ÜBERFÄLLIG</b>' : ''}</span>
         ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;white-space:pre-line">✎ ${esc(x.note.length > 120 ? x.note.slice(0,120) + ' …' : x.note)}</span>` : ''}</button></div>`; };
   const open = items.filter(x => !x.done), done = items.filter(x => x.done);
-  return `${prodTop(p)}
-    <div class="pad between" style="padding-top:10px;align-items:flex-end"><div><span class="lbl">PRODUZENT · ${esc(p.name.toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">Monatsplan</h1></div><button class="pill sun" data-act="addplan" data-id="${esc(p.id)}|${ym}">${icon.plus} To-do</button></div>
+  const ownP = account?.role === 'producer';
+  const head = `<div class="pad between" style="padding-top:10px;align-items:flex-end" ${photoOf(p) ? 'data-heroin' : ''}><div style="min-width:0"><span class="lbl">PRODUZENT · MONATSPLAN</span><h1 class="h-giant" style="margin-top:6px;font-size:44px">${ownP ? 'Hey ' + esc(p.name) + '.' : esc(p.name)}</h1></div><button class="pill sun" data-act="addplan" data-id="${esc(p.id)}|${ym}" style="position:relative;z-index:2">${icon.plus} To-do</button></div>`;
+  return `${photoOf(p) ? `<div class="starthero"><img class="aheadimg" src="${esc(photoOf(p))}" alt=""><span class="aheadshade"></span>${prodTop(p)}${head}</div>` : prodTop(p) + head}
     <div class="pad row" style="padding-top:14px;gap:10px"><button class="iconbtn ghost" data-act="pmonthnav" data-id="${esc(p.id)}|${ymShift(ym,-1)}" aria-label="Vormonat">${icon.back}</button><b style="font-size:20px;flex:1;text-align:center">${esc(ymLabel(ym))}</b><button class="iconbtn ghost" data-act="pmonthnav" data-id="${esc(p.id)}|${ymShift(ym,1)}" aria-label="Nächster Monat" style="transform:scaleX(-1)">${icon.back}</button></div>
     <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">
       <button class="tile" data-act="ptarget" data-id="${esc(p.id)}" style="text-align:left;cursor:pointer;color:var(--ink)"><b style="font-size:30px">${delivered}<span style="font-size:15px;color:var(--mute)"> / ${esc(tgt)}</span></b><span class="lbl" style="color:var(--ink)">BEAT-ABGABEN</span><div class="tc-bar" style="margin-top:8px"><i style="width:${Math.min(100, Math.round(delivered/tmin*100))}%;background:var(--sun)"></i></div></button>
@@ -2704,7 +2705,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611130005';
+const APP_VERSION = '202611130015';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
