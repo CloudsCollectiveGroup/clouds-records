@@ -1720,15 +1720,15 @@ const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) &&
 const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function pinItems(k){
   const out = [];
-  for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r) + checkTxt(t), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
-  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)) checksOf(t).forEach(c => { if(c.o === k && !c.d){ const r = S.releases[t.release]; if(r) out.push({src:'tasks', id:t.id, title:c.t, sub:'Punkt aus „' + t.title + '“ · ' + (person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by}); } });
+  for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({tick:['toggle', t.id], src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r) + checkTxt(t), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
+  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)) checksOf(t).forEach((c, ci) => { if(c.o === k && !c.d){ const r = S.releases[t.release]; if(r) out.push({tick:['chktoggle', t.id + '|' + ci], src:'tasks', id:t.id, title:c.t, sub:'Punkt aus „' + t.title + '“ · ' + (person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by}); } });
   for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
-  for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
+  for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({tick:['ptoggle', x.id], src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
-    if(assigned(x, k)) out.push({src:'todos', id:x.id, title:x.title, sub:'Aufgabe' + (a ? ' · ' + a : '') + checkTxt(x), due:x.due, go:null, at:x._at, by:x._by, note:x.note});
-    else checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'todos', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“' + (a ? ' · ' + a : ''), due:x.due, go:null, at:x._at, by:x._by}); }); }
+    if(assigned(x, k)) out.push({tick:['tododone', x.id], src:'todos', id:x.id, title:x.title, sub:'Aufgabe' + (a ? ' · ' + a : '') + checkTxt(x), due:x.due, go:null, at:x._at, by:x._by, note:x.note});
+    else checksOf(x).forEach((c, ci) => { if(c.o === k && !c.d) out.push({tick:['todochk', x.id + '|' + ci], src:'todos', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“' + (a ? ' · ' + a : ''), due:x.due, go:null, at:x._at, by:x._by}); }); }
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
 }
@@ -1739,13 +1739,17 @@ function vPin(c){
   const items = k ? pinItems(k) : [];
   const t0 = todayIso(), wk = isoAdd(t0, 7);
   const terms = k ? vals(S.todos||{}).filter(x => isTermin(x) && (!x.date || x.date >= t0) && assigned(x, k)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9')) : [];
-  const over = items.filter(x => x.due && x.due < t0), week = items.filter(x => x.due && x.due >= t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
+  const over = items.filter(x => x.due && x.due < t0), today = items.filter(x => x.due === t0), week = items.filter(x => x.due && x.due > t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
+  const termsWk = vals(S.todos||{}).filter(x => isTermin(x) && x.date && x.date >= t0 && x.date <= wk && k && assigned(x, k)).length;
+  const since7 = new Date(Date.now() - 7*864e5).toISOString();
+  const doneWk = k ? [...vals(S.tasks), ...vals(S.todos||{}).filter(x => !isTermin(x))].filter(x => x.done && assigned(x, k) && (x._at||'') >= since7).length : 0;
   const notes = k ? notesFor(k).filter(n => !(n.doneBy||[]).includes(k)) : [];
   const sent = vals(S.notes||{}).filter(n => n.fromId === me && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
-  const row = x => `<button class="vrow" data-act="pingo" data-id="${esc(JSON.stringify({g:x.go, src:x.src, id:x.id}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;align-items:flex-start">
+  const ownView = !c.k || c.k === myKey();
+  const row = x => `<div class="vrow" style="align-items:flex-start;padding:0;gap:0">${ownView && x.tick ? `<button class="dot" data-act="${esc(x.tick[0])}" data-id="${esc(x.tick[1])}" aria-label="${esc(x.title)} abhaken" style="flex:none;margin:14px 0 0 14px"></button>` : ''}<button data-act="pingo" data-id="${esc(JSON.stringify({g:x.go, src:x.src, id:x.id}))}" style="cursor:pointer;flex:1;min-width:0;text-align:left;font:inherit;color:inherit;background:none;border:0;padding:14px;display:flex;gap:10px;align-items:flex-start">
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.title)}${isNew(x) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
       <span class="small">${esc(x.sub.toUpperCase())}${x.due ? ' · ' + (x.due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.due) + '</b>' : 'BIS ' + fmt(x.due)) : ''}</span>
-      ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</span>${icon.chev}</button>`;
+      ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</span>${icon.chev}</button></div>`;
   const noteCard = n => `<div class="vrow" style="align-items:flex-start;border-color:rgba(255,204,0,.35);background:var(--sun-bg)">
       <span class="stack" style="flex:1;gap:4px;min-width:0"><span class="small">VON ${esc((n.from||'').toUpperCase())} · ${n.at ? new Date(n.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}${n.due ? ' · BIS ' + fmt(n.due) : ''}${(n.to||[]).length > 1 ? ' · AN ' + esc(n.to.map(t => ownerName(t)).join(', ').toUpperCase()) : ''}</span>
       <span style="font-size:15px;line-height:1.4;white-space:pre-line">${esc(n.text)}</span>${safeUrl(n.link) ? `<a class="small" href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">LINK ÖFFNEN →</a>` : ''}</span>
@@ -1777,7 +1781,13 @@ function vPin(c){
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
   return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
-    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">${k && ownView ? (new Date().getHours() < 11 ? 'Moin' : new Date().getHours() < 18 ? 'Hey' : 'N\'Abend') + ' ' + esc(ownerName(k).split(' ')[0]) + '.' : k ? esc(ownerName(k)) : 'Pinnwand'}</h1><div class="small" style="margin-top:6px">${k ? (ownView ? esc(new Date().toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'}).toUpperCase()) + ' · DEINE PINNWAND' : 'PINNWAND VON ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
+    ${k ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
+      <button class="tile ${over.length ? 'hot' : ''}" data-act="pinjump" data-id="pinOver" style="text-align:left;cursor:pointer;color:inherit;font:inherit${over.length ? ';border-color:rgba(255,90,110,.5);background:rgba(255,90,110,.12)' : ''}"><b ${over.length ? 'style="color:#FF5A6E"' : ''}>${over.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></button>
+      <button class="tile ${today.length ? 'hot' : ''}" data-act="pinjump" data-id="pinToday" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${today.length}</b><span class="lbl" style="color:var(--ink)">HEUTE FÄLLIG</span></button>
+      <button class="tile" data-act="pinjump" data-id="pinWeek" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${week.length}</b><span class="lbl" style="color:var(--ink)">DIESE WOCHE</span></button>
+      <button class="tile" data-act="pinjump" data-id="pinTerms" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${termsWk}</b><span class="lbl" style="color:var(--ink)">TERMINE · 7 TAGE</span></button></div>
+    <div class="pad small" style="padding-top:8px">${doneWk ? '✓ ' + doneWk + ' IN DEN LETZTEN 7 TAGEN ERLEDIGT · ' : ''}${items.length} OFFEN INSGESAMT</div>` : ''}
     ${pick}
     ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button></div>` : ''}
     ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
@@ -1785,8 +1795,8 @@ function vPin(c){
     ${studioSec}
     ${apvSec}
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
-    ${terms.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Termine</h2><span class="small">${terms.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${terms.map(x => todoRow(x)).join('')}</div>` : ''}
-    ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
+    ${terms.length ? `<div class="pad between" id="pinTerms" style="padding-top:22px"><h2 class="h-sec">Termine</h2><span class="small">${terms.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${terms.map(x => todoRow(x)).join('')}</div>` : ''}
+    <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
     ${!notes.length && !items.length && !sReq.length && !cPend.length && !terms.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
@@ -2694,7 +2704,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122345';
+const APP_VERSION = '202611130005';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
