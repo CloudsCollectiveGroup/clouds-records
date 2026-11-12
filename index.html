@@ -821,9 +821,6 @@ function vRelease(c){
     </div>
     ${contentSection(r)}
     ${videoSection(r)}
-    ${(() => { const team = !isPreview(), sh = shootsOf(r.artist).filter(x => x.status !== 'Gepostet');
-      return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Reel-Drehtage</h2>${team ? `<button class="pill" data-act="shootnew" data-id="${esc(r.artist)}">${icon.plus} Drehtag</button>` : ''}</div>
-      <div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(r.artist, x)).join('') || '<span class="small">Ein Tag, viele Reels (Instagram, TikTok, YouTube Shorts) – wie ein Musikvideo komplett planen.</span>'}</div>` : ''; })()}
     ${coopSection(r)}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
@@ -947,15 +944,23 @@ function videoSummary(v){
   return {next, locs, ok, props, cost: videoCost(v)};
 }
 function videoSection(r){
-  const v = r.video, team = !isPreview();
-  if(!v) return team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Musikvideo</h2></div>
-    <div class="pad" style="padding-top:10px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="vstart" data-id="${esc(r.id)}">${icon.plus} Musikvideo planen</button></div>` : '';
-  const s = videoSummary(v);
-  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Musikvideo</h2><span class="status" style="color:var(--sun)">● ${esc((v.status||'Idee').toUpperCase())}</span></div>
-    <div class="pad" style="padding-top:10px"><button class="vrow" data-go="video" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
+  const v = r.video, team = !isPreview(), sh = shootsOf(r.artist).filter(x => x.status !== 'Gepostet');
+  const dash = (act, id, label) => `<button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="${act}" data-id="${esc(id)}">${icon.plus} ${label}</button>`;
+  let videoCard = '';
+  if(v){ const s = videoSummary(v);
+    videoCard = `<button class="vrow" data-go="video" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
       <span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>
-      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${s.next ? 'Nächster Dreh ' + fmt(s.next.date) + (s.next.time ? ' · ' + esc(s.next.time) : '') : 'Noch kein Drehtag'}</b>
-        <span class="small">${s.ok}/${s.locs.length} LOCATIONS BESTÄTIGT · ${(v.crew||[]).length} CREW${s.props.length ? ' · ☑ ' + s.props.filter(p => p.d).length + '/' + s.props.length : ''}${team && (num(v.budget) || s.cost) ? ' · ' + eur(s.cost) + (num(v.budget) ? ' / ' + eur(num(v.budget)) : '') : ''}</span></span>${icon.chev}</button></div>`;
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">Musikvideo · ${s.next ? 'Dreh ' + fmt(s.next.date) + (s.next.time ? ' · ' + esc(s.next.time) : '') : 'noch kein Drehtag'}</b>
+        <span class="small">${s.ok}/${s.locs.length} LOCATIONS BESTÄTIGT · ${(v.crew||[]).length} CREW${s.props.length ? ' · ☑ ' + s.props.filter(p => p.d).length + '/' + s.props.length : ''}${team && (num(v.budget) || s.cost) ? ' · ' + eur(s.cost) + (num(v.budget) ? ' / ' + eur(num(v.budget)) : '') : ''}</span></span>
+      <span class="status" style="color:var(--sun);flex:none">● ${esc((v.status||'Idee').toUpperCase())}</span></button>`; }
+  if(!v && !sh.length && !team) return '';
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Musikvideo & Reels</h2></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">
+      ${videoCard || (team ? dash('vstart', r.id, 'Musikvideo planen') : '')}
+      ${sh.map(x => shootRow(r.artist, x)).join('')}
+      ${team ? dash('shootnew', r.artist, 'Reel-Drehtag planen') : ''}
+      ${team && !v && !sh.length ? '<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">Musikvideo oder Reel-Drehtag (viele Reels an einem Tag für Instagram, TikTok, Shorts) – beides mit Locations, Crew, Styling, Budget und Chat.</span>' : ''}
+    </div>`;
 }
 function coopSection(r){
   const c = r.coop, team = !isPreview();
@@ -2255,7 +2260,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122020';
+const APP_VERSION = '202611122030';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
