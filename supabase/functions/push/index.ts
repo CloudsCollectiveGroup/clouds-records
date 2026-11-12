@@ -36,11 +36,50 @@ async function usersFor(keys: string[]) {
   return [...ids];
 }
 
+// Morgen-Erinnerung: pro Person überfällige / heute fällige Aufgaben und Termine von heute und morgen
+const PHASE_WEEKS: Record<string, number> = { "T-12": 12, "T-10": 10, "T-8": 8, "T-6": 6, "T-4": 4, "T-2": 2, "T-0": 0, "Nach Release": -2 };
+const ymd = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+async function all(colName: string) { const { data } = await sb.from("docs").select("id,data").eq("col", colName).limit(5000); return (data || []).map((r: any) => ({ id: r.id, ...r.data })); }
+async function morning() {
+  const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
+  const [tasks, rels, studio, people, content] = await Promise.all([all("tasks"), all("releases"), all("studio"), all("people"), all("content")]);
+  const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
+  const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
+  const { data: members } = await sb.from("members").select("user_id,username,role,person");
+  const KEY: Record<string, string> = { cem: "C", kasper: "K", nikolina: "N", torben: "TH" };
+  let sent = 0;
+  for (const m of members || []) {
+    const key = m.role === "producer" ? "P" : m.role === "artist" ? m.person : KEY[m.username];
+    if (!key) continue;
+    const isArtist = m.role === "artist";
+    const mine = (t: any) => !t.done && (isArtist ? (t.owner === "A" && R[t.release]?.artist === key) : (t.owner === key || (t.helpers || []).includes(key)));
+    const myTasks = tasks.filter(mine), over = myTasks.filter(t => due(t) && due(t) < today).length, now = myTasks.filter(t => due(t) === today).length;
+    const ev: string[] = [];
+    for (const day of [today, tomorrow]) {
+      const tag = day === today ? "Heute" : "Morgen";
+      for (const s of studio) if (s.date === day && s.status === "Bestätigt" && (isArtist ? s.artist === key : key === "C")) ev.push(`${tag} Studio ${s.time || ""}`.trim());
+      for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} Reel-Dreh ${x.time || ""}`.trim());
+      for (const r of rels) for (const v of (r.video?.days || [])) if (v.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${v.time || ""}`.trim());
+      if (day === today) for (const r of rels) if (r.date === day && (isArtist ? r.artist === key : true)) ev.push(`Heute Release: ${r.title || r.code}`);
+    }
+    if (!isArtist) { const posts = content.filter((c: any) => c.date === today && c.status !== "Live" && (c.owner === key || (c.helpers || []).includes(key))).length; if (posts) ev.push(`${posts} Post${posts > 1 ? "s" : ""} heute`); }
+    const parts = [over ? `${over} überfällig` : "", now ? `${now} heute fällig` : "", ...[...new Set(ev)]].filter(Boolean);
+    if (!parts.length) continue;
+    const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
+    for (const s of subs || []) {
+      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: "Guten Morgen · Clouds Records", body: parts.join(" · "), tag: "morning" })); sent++; }
+      catch (e: any) { if ([404, 410].includes(e?.statusCode)) await sb.from("push_subs").delete().eq("endpoint", s.endpoint); }
+    }
+  }
+  return `morgen: ${sent}`;
+}
+
 Deno.serve(async (req) => {
   const c = await config();
   if (new URL(req.url).searchParams.has("init")) return new Response("bereit");
   if (req.headers.get("x-push-secret") !== c.secret) return new Response("forbidden", { status: 403 });
   const { op, col, data: d, old, by } = await req.json();
+  if (op === "CRON") return new Response(await morning());
   const out: { keys: string[]; title: string; body: string; tag: string }[] = [];
 
   if (col === "notes" && op === "INSERT") {
