@@ -101,7 +101,7 @@ h1,h2{margin:0;text-wrap:balance}
 .tc-body .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tc-bar{height:4px;border-radius:2px;background:var(--raise);overflow:hidden}.tc-bar i{display:block;height:100%}
 .pcard{display:flex;align-items:center;gap:14px;color:var(--ink);background:var(--card);border-radius:18px;padding:14px;border:1px solid var(--line);cursor:pointer;width:100%;text-align:left}
-.avatar{width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;flex:none}
+.avatar{overflow:hidden;position:relative;width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;flex:none}
 .navbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(min(430px,100%) - 24px);display:grid;background:rgba(19,40,74,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line2);border-radius:22px;padding:6px;z-index:20}
 .navbar button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:16px;background:transparent;border:0;color:var(--mute);font-size:11px;cursor:pointer}
 .navbar button.on{background:var(--raise);color:var(--sun);font-weight:600}
@@ -124,7 +124,7 @@ h1,h2{margin:0;text-wrap:balance}
 .rhero::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(0,0,0,.05) 0%,rgba(0,0,0,.55) 100%)}
 .rhero .vinyl{display:none}
 .team{display:flex}
-.team span{width:34px;height:34px;border-radius:17px;border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;margin-left:-8px}
+.team span{position:relative;overflow:hidden;width:34px;height:34px;border-radius:17px;border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;margin-left:-8px}
 .team span:first-child{margin-left:0}
 .steps{padding:10px 20px 0;display:flex;flex-direction:column}
 .step{display:grid;grid-template-columns:48px 24px minmax(0,1fr);align-items:start}
@@ -480,6 +480,7 @@ const favsOf = b => b.favs && typeof b.favs === 'object' ? b.favs : {};
 const myFav = b => !!(me && favsOf(b)[me]);
 const beatsOf = pid => vals(S.beats||{}).filter(b => !pid || b.producer === pid).sort((a,b) => ((myFav(b)?1:0)-(myFav(a)?1:0)) || (b.at||'').localeCompare(a.at||''));
 const sessionsOf = pid => vals(S.sessions||{}).filter(x => x.producer === pid).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+const avIn = p => photoOf(p) ? `<img src="${esc(photoOf(p))}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : esc((p.name||'?')[0]);
 const photoOf = p => /^img\/[\w.-]+\.(jpe?g|png|webp)$/i.test(p?.photo || '') ? p.photo : '';
 const interestOf = bid => vals(S.interest||{}).filter(x => x.beat === bid);
 function ctxProducer(c){ if(['producer','beats','sessions','pmonth','pcontent'].includes(c.r) && S.people[c.id]?.role === 'Produzent') return c.id; return null; }
@@ -750,7 +751,7 @@ function vRoster(){
         <div class="tc-bar"><i style="width:${all.length ? Math.max(4, Math.round(all.filter(b => b.status === 'Platziert').length/all.length*100)) : 0}%;background:var(--sun)"></i></div>
         <span class="small">${all.filter(b => b.status === 'Platziert').length} platziert</span></div></button>`; }).join('') : '';
   const prodCards = prods.map(p => `<button class="pcard" data-go="beats" data-id="${esc(p.id)}">
-      <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${esc(p.name[0])}</div>
+      <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${avIn(p)}</div>
       <div class="stack" style="flex:1;gap:4px"><span style="font-weight:700;font-size:19px">${esc(p.name)}</span><span class="mono" style="font-size:11px;color:var(--soft)">${beatsOf(p.id).length} BEATS · ${beatsOf(p.id).filter(b => b.status === 'Neu').length} NEU · ${openFor('P')} OFFEN</span></div>${icon.chev}</button>`).join('');
   return `${cloudSvg}
     <div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></span></div>
@@ -868,7 +869,7 @@ function vRelease(c){
         </div></div></div>
     <div class="pad between" style="padding-top:16px">
       <div class="team">
-        <span title="${esc(p.name)}" style="background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span>
+        <span title="${esc(p.name)}" style="background:${esc(p.color)};color:#fff">${avIn(p)}</span>
         <span title="${esc(prod?.name||'Produzent')}" style="background:var(--sun);color:var(--on-sun)">${esc((prod?.name||'P')[0])}</span>
         ${[...new Set(ts.map(t => t.owner))].filter(o => o && !['A','P','T'].includes(o) && OWNERS[o]).map(o => `<span title="${esc(OWNERS[o])}" style="background:var(--raise);color:var(--ink)">${esc(OWNERS[o][0])}</span>`).join('')}
       </div>
@@ -1384,7 +1385,7 @@ function vCockpit(){
     const pct = rs.length ? Math.round(dn / rs.length * 100) : 0, pa = rs.length ? Math.round(act / rs.length * 100) : 0;
     const yr = contractYear(p);
     return `<button class="vrow" data-go="artist" data-id="${esc(p.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;flex-wrap:wrap">
-      <span class="avatar" style="width:40px;height:40px;font-size:17px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span>
+      <span class="avatar" style="width:40px;height:40px;font-size:17px;background:${esc(p.color)};color:#fff">${avIn(p)}</span>
       <span class="stack" style="flex:1;gap:6px;min-width:0"><span class="between"><b>${esc(p.name)}</b><span class="small">${yearLabel(p)} · ${dn}/${rs.length}</span></span>
         <span class="bar" aria-label="${dn} von ${rs.length} veröffentlicht"><i style="width:${Math.max(pct,0)}%;background:${esc(p.color)};float:left"></i><i style="width:${pa}%;background:repeating-linear-gradient(45deg,${esc(p.color)} 0 2px,transparent 2px 5px);float:left"></i></span></span></button>`;
   }).join('');
@@ -1394,7 +1395,7 @@ function vCockpit(){
   const overdueList = overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
   return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="sticker tilt">NUR TEAM</span></div>${banner()}
     <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Label</h1></div>
-    <div class="chips" style="gap:14px;padding-top:16px" aria-label="Artists">${artists().map(p => `<button data-go="artiststart" data-id="${esc(p.id)}" style="background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;color:var(--ink)"><span class="avatar" style="width:56px;height:56px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span><span style="font-size:12px;color:var(--ink2)">${esc(p.name)}</span></button>`).join('')}</div>
+    <div class="chips" style="gap:14px;padding-top:16px" aria-label="Artists">${artists().map(p => `<button data-go="artiststart" data-id="${esc(p.id)}" style="background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;color:var(--ink)"><span class="avatar" style="width:56px;height:56px;background:${esc(p.color)};color:#fff">${avIn(p)}</span><span style="font-size:12px;color:var(--ink2)">${esc(p.name)}</span></button>`).join('')}</div>
     <div class="tiles">
       <div class="tile ${overdue.length?'hot':''}"><b>${overdue.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
       <div class="tile ${studioReq.length?'hot':'dark'}"><b>${studioReq.length}</b><span class="lbl" style="color:var(--ink)">STUDIO-ANFRAGEN</span></div>
@@ -1737,7 +1738,7 @@ function sheetProfile(pid){
 const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
 async function sheetPushPrefs(){
   let cur0 = {}; try{ const {data} = await sb.auth.getUser(); cur0 = data?.user?.user_metadata?.push || {}; }catch(_){}
-  const fields = `<div class="field"><span class="flabel">WORÜBER WILLST DU BENACHRICHTIGT WERDEN?</span><div class="stack" style="gap:6px">${PUSH_CATS.map(([k,l]) => `<label class="check ${cur0[k] === false ? '' : 'ok'}" style="cursor:pointer"><input type="checkbox" name="pp_${k}" ${cur0[k] === false ? '' : 'checked'} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="tt">${esc(l)}</span></label>`).join('')}</div></div>
+  const fields = `<div class="field"><span class="flabel">WORÜBER WILLST DU BENACHRICHTIGT WERDEN?</span><div class="stack" style="gap:6px">${PUSH_CATS.map(([k,l]) => `<label class="check" style="cursor:pointer"><input type="checkbox" name="pp_${k}" ${cur0[k] === false ? '' : 'checked'} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="tt">${esc(l)}</span></label>`).join('')}</div></div>
     <span class="small" style="display:block;margin-bottom:12px">Gilt für alle deine Geräte. Ausgeschaltetes landet trotzdem auf der Pinnwand.</span>`;
   sheet('Mitteilungen', fields, async (fd, f) => {
     const push = {}; PUSH_CATS.forEach(([k]) => push[k] = !!f.querySelector(`[name=pp_${k}]`).checked);
@@ -1791,7 +1792,7 @@ function vWeek(){
   const pend = !aid ? pendingContent().length : 0, sreq = !aid ? studioOf().filter(x => x.status === 'Angefragt').length : 0;
   const tile = (n, l, hot) => `<div class="tile ${hot && n ? 'hot' : ''}"><b>${n}</b><span class="lbl" style="color:var(--ink)">${l}</span></div>`;
   const byArtist = !aid ? artists().map(p => { const ts = tasks.filter(t => S.releases[t.release]?.artist === p.id); const d = ts.filter(t => t.done && (t._at||'') >= since).length, o = ts.filter(t => !t.done && taskDue(t) && taskDue(t) < t0).length;
-    return `<div class="vrow"><span class="avatar" style="width:34px;height:34px;font-size:14px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span><span class="stack" style="flex:1;gap:2px"><b>${esc(p.name)}</b><span class="small">${d} ERLEDIGT${o ? ` · <span style="color:var(--danger)">${o} ÜBERFÄLLIG</span>` : ''}</span></span></div>`; }).join('') : '';
+    return `<div class="vrow"><span class="avatar" style="width:34px;height:34px;font-size:14px;background:${esc(p.color)};color:#fff">${avIn(p)}</span><span class="stack" style="flex:1;gap:2px"><b>${esc(p.name)}</b><span class="small">${d} ERLEDIGT${o ? ` · <span style="color:var(--danger)">${o} ÜBERFÄLLIG</span>` : ''}</span></span></div>`; }).join('') : '';
   const ev = e => `<div class="vrow"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span><span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${parse(e.date).toLocaleDateString('de-DE',{weekday:'short', day:'2-digit', month:'2-digit'}).toUpperCase()}${e.time ? ' · ' + esc(e.time) : ''}${!aid && e.a ? ' · ' + esc((person(e.a)?.name||'').toUpperCase()) : ''}</span></span></div>`;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><button class="back" data-act="back">${icon.back}Zurück</button><span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'LABEL'}</span></div>
     <div class="pad" style="padding-top:14px"><span class="lbl">LETZTE 7 TAGE · NÄCHSTE 7 TAGE</span><h1 class="h-giant" style="margin-top:6px">Woche</h1></div>
@@ -2509,7 +2510,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122010';
+const APP_VERSION = '202611122030';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
