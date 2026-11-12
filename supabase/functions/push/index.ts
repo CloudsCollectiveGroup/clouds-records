@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
       if (kind === "content") { keys.add("C"); keys.add("N"); if (c.fromArtist) keys.add(c.artist || d.artist); }
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
+    else if (kind === "shoot") { title = "Content-Drehtag"; keys.add("C"); keys.add("N"); if (d.artist) keys.add(d.artist); }
     keys.delete("T");
     const { data: prev } = await sb.from("docs").select("data").eq("col", "chat").eq("data->>ref", d.ref);
     (prev || []).forEach((m: any) => { if (m.data?.byId) extraUsers.push(m.data.byId); });
