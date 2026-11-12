@@ -185,6 +185,19 @@ h1,h2{margin:0;text-wrap:balance}
 .field label{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;color:var(--mute)}
 .field input,.field select,.field textarea{min-height:46px;border:1px solid var(--line2);border-radius:12px;background:var(--paper);padding:10px 12px;font-size:16px;width:100%;color:var(--ink)}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+/* Datum/Uhrzeit: iOS zeichnet diese Felder sonst höher, zentriert und breiter als die anderen */
+.field input[type=date],.field input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;height:46px;line-height:24px;text-align:left}
+.field input[type=date]::-webkit-date-and-time-value,.field input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
+.field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.8)}
+.field select{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:32px}
+.rooms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.rooms .gchip{display:block;position:relative}
+.rooms .gchip span{width:100%;min-height:42px;justify-content:center;text-align:center;border-radius:12px}
+.rooms .gchip:last-child:nth-child(odd){grid-column:1/-1}
+.vstage{display:flex;gap:6px;overflow-x:auto;padding:14px 20px 2px;scrollbar-width:none}
+.vstage button{flex:1;min-width:64px;min-height:36px;border-radius:10px;border:1px solid var(--line2);background:var(--card);color:var(--mute);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
+.vstage button.done{color:var(--ink2);border-color:var(--line2);background:var(--raise)}
+.vstage button.on{background:var(--sun);color:var(--on-sun);border-color:var(--sun)}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .btn{min-height:48px;border-radius:24px;border:0;background:var(--sun);color:var(--on-sun);font-weight:600;font-size:16px;cursor:pointer;padding:0 20px}
 .btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line2)}
@@ -252,7 +265,7 @@ const PHASE_WEEKS = {'T-12':12,'T-10':10,'T-8':8,'T-6':6,'T-4':4,'T-2':2,'T-0':0
 const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', K:'Kasper', C:'Cem', TH:'Thorben', T:'Team'};
 const HELPER_KEYS = ['C','K','N','TH','P'];
 const helpersOf = x => Array.isArray(x?.helpers) ? x.helpers.filter(k => k !== x.owner && OWNERS[k]) : [];
-const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || k);
+const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || S.people?.[k]?.name || k);
 const withHelpers = x => helpersOf(x).length ? ' + ' + helpersOf(x).map(k => ownerName(k, x)).join(' + ') : '';
 const HelpChips = x => `<div class="field"><span class="flabel">ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)</span><div class="gchips">${HELPER_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${esc(ownerName(k, x))}</span></label>`).join('')}</div></div>`;
 const checksOf = x => Array.isArray(x?.checks) ? x.checks.filter(c => c && c.t) : [];
@@ -350,8 +363,20 @@ const CSTATUS_COL = {'Idee':'var(--mute)','In Arbeit':'var(--single)','Bereit':'
 const CONTENT_TEMPLATE = [[-14,'Announcement','Instagram','Release ankündigen'],[-10,'Pre-Save','Alle Kanäle','Pre-Save-Link teilen'],[-7,'Snippet','Instagram','Snippet als Reel'],[-5,'Snippet','TikTok','Snippet auf TikTok'],[-3,'Story','Instagram','Countdown 3 Tage'],[-1,'Story','Instagram','Countdown morgen'],[0,'Out Now','Instagram','Out-Now-Post'],[0,'Story','Instagram','Out-Now-Story mit Link'],[3,'Behind the Scenes','Instagram','Studio-Einblick'],[7,'Reel','TikTok','Reaktionen und Recap']];
 const contentOf = rid => vals(S.content||{}).filter(c => c.release === rid).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
 /* Studio */
-const ROOMS = ['Studio 1 · Vocals','Studio 2 · Mix/Master','BlackClouds (Studio 4/5)','Egal'];
+const ROOMS = ['Studio 1 · Vocals','Studio 3 · Basement Studios','Studio 4 · BlackClouds','Studio 5 · BlackClouds','Egal'];
 const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
+const TIMES = (() => { const o = []; for(let h = 8; h <= 23; h++) for(const m of ['00','30']) o.push(String(h).padStart(2,'0') + ':' + m); return o; })();
+const endTime = (t, h) => { if(!t) return ''; const [a,b] = t.split(':').map(Number); const m = (a*60 + b + (+h||0)*60) % 1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); };
+const studioText = x => { const r = S.releases[x.release], a = person(x.artist); return `CloudStudios · ${x.room||'Raum offen'} · ${a?.name||''}${r ? ' (' + relName(r) + ')' : ''} · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' ' + x.time + '–' + endTime(x.time, x.hours) : ''}${x.note ? ' · ' + x.note : ''}`; };
+/* Musikvideo (liegt am Release unter „video“) */
+const VSTAGES = ['Idee','Planung','Dreh','Schnitt','Fertig'];
+const VLOC_STATUS = ['Idee','Angefragt','Bestätigt','Abgesagt'];
+const VCREW_ROLES = ['Regie','Kamera','Licht','Schnitt','Styling','Make-up','Produktion','Sonstiges'];
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const eur = n => (Math.round(n*100)/100).toLocaleString('de-DE', {minimumFractionDigits:0, maximumFractionDigits:2}) + ' €';
+const videoCost = v => (v.locations||[]).filter(l => l.status !== 'Abgesagt').reduce((s,l) => s + num(l.cost), 0) + (v.crew||[]).reduce((s,c) => s + num(c.cost), 0) + num(v.other);
+/* Kooperation mit anderem Vertrieb/Label (optional, am Release unter „coop“) */
+const COOP_KINDS = ['Vertrieb','Label','Co-Release','Promo-Partner','Sonstiges'];
 /* Beats & Listening-Sessions (Produzenten) */
 const BSTATUS = ['Idee','Gemixt','Neu','Freigegeben','Store','Auswahl','Reserviert','Duo','Platziert'];
 const BLABEL = {Idee:'Idee', Gemixt:'Fertig gemixt', Neu:'Pool', Freigegeben:'Beat Market + Store', Store:'Nur Store', Reserviert:'Exklusiv reserviert', Duo:'Duo / Feature-Idee', Auswahl:'Passt zu mehreren', Platziert:'Platziert', Verworfen:'Nur Store'};
@@ -542,8 +567,8 @@ function shrinkImage(file){
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
-const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market'].includes(r) ? r : 'artiststart';
-  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video'].includes(r) ? r : 'artiststart';
+  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
 function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
@@ -554,7 +579,8 @@ function ctxArtist(c){
   if(c.r === 'release') return S.releases[c.id]?.artist || null;
   if(c.r === 'track'){ const t = S.tracks[c.id]; return t ? S.releases[t.release]?.artist || null : null; }
   if(c.r === 'tracks' && c.artist) return c.artist;
-  if((c.r === 'recordings' || c.r === 'market') && S.people[c.id]) return c.id;
+  if((c.r === 'recordings' || c.r === 'market' || c.r === 'apin') && S.people[c.id]) return c.id;
+  if(c.r === 'video') return S.releases[c.id]?.artist || null;
   return null;
 }
 function renderNav(){
@@ -562,7 +588,7 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beat Market',icon.cockpit,{id:a,preview:a}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c);
@@ -572,7 +598,7 @@ function renderNav(){
       : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['market','Beat Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
-  const active = {release:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
+  const active = {release:'artist', video:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
   nav.innerHTML = items.map(([r,l,ic],i) => `<button data-i="${i}" class="${r===active?'on':''}" ${r===active?'aria-current="page"':''}>${ic}${l}</button>`).join('');
   nav.querySelectorAll('button').forEach(b => b.onclick = () => {
     const [r,,,p] = items[+b.dataset.i];
@@ -590,7 +616,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
-  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin}[c.r] || vRoster;
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
@@ -700,7 +726,7 @@ function relRow(r, now){
   return `<button class="rrow ${now?'now':''} ${r.status==='Released'?'done':''}" data-go="release" data-id="${esc(r.id)}">
     <span class="cover" style="background:${T.c}">${coverUrl(r) ? coverTag(r) : miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
     <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(relTitle(r))}${now?'<span class="sticker tilt3" style="padding:3px 6px;font-size:10px">JETZT</span>':''}</span>
-      <span class="small" style="font-weight:700;color:${isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}</span>${parent}</span>
+      <span class="small" style="font-weight:700;color:${isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}${r.coop?.partner ? ' · KOOP ' + esc(r.coop.partner.toUpperCase()) : ''}${r.video ? ' · VIDEO' : ''}</span>${parent}</span>
     <span class="small" style="text-align:right">${r.date ? fmt(r.date) : 'DATUM<br>OFFEN'}</span></button>`;
 }
 
@@ -749,6 +775,7 @@ function vRelease(c){
           <span class="chip">${r.date ? 'RELEASE ' + fmt(r.date) : 'RELEASE-DATUM OFFEN'}</span>
           <span class="chip" style="background:var(--raise);color:var(--ink)">${esc(r.status.toUpperCase())}</span>
           ${countdown ? `<span class="sticker tilt3">${countdown}</span>` : ''}
+          ${r.coop?.partner ? `<span class="chip" style="background:rgba(20,20,20,.45);color:#fff">KOOP · ${esc(r.coop.partner.toUpperCase())}</span>` : ''}
         </div></div></div>
     <div class="pad between" style="padding-top:16px">
       <div class="team">
@@ -767,6 +794,8 @@ function vRelease(c){
       ${dropboxFolder(p, `DROPBOX-ORDNER ${esc(p.name.toUpperCase())} →`)}
     </div>
     ${contentSection(r)}
+    ${videoSection(r)}
+    ${coopSection(r)}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
 
@@ -784,6 +813,137 @@ function contentSection(r){
   return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Content-Plan</h2>${team ? `<button class="pill" data-act="addcontent" data-id="${esc(r.id)}">${icon.plus} Beitrag</button>` : `<span class="small">${items.length} BEITRÄGE</span>`}</div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(c => contentRow(c, false)).join('') :
       `<div class="empty" style="margin:0"><b>Noch kein Content-Plan</b><span class="small">Standard: 10 Beiträge von Ankündigung (T-14) bis Recap (T+7). Daten rechnen sich aus dem Release-Datum.</span>${team ? `<button class="pill sun" data-act="contenttemplate" data-id="${esc(r.id)}">Standard-Plan anlegen</button>` : ''}</div>`}</div>`;
+}
+
+/* ---------- Musikvideo & Kooperation (am Release) ---------- */
+const saveVideo = (rid, patch) => put('releases', rid, {video: {...(S.releases[rid]?.video || {}), ...patch}});
+function videoSummary(v){
+  const t0 = todayIso();
+  const next = (v.days||[]).filter(d => d.date && d.date >= t0).sort((a,b) => a.date.localeCompare(b.date))[0];
+  const locs = (v.locations||[]).filter(l => l.status !== 'Abgesagt'), ok = locs.filter(l => l.status === 'Bestätigt').length;
+  const props = v.props||[];
+  return {next, locs, ok, props, cost: videoCost(v)};
+}
+function videoSection(r){
+  const v = r.video, team = !isPreview();
+  if(!v) return team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Musikvideo</h2></div>
+    <div class="pad" style="padding-top:10px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="vstart" data-id="${esc(r.id)}">${icon.plus} Musikvideo planen</button></div>` : '';
+  const s = videoSummary(v);
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Musikvideo</h2><span class="status" style="color:var(--sun)">● ${esc((v.status||'Idee').toUpperCase())}</span></div>
+    <div class="pad" style="padding-top:10px"><button class="vrow" data-go="video" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
+      <span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${s.next ? 'Nächster Dreh ' + fmt(s.next.date) + (s.next.time ? ' · ' + esc(s.next.time) : '') : 'Noch kein Drehtag'}</b>
+        <span class="small">${s.ok}/${s.locs.length} LOCATIONS BESTÄTIGT · ${(v.crew||[]).length} CREW${s.props.length ? ' · ☑ ' + s.props.filter(p => p.d).length + '/' + s.props.length : ''}${team && (num(v.budget) || s.cost) ? ' · ' + eur(s.cost) + (num(v.budget) ? ' / ' + eur(num(v.budget)) : '') : ''}</span></span>${icon.chev}</button></div>`;
+}
+function coopSection(r){
+  const c = r.coop, team = !isPreview();
+  if(!c?.partner) return team ? `<div class="pad" style="padding-top:14px"><button class="pill dash" style="width:100%;justify-content:center;min-height:42px;color:var(--mute)" data-act="editcoop" data-id="${esc(r.id)}">${icon.plus} Kooperation mit Vertrieb/Label (optional)</button></div>` : '';
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Kooperation</h2>${team ? `<button class="pill" data-act="editcoop" data-id="${esc(r.id)}">${icon.edit} Bearbeiten</button>` : ''}</div>
+    <div class="pad" style="padding-top:10px"><div class="vrow" style="align-items:flex-start">
+      <span class="play" style="font-family:var(--mono);font-size:10px;font-weight:700">KOOP</span>
+      <span class="stack" style="flex:1;gap:4px;min-width:0"><b style="font-weight:600">${esc(c.partner)}</b>
+        <span class="small">${esc((c.kind||'').toUpperCase())}${team && c.share ? ' · ANTEIL ' + esc(c.share.toUpperCase()) : ''}${team && c.contact ? ' · ' + esc(c.contact.toUpperCase()) : ''}</span>
+        ${team && c.note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(c.note)}</span>` : ''}
+        ${safeUrl(c.link) ? `<a class="small" href="${esc(c.link)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">${team ? 'VERTRAG / UNTERLAGEN' : 'LINK'} ÖFFNEN →</a>` : ''}</span></div></div>`;
+}
+function sheetCoop(rid){
+  const r = S.releases[rid]; if(!r) return;
+  const c = r.coop || {kind:'Vertrieb'};
+  const fields = `${F('partner','PARTNER (VERTRIEB / LABEL)',c.partner||'','text','required placeholder="z. B. Groove Attack"')}
+    <div class="grid2">${Sel('kind','ART',COOP_KINDS,c.kind)}${F('share','ANTEIL / SPLIT',c.share||'','text','placeholder="z. B. 50/50"')}</div>
+    ${F('contact','ANSPRECHPARTNER',c.contact||'','text','placeholder="Name, Telefon oder Mail"')}
+    ${F('link','VERTRAG / UNTERLAGEN (LINK)',c.link||'','url','placeholder="https://www.dropbox.com/…"')}
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="3" placeholder="Was übernimmt der Partner, was wir?">${esc(c.note||'')}</textarea></div>
+    <span class="small" style="display:block;margin-bottom:12px">Der Artist sieht nur Partner und Art, nicht Anteil, Kontakt und Notiz.</span>`;
+  const extra = r.coop ? `<button class="btn danger" type="button" id="delCoop" style="width:100%;margin-top:10px">Kooperation entfernen</button>` : '';
+  sheet('Kooperation · ' + relName(r), fields, async fd => {
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    return await put('releases', rid, {coop:{partner:(fd.partner||'').trim(), kind:fd.kind, share:(fd.share||'').trim(), contact:(fd.contact||'').trim(), link:safeUrl(fd.link), note:(fd.note||'').trim()}}) ? undefined : false;
+  }, extra);
+  const d = $('#delCoop');
+  if(d) d.onclick = async () => { if(d.dataset.sure){ await put('releases', rid, {coop:null}); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich entfernen? Erneut tippen'; } };
+}
+function vVideo(c){
+  const r = S.releases[c.id]; if(!r) throw new Error('missing');
+  const v = r.video || {}, p = person(r.artist), team = !isPreview(), s = videoSummary(v), t0 = todayIso();
+  const cur0 = VSTAGES.indexOf(v.status || 'Idee');
+  const stage = `<div class="vstage">${VSTAGES.map((x,i) => `<button ${team ? `data-act="vstage" data-id="${esc(r.id)}|${esc(x)}"` : 'disabled'} class="${i === cur0 ? 'on' : i < cur0 ? 'done' : ''}">${esc(x.toUpperCase())}</button>`).join('')}</div>`;
+  const add = kind => team ? `<button class="pill" data-act="vadd" data-id="${esc(r.id)}|${kind}">${icon.plus} ${kind === 'days' ? 'Drehtag' : kind === 'locations' ? 'Location' : 'Person'}</button>` : '';
+  const row = (kind, i, main, sub, right='', note='') => `<button class="vrow" ${team ? `data-act="vedit" data-id="${esc(r.id)}|${kind}|${i}"` : 'data-act="noop"'} style="cursor:${team ? 'pointer' : 'default'};width:100%;text-align:left;font:inherit;align-items:flex-start">
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${main}</b><span class="small">${sub}</span>${note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(note)}</span>` : ''}</span>${right}</button>`;
+  const LCOL = {'Idee':'var(--mute)','Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgesagt':'var(--danger)'};
+  const days = (v.days||[]).map((d,i) => ({...d, i})).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'))
+    .map(d => row('days', d.i, `${d.date ? fmt(d.date) : 'Datum offen'}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}`, `${esc((d.loc || 'Location offen').toUpperCase())}${d.date && d.date < t0 ? ' · VORBEI' : ''}`, '', d.note)).join('');
+  const locs = (v.locations||[]).map((l,i) => row('locations', i, esc(l.name), `${l.address ? esc(l.address.toUpperCase()) : 'ADRESSE OFFEN'}${team && num(l.cost) ? ' · ' + eur(num(l.cost)) : ''}`, `<span class="status" style="color:${LCOL[l.status]||'var(--mute)'};flex:none">● ${esc((l.status||'Idee').toUpperCase())}</span>`, l.note)).join('');
+  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}`)).join('');
+  const refs = (v.refs||'').split('\n').map(x => x.trim()).filter(Boolean);
+  const props = (v.props||[]).map((x,i) => team
+    ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${esc(r.id)}|${i}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></button>`
+    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></div>`).join('');
+  const budget = num(v.budget), over = budget && s.cost > budget;
+  const head = (t, extra='') => `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">${t}</h2>${extra}</div>`;
+  const list = (html, emptyTxt) => `<div class="pad stack" style="gap:8px;padding-top:10px">${html || `<span class="small">${team ? emptyTxt : 'Noch nichts eingetragen.'}</span>`}</div>`;
+  return `${banner()}${previewBanner()}
+    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(relName(r))}</button><span class="small">${esc(p?.name?.toUpperCase()||'')}</span></div>
+    <div class="pad" style="padding-top:14px"><span class="lbl">MUSIKVIDEO · ${esc(relTitle(r).toUpperCase())}</span><h1 class="h-big" style="margin-top:6px">${esc(v.title || r.title || 'Musikvideo')}</h1></div>
+    ${stage}
+    <div class="tiles">
+      <div class="tile"><b style="font-size:24px">${s.next ? fmt(s.next.date) : '—'}</b><span class="lbl" style="color:var(--ink)">NÄCHSTER DREH</span></div>
+      <div class="tile"><b style="font-size:24px">${s.ok}/${s.locs.length}</b><span class="lbl" style="color:var(--ink)">LOCATIONS BESTÄTIGT</span></div>
+      <div class="tile"><b style="font-size:24px">${(v.crew||[]).length}</b><span class="lbl" style="color:var(--ink)">CREW</span></div>
+      ${team ? `<div class="tile ${over ? 'hot' : ''}"><b style="font-size:24px">${eur(s.cost)}</b><span class="lbl" style="color:var(--ink)">${budget ? 'VON ' + eur(budget) : 'KOSTEN'}</span></div>` : `<div class="tile"><b style="font-size:24px">${(v.props||[]).filter(x => x.d).length}/${(v.props||[]).length}</b><span class="lbl" style="color:var(--ink)">STYLING & PROPS</span></div>`}
+    </div>
+    ${head('Konzept & Referenzen', team ? `<button class="pill" data-act="vbase" data-id="${esc(r.id)}">${icon.edit} Bearbeiten</button>` : '')}
+    <div class="pad stack" style="gap:8px;padding-top:10px">${v.concept ? `<div class="vrow" style="white-space:pre-line;line-height:1.45;font-size:15px">${esc(v.concept)}</div>` : `<span class="small">${team ? 'Noch kein Konzept. Idee, Story und Stimmung hier festhalten.' : 'Noch kein Konzept eingetragen.'}</span>`}
+      ${refs.map(x => safeUrl(x) ? `<a class="vrow" href="${esc(x)}" target="_blank" rel="noopener" style="font-size:14px;color:var(--sun);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">↗ ${esc(x.replace(/^https:\/\/(www\.)?/,''))}</a>` : `<span class="small">• ${esc(x)}</span>`).join('')}</div>
+    ${head('Drehtage', add('days'))}${list(days, 'Noch kein Drehtag eingetragen.')}
+    ${head('Locations', add('locations'))}${list(locs, 'Noch keine Location. Beliebig viele möglich, jeweils mit Status und Kosten.')}
+    ${head('Crew', add('crew'))}${list(crew, 'Regie, Kamera, Licht, Schnitt … hier eintragen.')}
+    ${head('Styling & Requisiten', team ? `<button class="pill" data-act="vprops" data-id="${esc(r.id)}">${icon.edit} Liste</button>` : '')}${list(props, 'Outfits und Props als Checkliste.')}
+    ${team ? `${head('Budget', `<button class="pill" data-act="vbase" data-id="${esc(r.id)}">${icon.edit} Budget</button>`)}
+    <div class="pad stack" style="gap:6px;padding-top:10px">
+      <div class="between small"><span>GEPLANT</span><b>${budget ? eur(budget) : 'OFFEN'}</b></div>
+      <div class="between small"><span>LOCATIONS</span><b>${eur((v.locations||[]).filter(l => l.status !== 'Abgesagt').reduce((a,l) => a + num(l.cost), 0))}</b></div>
+      <div class="between small"><span>CREW</span><b>${eur((v.crew||[]).reduce((a,x) => a + num(x.cost), 0))}</b></div>
+      <div class="between small"><span>SONSTIGES (CATERING, TECHNIK …)</span><b>${eur(num(v.other))}</b></div>
+      <div class="between" style="border-top:1px solid var(--line);padding-top:8px;font-weight:700"><span>TATSÄCHLICH</span><span style="color:${over ? 'var(--danger)' : 'var(--ink)'}">${eur(s.cost)}${budget ? ' · ' + (over ? eur(s.cost - budget) + ' DRÜBER' : eur(budget - s.cost) + ' FREI') : ''}</span></div></div>
+    <div class="pad" style="padding-top:28px"><button class="pill dash" style="width:100%;justify-content:center;color:var(--danger)" data-act="vdelete" data-id="${esc(r.id)}">Musikvideo-Planung entfernen</button></div>` : '<div class="pad small" style="padding-top:18px">Plan vom Team · nur lesend.</div>'}`;
+}
+function sheetVideoBase(rid){
+  const r = S.releases[rid], v = r?.video || {};
+  const fields = `${F('title','ARBEITSTITEL VIDEO',v.title||'','text',`placeholder="${esc(r?.title || 'z. B. BIT – Official Video')}"`)}
+    ${Sel('status','STATUS',VSTAGES,v.status||'Idee')}
+    <div class="field"><label for="f-concept">KONZEPT & STORY</label><textarea id="f-concept" name="concept" rows="5" placeholder="Idee, Story, Stimmung, Farben">${esc(v.concept||'')}</textarea></div>
+    <div class="field"><label for="f-refs">REFERENZEN (EIN LINK PRO ZEILE)</label><textarea id="f-refs" name="refs" rows="3" placeholder="https://youtu.be/…">${esc(v.refs||'')}</textarea></div>
+    <div class="grid2">${F('budget','BUDGET GEPLANT (€)',v.budget||'','text','inputmode="decimal" placeholder="z. B. 1500"')}${F('other','SONSTIGE KOSTEN (€)',v.other||'','text','inputmode="decimal" placeholder="Catering, Technik"')}</div>`;
+  sheet('Musikvideo · ' + relName(r), fields, async fd => await saveVideo(rid, {title:(fd.title||'').trim(), status:fd.status, concept:(fd.concept||'').trim(), refs:(fd.refs||'').trim(), budget:(fd.budget||'').trim(), other:(fd.other||'').trim()}) ? undefined : false);
+}
+function sheetVItem(rid, kind, idx){
+  const r = S.releases[rid], v = r?.video || {}, arr = [...(v[kind]||[])], isNew = idx == null, x = isNew ? {} : arr[idx] || {};
+  const locNames = (v.locations||[]).filter(l => l.status !== 'Abgesagt').map(l => l.name);
+  const area = (n, l, val, ph='') => `<div class="field"><label for="f-${n}">${l}</label><textarea id="f-${n}" name="${n}" rows="2" placeholder="${ph}">${esc(val||'')}</textarea></div>`;
+  let title, fields;
+  if(kind === 'days'){ title = 'Drehtag';
+    const locs = [['','Location offen'], ...locNames.map(n => [n,n]), ...(x.loc && !locNames.includes(x.loc) ? [[x.loc, x.loc]] : [])];
+    fields = `${F('date','DATUM',x.date||'','date','required')}<div class="grid2">${Sel('time','BEGINN',['', ...TIMES].map(t => [t, t || 'offen']),x.time||'')}${Sel('end','ENDE',['', ...TIMES].map(t => [t, t || 'offen']),x.end||'')}</div>
+      ${Sel('loc','LOCATION',locs,x.loc||'')}${area('note','NOTIZ',x.note,'Call Time, Szenen, Treffpunkt')}`; }
+  else if(kind === 'locations'){ title = 'Location';
+    fields = `${F('name','NAME',x.name||'','text','required placeholder="z. B. Hafen Hamburg, Studio 3"')}${F('address','ADRESSE',x.address||'')}
+      <div class="grid2">${Sel('status','STATUS',VLOC_STATUS,x.status||'Idee')}${F('cost','KOSTEN (€)',x.cost||'','text','inputmode="decimal"')}</div>${area('note','NOTIZ',x.note,'Ansprechpartner, Genehmigung, Strom …')}`; }
+  else { title = 'Crew';
+    fields = `<div class="grid2">${Sel('role','ROLLE',VCREW_ROLES,x.role||'Regie')}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}`; }
+  const extra = isNew ? '' : `<button class="btn danger" type="button" id="delVItem" style="width:100%;margin-top:10px">${title} löschen</button>`;
+  sheet((isNew ? 'Neu: ' : '') + title, fields, async fd => {
+    const doc = {}; for(const [k, val] of Object.entries(fd)) doc[k] = String(val).trim();
+    if(isNew) arr.push(doc); else arr[idx] = doc;
+    return await saveVideo(rid, {[kind]: arr}) ? undefined : false;
+  }, extra);
+  const d = $('#delVItem');
+  if(d) d.onclick = async () => { if(d.dataset.sure){ arr.splice(idx, 1); await saveVideo(rid, {[kind]: arr}); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+function sheetVProps(rid){
+  const r = S.releases[rid], v = r?.video || {};
+  sheet('Styling & Requisiten', `${CheckList({checks: v.props||[]})}<span class="small" style="display:block;margin-bottom:12px">Outfits, Props, Make-up – jeder Punkt einzeln abhakbar.</span>`, async (fd, f) => await saveVideo(rid, {props: readChecks(f)}) ? undefined : false);
 }
 
 /* Content: Gesamtansicht für das Team (z. B. Nikolina) */
@@ -834,30 +994,39 @@ async function contentTemplate(rid){
 /* Studio-Anfragen */
 function sheetStudio(rid, id){
   const team = account?.role !== 'artist';
-  const x = id ? S.studio[id] : {release:rid, artist:S.releases[rid]?.artist, date:'', time:'14:00', hours:'4', room:ROOMS[0], status:'Angefragt'};
+  const x = id ? S.studio[id] : {release:rid, artist:S.releases[rid]?.artist, date:'', time:'14:00', hours:'4', room:'Egal', status:'Angefragt'};
   const rels = relsOf(x.artist).map(r => [r.id, relName(r) + (r.title ? ' · ' + r.title : '')]);
+  const times = x.time && !TIMES.includes(x.time) ? [x.time, ...TIMES] : TIMES;
+  const rooms = x.room && !ROOMS.includes(x.room) ? [...ROOMS.slice(0,-1), x.room, 'Egal'] : ROOMS;
   const fields = `${Sel('release','FÜR RELEASE',rels,x.release)}
-    <div class="grid2">${F('date','WUNSCHDATUM',x.date||'','date','required')}${F('time','UHRZEIT',x.time||'','time')}</div>
-    <div class="grid2">${Sel('hours','DAUER',[['4','4 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}${Sel('room','RAUM',ROOMS,x.room)}</div>
+    ${F('date','WUNSCHDATUM',x.date||'','date',`required min="${id ? '' : todayIso()}"`)}
+    <div class="grid2">${Sel('time','BEGINN',times,x.time||'14:00')}${Sel('hours','DAUER',[['4','4 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}</div>
+    <div class="field"><span class="flabel">RAUM</span><div class="gchips rooms">${rooms.map(r => `<label class="gchip"><input type="radio" name="room" value="${esc(r)}" ${r === (x.room||'Egal') ? 'checked' : ''}><span>${esc(r)}</span></label>`).join('')}</div></div>
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
-    ${id && team ? Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status) : ''}`;
-  const extra = id && team ? `<button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
+    ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
+  const extra = id && team ? `<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
   sheet(id ? 'Studio-Anfrage' : 'Studio-Slot anfragen', fields, async fd => {
-    const doc = {release:fd.release, date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room, note:(fd.note||'').trim()};
-    if(id) return await put('studio', id, team ? {...doc, status:fd.status} : doc) ? undefined : false;
+    const doc = {release:fd.release, date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room || 'Egal', note:(fd.note||'').trim()};
+    if(id) return await put('studio', id, team ? {...doc, status:fd.status, tt: fd.tt === '1'} : doc) ? undefined : false;
     const ok = await put('studio', uid('s'), {...doc, artist:x.artist, status:'Angefragt', by: account?.name || '', at: new Date().toISOString()}, false);
     if(ok) toast('Anfrage gesendet · das Team bestätigt den Slot');
     return ok ? undefined : false;
   }, extra);
   const d = $('#delStudio');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('studio', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+  const cp = $('#copyStudio');
+  if(cp) cp.onclick = () => copyText(studioText(S.studio[id] || x));
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); toast('Kopiert · in TimeTree einfügen'); }
+  catch(_){ const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); toast('Kopiert · in TimeTree einfügen'); }catch(__){ toast('Kopieren nicht möglich'); } a.remove(); }
 }
 function studioRow(x, withArtist){
   const r = S.releases[x.release], a = person(x.artist);
   return `<button class="vrow" data-act="editstudio" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
     <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600">${x.hours}h</span>
-    <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) : ''}</b>
-      <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' : ''}${esc(relName(r).toUpperCase())} · ${esc((x.room||'').toUpperCase())}</span></span>
+    <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</b>
+      <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' : ''}${esc(relName(r).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
     <span class="status" style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></button>`;
 }
 
@@ -1011,6 +1180,8 @@ function vArtistStart(c){
     <div class="topbar">${team ? `<button class="back" data-act="home">${icon.back}Artists</button>` : `<span class="brand">CLOUDS RECORDS</span>`}<span class="row" style="gap:8px">${team ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>` : `<span class="small">${yearLabel(p)}</span>`}</span></div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant" style="font-size:44px">${team ? esc(p.name) : `Hey ${esc(p.name)}.`}</h1>${team ? `<div class="small" style="margin-top:6px">${yearLabel(p)}${dropboxFolder(p, ' · DROPBOX-ORDNER →', 'small', 'font-weight:600;color:var(--sun);text-decoration:none')}</div>` : ''}
       <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div>
+    ${team ? (() => { const n = notesFor(p.id).filter(x => !(x.doneBy||[]).includes(p.id)).length, o = vals(S.tasks).filter(t => !t.done && t.owner === 'A' && S.releases[t.release]?.artist === p.id).length;
+      return `<button class="vrow" data-go="apin" data-id="${esc(p.id)}" style="margin:18px 16px 0;width:calc(100% - 32px);cursor:pointer;text-align:left;font:inherit"><span class="play">${icon.roster}</span><span class="stack" style="flex:1;gap:2px"><b>Pinnwand von ${esc(p.name)}</b><span class="small">${n} NACHRICHTEN · ${o} AUFGABEN OFFEN</span></span>${icon.chev}</button>`; })() : ''}
     ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
     <div style="margin:10px 16px 0;background:${TYPE[r.type].c};color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700">${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="sticker tilt3">${fmt(r.date)}</span>`:''}</div>
@@ -1134,7 +1305,7 @@ function sheetRecording(aid, id){
 }
 /* ---------- Pinnwand: alles, was bei mir liegt + Nachrichten ---------- */
 const USER_KEY = {cem:'C', kasper:'K', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
-const myKey = () => account?.role === 'producer' ? 'P' : (USER_KEY[account?.username] || null);
+const myKey = () => account?.role === 'producer' ? 'P' : account?.role === 'artist' ? lockedArtist : (USER_KEY[account?.username] || null);
 const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) && x.helpers.includes(k)));
 const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function pinItems(k){
@@ -1165,29 +1336,89 @@ function vPin(c){
   const sentCard = n => `<div class="vrow" style="align-items:flex-start"><span class="stack" style="flex:1;gap:3px;min-width:0"><span class="small">AN ${esc((n.to||[]).map(t => ownerName(t) + ((n.doneBy||[]).includes(t) ? ' ✓' : '')).join(', ').toUpperCase())}</span><span style="font-size:14px;white-space:pre-line">${esc(n.text)}</span></span><button class="iconbtn ghost" data-act="notedel" data-id="${esc(n.id)}" aria-label="Nachricht zurückziehen" style="width:34px;height:34px;flex:none">×</button></div>`;
   const sec = (title, list, hot) => list.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec" ${hot ? 'style="color:var(--danger)"' : ''}>${title}</h2><span class="small">${list.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(row).join('')}</div>` : '';
   const team = account?.role !== 'producer';
+  /* Studio-Anfragen landen bei Cem: offen = angefragt oder bestätigt, aber noch nicht in TimeTree */
+  const sReq = k === 'C' ? studioOf().filter(x => x.status === 'Angefragt' || (x.status === 'Bestätigt' && !x.tt && (!x.date || x.date >= t0))) : [];
+  const sAsk = sReq.filter(x => x.status === 'Angefragt').length, sTT = sReq.length - sAsk;
+  const studioCard = x => { const r = S.releases[x.release], a = person(x.artist);
+    return `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:10px;${x.status === 'Angefragt' ? 'border-color:rgba(212,175,55,.35);background:var(--sun-bg)' : ''}">
+      <button data-act="editstudio" data-id="${esc(x.id)}" style="background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer;display:flex;gap:12px;align-items:center">
+        <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600;flex:none">${esc(x.hours)}h</span>
+        <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(a?.name||'')} · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}${isNew({at:x._at, by:x._by}) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
+          <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(relName(r).toUpperCase())}${x.by ? ' · VON ' + esc(x.by.toUpperCase()) : ''}</span>
+          ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note)}</span>` : ''}</span>
+        <span class="status" style="color:${SSTATUS_COL[x.status]}">● ${esc(x.status.toUpperCase())}</span></button>
+      <div class="row" style="gap:8px;flex-wrap:wrap">${x.status === 'Angefragt' ? `<button class="pill sun" data-act="sconfirm" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} Bestätigen</button><button class="pill" data-act="sdecline" data-id="${esc(x.id)}" style="min-height:34px">Ablehnen</button>` : ''}
+        <button class="pill" data-act="scopy" data-id="${esc(x.id)}" style="min-height:34px">Text kopieren</button>
+        ${x.status === 'Bestätigt' ? `<button class="pill sun" data-act="stt" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} In TimeTree eingetragen</button>` : ''}</div></div>`; };
+  const studioSec = k === 'C' ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
+      <button class="tile ${sAsk ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sAsk}</b><span class="lbl" style="color:var(--ink)">STUDIO-ANFRAGEN</span></button>
+      <button class="tile ${sTT ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sTT}</b><span class="lbl" style="color:var(--ink)">FÜR TIMETREE</span></button></div>
+    ${sReq.length ? `<div class="pad between" id="pinStudio" style="padding-top:22px"><h2 class="h-sec">Studio-Anfragen</h2><span class="small">→ TIMETREE</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sReq.map(studioCard).join('')}</div>` : ''}` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
   return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${pick}
+    ${studioSec}
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
     ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
-    ${!notes.length && !items.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
+    ${!notes.length && !items.length && !sReq.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
-function sheetNote(){
-  const mk = myKey();
-  const fields = `<div class="field"><label for="f-text">NACHRICHT</label><textarea id="f-text" name="text" rows="4" required placeholder="z. B. Niki, bitte Cover für BIT bis Freitag"></textarea></div>
-    <div class="field"><span class="flabel">AN (MEHRFACH)</span><div class="gchips">${HELPER_KEYS.filter(x => x !== mk).map(x => `<label class="gchip"><input type="checkbox" name="to" value="${x}"><span>${esc(ownerName(x))}</span></label>`).join('')}</div></div>
+function sheetNote(preTo){
+  const mk = myKey(), isArtist = account?.role === 'artist';
+  const chip = (x, on) => `<label class="gchip"><input type="checkbox" name="to" value="${esc(x)}" ${on ? 'checked' : ''}><span>${esc(ownerName(x))}</span></label>`;
+  const teamChips = HELPER_KEYS.filter(x => x !== mk).map(x => chip(x, isArtist ? x === 'C' : x === preTo)).join('');
+  const artistChips = isArtist ? '' : artists().map(a => chip(a.id, a.id === preTo)).join('');
+  const fields = `<div class="field"><label for="f-text">NACHRICHT</label><textarea id="f-text" name="text" rows="4" required placeholder="${isArtist ? 'z. B. Hook für Single 02 ist fertig, Link anbei' : 'z. B. Niki, bitte Cover für BIT bis Freitag'}"></textarea></div>
+    <div class="field"><span class="flabel">AN ${isArtist ? 'DAS TEAM' : 'TEAM'} (MEHRFACH)</span><div class="gchips">${teamChips}</div></div>
+    ${artistChips ? `<div class="field"><span class="flabel">AN ARTISTS (ERSCHEINT AUF DEREN PINNWAND)</span><div class="gchips">${artistChips}</div></div>` : ''}
     <div class="grid2">${F('due','BIS (OPTIONAL)','','date')}${F('link','LINK (OPTIONAL)','','url','placeholder="https://…"')}</div>`;
   sheet('Neue Nachricht', fields, async (fd, f) => {
     const to = [...f.querySelectorAll('input[name=to]:checked')].map(i => i.value);
     if(!to.length){ toast('Bitte mindestens eine Person antippen'); return false; }
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
-    const ok = await put('notes', uid('n'), {text:(fd.text||'').trim(), to, due:fd.due||'', link:safeUrl(fd.link), from:account?.name || 'Team', fromKey: mk || '', fromId: me || '', doneBy:[], at:new Date().toISOString()}, false);
+    const ok = await put('notes', uid('n'), {text:(fd.text||'').trim(), to, due:fd.due||'', link:safeUrl(fd.link), from:account?.name || 'Team', fromKey: mk || '', fromId: me || '', ...(isArtist ? {fromArtist: lockedArtist} : {}), doneBy:[], at:new Date().toISOString()}, false);
     if(ok) toast('Angepinnt bei ' + to.map(x => ownerName(x)).join(', '));
     return ok ? undefined : false;
   });
+}
+/* ---------- Artist: Pinnwand ---------- */
+function vArtistPin(c){
+  const aid = c.id, p = person(aid); if(!p) throw new Error('missing');
+  const own = lockedArtist === aid, t0 = todayIso(), wk = isoAdd(t0, 7);
+  const since = SEEN['__apin_' + aid] || '';
+  const fresh = x => x._at && x._by && x._by !== me && x._at > since;
+  const notes = notesFor(aid).filter(n => !(n.doneBy||[]).includes(aid));
+  const sent = vals(S.notes||{}).filter(n => n.fromArtist === aid && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+  const tasks = vals(S.tasks).filter(t => !t.done && (t.owner === 'A' || helpersOf(t).includes('A')) && S.releases[t.release]?.artist === aid)
+    .map(t => ({t, due: taskDue(t)})).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
+  const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
+  const shoots = relsOf(aid).flatMap(r => (r.video?.days||[]).filter(d => d.date && d.date >= t0).map(d => ({...d, r}))).sort((a,b) => a.date.localeCompare(b.date));
+  const taskRow = ({t, due}) => { const r = S.releases[t.release];
+    return `<div class="vrow" style="align-items:flex-start"><button class="dot" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} abhaken" style="flex:none;margin-top:2px"></button>
+      <button data-go="release" data-id="${esc(r.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer"><b style="font-weight:600">${esc(t.title)}${fresh(t) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
+      <span class="small">${esc(relName(r).toUpperCase())}${r.title ? ' · ' + esc(r.title.toUpperCase()) : ''}${checkTxt(t)}${due ? ' · ' + (due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(due) + '</b>' : 'BIS ' + fmt(due)) : ''}</span>
+      ${t.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : ''}</button></div>`; };
+  const noteCard = n => `<div class="vrow" style="align-items:flex-start;border-color:rgba(212,175,55,.35);background:var(--sun-bg)">
+      <span class="stack" style="flex:1;gap:4px;min-width:0"><span class="small">VON ${esc((n.from||'').toUpperCase())} · ${n.at ? new Date(n.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}${n.due ? ' · BIS ' + fmt(n.due) : ''}${fresh(n) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</span>
+      <span style="font-size:15px;line-height:1.4;white-space:pre-line">${esc(n.text)}</span>${safeUrl(n.link) ? `<a class="small" href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">LINK ÖFFNEN →</a>` : ''}</span>
+      ${own ? `<button class="pill sun" data-act="notedone" data-id="${esc(n.id)}" style="min-height:34px;flex:none">${icon.check} Erledigt</button>` : ''}</div>`;
+  const sentCard = n => `<div class="vrow" style="align-items:flex-start"><span class="stack" style="flex:1;gap:3px;min-width:0"><span class="small">AN ${esc((n.to||[]).map(t => ownerName(t) + ((n.doneBy||[]).includes(t) ? ' ✓' : '')).join(', ').toUpperCase())}</span><span style="font-size:14px;white-space:pre-line">${esc(n.text)}</span></span>${own ? `<button class="iconbtn ghost" data-act="notedel" data-id="${esc(n.id)}" aria-label="Nachricht zurückziehen" style="width:34px;height:34px;flex:none">×</button>` : ''}</div>`;
+  const over = tasks.filter(x => x.due && x.due < t0), week = tasks.filter(x => x.due && x.due >= t0 && x.due <= wk), later = tasks.filter(x => !x.due || x.due > wk);
+  const sec = (title, list, html, hot, extra='') => list.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec" ${hot ? 'style="color:var(--danger)"' : ''}>${title}</h2><span class="small">${extra || list.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(html).join('')}</div>` : '';
+  const shootRow = d => `<button class="vrow" data-go="video" data-id="${esc(d.r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">Dreh · ${fmt(d.date)}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}</b><span class="small">${esc(relName(d.r).toUpperCase())}${d.loc ? ' · ' + esc(d.loc.toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
+  if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
+  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length;
+  return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand">CLOUDS RECORDS</span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div></div>
+    ${sec('Nachrichten', notes, noteCard)}
+    ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
+    ${sec('Studio', studio, x => studioRow(x, false))}
+    ${sec('Musikvideo-Dreh', shoots, shootRow)}
+    ${empty ? `<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landen Nachrichten vom Team, deine Aufgaben, Studio-Termine und Drehtage.${own ? ' Über „Nachricht“ schreibst du dem Team.' : ''}</span></div>` : ''}
+    ${sent.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">${own ? 'Von dir gesendet' : 'Von ' + esc(p.name) + ' gesendet'}</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
 /* ---------- Artist: Beat Market ---------- */
 const myBeats = aid => vals(S.beats||{}).filter(b => pickedFor(b, aid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
@@ -1462,6 +1693,20 @@ async function act(a, id){
   if(a === 'contenttemplate') return contentTemplate(id);
   if(a === 'cfilter') return tab('content', {f:id});
   if(a === 'addstudio') return sheetStudio(id);
+  if(a === 'sconfirm' || a === 'sdecline'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {status: a === 'sconfirm' ? 'Bestätigt' : 'Abgelehnt'}); toast(a === 'sconfirm' ? 'Bestätigt · jetzt in TimeTree eintragen' : 'Abgelehnt'); } return; }
+  if(a === 'scopy'){ const x = S.studio?.[id]; return x ? copyText(studioText(x)) : null; }
+  if(a === 'stt'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {tt:true}); toast('Als eingetragen markiert'); } return; }
+  if(a === 'pinjump'){ document.getElementById(id)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+  if(a === 'addnoteto') return sheetNote(id);
+  if(a === 'editcoop') return sheetCoop(id);
+  if(a === 'vstart'){ await saveVideo(id, {status:'Idee', locations:[], days:[], crew:[], props:[]}); return go('video', {id}); }
+  if(a === 'vbase') return sheetVideoBase(id);
+  if(a === 'vprops') return sheetVProps(id);
+  if(a === 'vadd'){ const [rid, kind] = id.split('|'); return sheetVItem(rid, kind); }
+  if(a === 'vedit'){ const [rid, kind, i] = id.split('|'); return sheetVItem(rid, kind, +i); }
+  if(a === 'vstage'){ const [rid, st] = id.split('|'); return saveVideo(rid, {status: st}); }
+  if(a === 'vprop'){ const [rid, i] = id.split('|'); const ps = [...(S.releases[rid]?.video?.props||[])]; if(ps[+i]){ ps[+i] = {...ps[+i], d: !ps[+i].d}; await saveVideo(rid, {props: ps}); } return; }
+  if(a === 'vdelete'){ const el = document.querySelector(`[data-act="vdelete"]`); if(el && !el.dataset.sure){ el.dataset.sure = 1; el.textContent = 'Wirklich entfernen? Erneut tippen'; setTimeout(() => { if(el.isConnected){ delete el.dataset.sure; el.textContent = 'Musikvideo-Planung entfernen'; } }, 4000); return; } await put('releases', id, {video:null}); back(); return; }
   if(a === 'addstudioartist'){ const r = currentRelease(id) || nextPlanned(id) || relsOf(id)[0]; return r ? sheetStudio(r.id) : toast('Noch kein Release angelegt'); }
   if(a === 'editstudio') return sheetStudio(null, id);
   if(a === 'addvorab') return sheetVorab(id);
@@ -1746,7 +1991,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611112210';
+const APP_VERSION = '202611121700';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
