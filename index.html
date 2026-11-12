@@ -99,6 +99,12 @@ h1,h2{margin:0;text-wrap:balance}
 .tc-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
 .tc-name{font-weight:600;font-size:17px}
 .tc-body .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.beattile .tc-art{overflow:hidden}
+.bt-wave{position:absolute;left:10%;right:10%;bottom:18%;height:28%;display:flex;align-items:flex-end;gap:3px;opacity:.35}
+.bt-wave i{flex:1;background:#fff;border-radius:2px}.bt-wave i:nth-child(3n){height:40%}.bt-wave i:nth-child(3n+1){height:85%}.bt-wave i:nth-child(3n+2){height:60%}.bt-wave i:nth-child(5n){height:100%}
+.bt-play{position:relative;width:56px;height:56px;border-radius:28px;background:var(--sun);color:var(--on-sun);display:flex;align-items:center;justify-content:center;text-decoration:none}
+.bt-fav{position:absolute;right:8px;top:8px;width:32px;height:32px;border-radius:16px;border:0;background:rgba(12,27,49,.55);color:#fff;font-size:16px;cursor:pointer}.bt-fav.on{color:var(--sun)}
+.prodtile .tc-art{aspect-ratio:16/9}
 .tc-bar{height:4px;border-radius:2px;background:var(--raise);overflow:hidden}.tc-bar i{display:block;height:100%}
 .pcard{display:flex;align-items:center;gap:14px;color:var(--ink);background:var(--card);border-radius:18px;padding:14px;border:1px solid var(--line);cursor:pointer;width:100%;text-align:left}
 .avatar{overflow:hidden;position:relative;width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;flex:none}
@@ -1983,34 +1989,72 @@ function vArtistPin(c){
 }
 /* ---------- Artist: Beat Market ---------- */
 const myBeats = aid => vals(S.beats||{}).filter(b => pickedFor(b, aid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
-function vMarketTeam(){
+/* Beat-Kachel: Farbe aus dem ersten Genre, großer Play-Knopf, Aktion unten */
+const GENRE_COL = ['#7A4FBF','#2F5BD3','#C2407A','#3FAE7F','#E0703F','#22D3EE','#B23A48','#5B8DEF'];
+const beatCol = b => { const g = (genresOf(b)[0] || b.title || 'x'); let h = 0; for(const ch of g) h = (h*31 + ch.charCodeAt(0)) >>> 0; return GENRE_COL[h % GENRE_COL.length]; };
+function beatTile(b, mode){
+  const meta = [b.bpm ? b.bpm + ' BPM' : '', b.key || ''].filter(Boolean).join(' · ');
+  const ints = interestOf(b.id), cl = ints[0], meCl = cl && cl.artist === lockedArtist;
+  const who = x => esc(((x && (x.artistName || person(x.artist)?.name)) || '').toUpperCase());
+  const prod = person(b.producer);
+  let actn;
+  if(mode === 'mine') actn = `<span class="status" style="color:var(--sun)">● ${b.status === 'Duo' ? 'FEATURE-IDEE' : 'FÜR DICH'}</span>`;
+  else if(mode === 'artist') actn = cl && !meCl ? `<span class="status" style="color:var(--mute)">● VERGEBEN · ${who(cl)}</span>` : `<button class="pill ${meCl ? 'on' : 'sun'}" data-act="interest" data-id="${esc(b.id)}" style="min-height:32px;width:100%;justify-content:center">${meCl ? 'Markiert ✓' : 'Markieren'}</button>`;
+  else actn = `<span class="status" style="color:${BSTATUS_COL[b.status]||'var(--mute)'}">● ${esc((BLABEL[b.status]||b.status||'').toUpperCase())}</span>${ints.length ? `<span class="small" style="color:var(--sun)">★ ${ints.map(who).join(', ')}</span>` : ''}`;
+  const team = mode !== 'artist' && mode !== 'mine';
+  return `<div class="tilecard beattile">
+    <div class="tc-art" style="aspect-ratio:1/1;background:${beatCol(b)}">
+      <span class="bt-wave" aria-hidden="true">${'<i></i>'.repeat(14)}</span>
+      <a class="bt-play" href="${esc(safeUrl(b.link) || '#')}" target="_blank" rel="noopener" aria-label="${esc(b.title)} anhören">${icon.play}</a>
+      ${genresOf(b)[0] ? `<span class="tc-yr">${esc(genresOf(b).slice(0,2).join(' · ').toUpperCase())}</span>` : ''}
+      ${team ? `<button class="bt-fav ${myFav(b) ? 'on' : ''}" data-act="fav" data-id="${esc(b.id)}" aria-label="Favorit">${myFav(b) ? '★' : '☆'}</button>` : ''}</div>
+    <div class="tc-body">
+      <button data-act="${team ? 'editbeat' : 'noop'}" data-id="${esc(b.id)}" style="background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:${team ? 'pointer' : 'default'}"><span class="tc-name" style="font-family:var(--head);font-weight:400;font-size:20px;letter-spacing:.02em;text-transform:uppercase">${esc(b.title)}</span></button>
+      <span class="small">${esc(meta.toUpperCase()) || 'OHNE ANGABEN'}${prod && team ? ' · ' + esc(prod.name.toUpperCase()) : ''}</span>
+      ${actn}</div></div>`;
+}
+const beatGrid = (list, mode, empty) => list.length ? `<div class="tilegrid" style="padding-top:12px">${list.map(b => beatTile(b, mode)).join('')}</div>` : `<div class="pad small" style="padding-top:10px">${empty}</div>`;
+/* Produzenten-Kachel (breit, mit Foto) */
+function prodTile(pp, sub, o){
+  return `<button class="tilecard prodtile" data-act="mkt" data-id="${esc(JSON.stringify(o))}" style="margin:16px 20px 0;width:calc(100% - 40px)">
+    <div class="tc-art" style="aspect-ratio:16/9;background:var(--sun)">${photoOf(pp) ? `<img src="${esc(photoOf(pp))}" alt="" style="object-position:center 30%">` : `<span class="tc-ini" style="color:var(--on-sun)">${esc(pp.name[0])}</span>`}<span class="aheadshade"></span>
+      <span class="tc-yr" style="background:var(--sun);color:var(--on-sun)">PRODUZENT</span>
+      <span style="position:absolute;left:14px;right:14px;bottom:12px;text-align:left"><span style="display:block;font-family:var(--head);font-size:30px;line-height:1;color:#fff;text-transform:uppercase">Beats von ${esc(pp.name)}</span><span class="small" style="color:#fff">${sub}</span></span></div></button>`;
+}
+const mktTop = (title, sub, back) => `${cloudSvg}<div class="topbar">${back ? `<button class="back" data-act="back">${icon.back}Beat Market</button>` : `<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>`}</div>${banner()}${previewBanner()}
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">${title}</h1><div class="small" style="margin-top:6px">${sub}</div></div>`;
+function vMarketTeam(c){
   const all = vals(S.beats||{});
-  const open = all.filter(b => b.status === 'Freigegeben').sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || ((myFav(b)?1:0)-(myFav(a)?1:0)) || (b.at||'').localeCompare(a.at||''));
-  const free = open.filter(b => !interestOf(b.id).length), taken = open.filter(b => interestOf(b.id).length);
-  const groups = artists().map(a => ({a, list: all.filter(b => pickedFor(b, a.id))})).filter(g => g.list.length);
-  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="small">${free.length} FREI · ${taken.length} MARKIERT</span></div>${banner()}
-    <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Beat Market</h1><span class="sticker tilt" style="margin-bottom:10px">LABEL-SICHT</span></div>
-    <div class="pad small" style="padding-top:6px">SO SEHEN DIE ARTISTS DEN MARKET – PLUS WER WAS MARKIERT HAT. BEAT ANTIPPEN ZUM BEARBEITEN.</div>
-    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Offen für alle</h2><span class="small">${free.length} FREI</span></div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${free.map(b => beatRow(b)).join('') || '<span class="small">Keine freien Beats. Neue kommen über die Listening-Session.</span>'}</div>
-    ${taken.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von Artists markiert</h2><span class="small">${taken.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${taken.map(b => beatRow(b)).join('')}</div>` : ''}
-    <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Für Artists gepickt</h2><span class="small">EXKLUSIV & DUO</span></div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${groups.length ? groups.map(g => `<div class="lbl" style="color:${esc(g.a.color)};padding-top:6px">${esc(g.a.name.toUpperCase())}</div>` + g.list.map(b => beatRow(b)).join('')).join('') : '<span class="small">Noch nichts exklusiv gepickt.</span>'}</div>`;
+  const open = pid => all.filter(b => b.status === 'Freigegeben' && (!pid || b.producer === pid)).sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || (b.at||'').localeCompare(a.at||''));
+  const forA = aid => all.filter(b => pickedFor(b, aid) || interestOf(b.id).some(x => x.artist === aid));
+  if(c.pid && person(c.pid)){ const pp = person(c.pid), list = open(c.pid), free = list.filter(b => !interestOf(b.id).length), taken = list.filter(b => interestOf(b.id).length);
+    return `${mktTop('Offen für alle', 'BEATS VON ' + esc(pp.name.toUpperCase()) + ' · SO SEHEN ES DIE ARTISTS', true)}
+      <div class="pad between" style="padding-top:22px"><h2 class="h-sec">Frei</h2><span class="small">${free.length}</span></div>${beatGrid(free, 'team', 'Keine freien Beats. Neue kommen über die Listening-Session.')}
+      ${taken.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Von Artists markiert</h2><span class="small">${taken.length}</span></div>${beatGrid(taken, 'team', '')}` : ''}`; }
+  if(c.a && person(c.a)){ const a = person(c.a), list = forA(c.a);
+    return `${mktTop(esc(a.name), 'GEPICKT, VORGESCHLAGEN ODER MARKIERT', true)}${beatGrid(list, 'team', 'Für ' + esc(a.name) + ' ist noch nichts gepickt oder markiert.')}`; }
+  const prods = producers();
+  return `${mktTop('Beat Market', 'PRODUZENT ANTIPPEN = OFFEN FÜR ALLE · ARTIST ANTIPPEN = SEINE BEATS', false).replace('</h1>', '</h1>')}
+    ${prods.map(pp => { const l = open(pp.id); return prodTile(pp, `${l.filter(b => !interestOf(b.id).length).length} FREI · ${l.filter(b => interestOf(b.id).length).length} MARKIERT`, {pid: pp.id}); }).join('')}
+    <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Artists</h2><span class="small">GEPICKT · MARKIERT</span></div>
+    <div class="tilegrid" style="padding-top:12px">${artists().map(a => { const l = forA(a.id), pk = l.filter(b => pickedFor(b, a.id)).length, mk = l.length - pk;
+      return `<button class="tilecard" data-act="mkt" data-id="${esc(JSON.stringify({a:a.id}))}" aria-label="Beats für ${esc(a.name)}">
+        <div class="tc-art" style="background:${esc(a.color)}">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini">${esc((a.name||'?')[0])}</span>`}${l.length ? `<span class="tc-new">${l.length} BEATS</span>` : ''}</div>
+        <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${pk} GEPICKT · ${mk} MARKIERT</span></div></button>`; }).join('')}</div>`;
 }
 function vMarket(c){
-  if(!c.id && !lockedArtist) return vMarketTeam();
+  if(!c.id && !lockedArtist) return vMarketTeam(c);
   const p = person(c.id); if(!p) throw new Error('missing');
-  const mine = myBeats(p.id);
-  const open = vals(S.beats||{}).filter(b => b.status === 'Freigegeben').sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || (b.at||'').localeCompare(a.at||''));
-  const marked = open.filter(b => interestOf(b.id).some(x => x.artist === p.id));
-  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="small">${open.filter(b => !interestOf(b.id).length).length} FREI</span></div>${banner()}${previewBanner()}
-    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Beat Market</h1><div class="small" style="margin-top:6px">BEATS VON ${esc(producers().map(x => x.name.toUpperCase()).join(' & ') || 'CLOUDS RECORDS')}</div></div>
+  const all = vals(S.beats||{});
+  const open = pid => all.filter(b => b.status === 'Freigegeben' && (!pid || b.producer === pid)).sort((a,b) => (interestOf(a.id).length - interestOf(b.id).length) || (b.at||'').localeCompare(a.at||''));
+  if(c.pid && person(c.pid)){ const pp = person(c.pid), list = open(c.pid).filter(b => !interestOf(b.id).some(x => x.artist === p.id));
+    return `${mktTop('Offen für alle', 'BEATS VON ' + esc(pp.name.toUpperCase()) + ' · JEDER BEAT GEHT NUR AN EINEN ARTIST – WER ZUERST MARKIERT', true)}${beatGrid(list, 'artist', 'Gerade keine offenen Beats. Neue kommen nach jeder Listening-Session.')}`; }
+  const mine = myBeats(p.id), marked = open().filter(b => interestOf(b.id).some(x => x.artist === p.id) && !mine.includes(b));
+  return `${mktTop('Beat Market', 'DEINE BEATS UND DER MARKET DEINER PRODUZENTEN', false)}
+    ${producers().map(pp => { const l = open(pp.id), free = l.filter(b => !interestOf(b.id).length).length; return prodTile(pp, `${free} FREI · ANTIPPEN ZUM STÖBERN`, {id: p.id, pid: pp.id}); }).join('')}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Für dich gepickt</h2><span class="small">${mine.length + marked.length}</span></div>
-    <div class="pad small" style="padding-top:6px">FÜR DICH ZUR SEITE GELEGT ODER DIR VORGESCHLAGEN – UND WAS DU DIR MARKIERT HAST. BEI VORSCHLÄGEN GILT: WER ZUERST MARKIERT.</div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${mine.map(b => beatRow(b, b.status === 'Auswahl' ? 'artist' : 'mine')).join('')}${marked.filter(b => !mine.includes(b)).map(b => beatRow(b, 'artist')).join('')}${mine.length + marked.length ? '' : '<span class="small">Noch nichts für dich gepickt. Schau unten im Market und markier dir einen Beat.</span>'}</div>
-    <div class="pad between" style="padding-top:28px"><h2 class="h-sec">Offen für alle</h2><span class="small">${open.length - marked.length} BEATS</span></div>
-    <div class="pad small" style="padding-top:6px">MARKIER DIR EINEN BEAT – JEDER BEAT GEHT NUR AN EINEN ARTIST.</div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${open.filter(b => !interestOf(b.id).some(x => x.artist === p.id)).map(b => beatRow(b, 'artist')).join('') || '<span class="small">Gerade keine offenen Beats. Neue kommen nach jeder Listening-Session.</span>'}</div>`;
+    <div class="pad small" style="padding-top:6px">FÜR DICH ZUR SEITE GELEGT, VORGESCHLAGEN ODER VON DIR MARKIERT.</div>
+    ${mine.length + marked.length ? `<div class="tilegrid" style="padding-top:12px">${mine.map(b => beatTile(b, b.status === 'Auswahl' ? 'artist' : 'mine')).join('')}${marked.map(b => beatTile(b, 'artist')).join('')}</div>` : '<div class="pad small" style="padding-top:10px">Noch nichts für dich gepickt. Oben den Produzenten antippen und einen Beat markieren.</div>'}`;
 }
 /* ---------- Produzent: Monatsplan & Content ---------- */
 function vPMonth(c){
@@ -2205,6 +2249,7 @@ async function act(a, id){
   if(a === 'exitpreview'){ const id = cur().preview; return tab('artiststart', {id}); }
   if(a === 'preview') return tab('artiststart', {id, preview:id});
   if(a === 'filter'){ filterArtist = id; return render(); }
+  if(a === 'mkt'){ go('market', JSON.parse(id)); return; }
   if(a === 'addtodo'){ const [kind, artist] = id.split('|'); sheetTodo(null, {kind, artist}); return; }
   if(a === 'todoview'){ if(lockedArtist || isPreview()) sheetTodoView(id); else sheetTodo(id); return; }
   if(a === 'tododone'){ const x = S.todos?.[id]; if(x) await put('todos', id, {done: !x.done, doneAt: x.done ? '' : new Date().toISOString(), doneBy: x.done ? '' : (account?.name || '')}); return; }
@@ -2615,7 +2660,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122215';
+const APP_VERSION = '202611122245';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
