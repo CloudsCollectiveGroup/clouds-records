@@ -336,7 +336,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -1372,6 +1372,7 @@ function vTracks(c){
 function vCockpit(){
   const open = vals(S.tasks).filter(t => !t.done);
   const overdue = open.filter(t => { const d = taskDue(t); return d && daysTo(d) < 0; });
+  const todoOver = vals(S.todos||{}).filter(x => !isTermin(x) && !x.done && x.due && daysTo(x.due) < 0);
   const studio = open.filter(t => /recording/i.test(t.title));
   const radar = vals(S.releases).filter(r => r.date && daysTo(r.date) >= 0 && daysTo(r.date) <= 90).sort((a,b) => a.date.localeCompare(b.date));
   const months = [0,1,2].map(i => { const d = today(); d.setDate(1); d.setMonth(d.getMonth()+i); return d; });
@@ -1392,12 +1393,13 @@ function vCockpit(){
   const missing = artists().filter(p => !p.start);
   const studioReq = studioOf().filter(x => x.status === 'Angefragt');
   const studioNext = studioOf().filter(x => x.status === 'Bestätigt' && x.date >= todayIso()).slice(0,4);
-  const overdueList = overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
+  const overdueTodo = todoOver.map(x => `<button class="vrow" data-act="todoview" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff">☐</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(x.title)}</b><span class="small">AUFGABE · ${esc(todoWho(x).toUpperCase())} · FÄLLIG ${fmt(x.due)}</span></span></button>`).join('');
+  const overdueList = overdueTodo + overdue.slice(0,6).map(t => { const r = S.releases[t.release]; return r ? `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700">${esc(t.phase)}</span><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(t.title)}</b><span class="small">${esc(person(r.artist)?.name.toUpperCase()||'')} · ${esc(relName(r).toUpperCase())} · FÄLLIG ${fmt(taskDue(t))}</span></span></button>` : ''; }).join('');
   return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="sticker tilt">NUR TEAM</span></div>${banner()}
     <div class="pad" style="padding-top:18px;position:relative"><h1 class="h-giant">Label</h1></div>
     <div class="chips" style="gap:14px;padding-top:16px" aria-label="Artists">${artists().map(p => `<button data-go="artiststart" data-id="${esc(p.id)}" style="background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;color:var(--ink)"><span class="avatar" style="width:56px;height:56px;background:${esc(p.color)};color:#fff">${avIn(p)}</span><span style="font-size:12px;color:var(--ink2)">${esc(p.name)}</span></button>`).join('')}</div>
     <div class="tiles">
-      <div class="tile ${overdue.length?'hot':''}"><b>${overdue.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
+      <div class="tile ${overdue.length + todoOver.length?'hot':''}"><b>${overdue.length + todoOver.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></div>
       <div class="tile ${studioReq.length?'hot':'dark'}"><b>${studioReq.length}</b><span class="lbl" style="color:var(--ink)">STUDIO-ANFRAGEN</span></div>
       <div class="tile"><b>${radar.length}</b><span class="lbl" style="color:var(--ink)">RELEASES · 90 TAGE</span></div>
       <div class="tile"><b>${open.length}</b><span class="lbl" style="color:var(--ink)">OFFENE SCHRITTE</span></div>
@@ -1471,6 +1473,8 @@ function vArtistStart(c){
       <div class="row" style="flex-wrap:wrap"><button class="pill navy" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill line" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>`; })()}` : ''}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">${team ? 'Aufgaben' : 'Deine Aufgaben'}</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>
+    ${(() => { const list = todosOf(p.id).filter(x => (team || todoArtistIn(x)) && (isTermin(x) ? (!x.date || x.date >= todayIso()) : !x.done)).sort((a,b) => ((a.date||a.due)||'9999').localeCompare((b.date||b.due)||'9999'));
+      return list.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Termine & Aufgaben</h2>${team ? `<span class="row" style="gap:6px"><button class="pill" data-act="addtodo" data-id="Termin|${esc(p.id)}">${icon.plus} Termin</button><button class="pill" data-act="addtodo" data-id="Aufgabe|${esc(p.id)}">${icon.plus} Aufgabe</button></span>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(x => todoRow(x, {withArtist:false})).join('') || '<span class="small">Termine und Aufgaben außerhalb der Releases – Fotoshooting, Pressetermin, Meeting. Der Artist sieht nur, wo er eingetragen ist.</span>'}</div>` : ''; })()}
     ${(() => { const sh = shootsOf(p.id).filter(x => x.status !== 'Gepostet'); return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Reel-Drehtage</h2>${team ? `<button class="pill" data-act="shootnew" data-id="${esc(p.id)}">${icon.plus} Drehtag</button>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(p.id, x)).join('') || '<span class="small">Noch kein Content-Drehtag. Ein Tag, viele Reels – hier komplett planen.</span>'}</div>` : ''; })()}
     <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio</h2><button class="pill" data-act="addstudioartist" data-id="${esc(p.id)}">${icon.plus} Anfragen</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${studioOf(p.id).filter(x => x.status !== 'Abgelehnt' || x.date >= todayIso()).slice(-4).map(x => studioRow(x, false)).join('') || '<span class="small">Keine Studio-Anfragen. Über „Anfragen“ einen Slot bei CloudStudios wünschen.</span>'}</div>
@@ -1586,6 +1590,86 @@ function sheetRecording(aid, id){
   const d = $('#delRec');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('recordings', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
+/* ---------- Aufgaben & Termine ohne Release (col „todos“) – für Team und Artists ---------- */
+const isTermin = x => x?.kind === 'Termin';
+const todoArtistIn = x => !!x?.artist && (x.owner === 'A' || helpersOf(x).includes('A') || checksOf(x).some(c => c.o === 'A'));
+const todoAMine = x => x.owner === 'A' || helpersOf(x).includes('A');
+const todoWho = x => [x.owner, ...helpersOf(x)].filter(Boolean).map(k => k === 'A' ? (person(x.artist)?.name || 'Artist') : ownerName(k)).join(' + ');
+const todosOf = aid => vals(S.todos||{}).filter(x => !aid || x.artist === aid);
+const todoWhen = x => isTermin(x) ? (x.date ? fmt(x.date) : 'DATUM OFFEN') + (x.time ? ' · ' + x.time + (x.end ? '–' + x.end : '') : '') + (x.place ? ' · ' + x.place.toUpperCase() : '') : (x.due ? (x.due < todayIso() && !x.done ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.due) + '</b>' : 'BIS ' + fmt(x.due)) : '');
+function todoRow(x, opt = {}){
+  const a = person(x.artist), n = chatOf('todos:' + x.id).length, canTick = !isTermin(x) && (!lockedArtist || todoAMine(x));
+  const lead = isTermin(x) ? `<span class="play" style="flex-direction:column;gap:0;font-family:var(--mono);font-size:11px;font-weight:600;line-height:1.2;text-align:center;background:rgba(34,211,238,.14);color:#22D3EE">${x.date ? `<span>${parse(x.date).getDate()}.</span><span style="font-size:9px">${parse(x.date).toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>` : '—'}</span>`
+    : (canTick ? `<button class="dot ${x.done ? 'ok' : ''}" data-act="tododone" data-id="${esc(x.id)}" aria-label="${esc(x.title)} abhaken" style="flex:none;margin-top:2px">${x.done ? icon.check : ''}</button>` : '<span style="flex:none;width:22px">☐</span>');
+  return `<div class="vrow" style="align-items:flex-start">${lead}
+    <button data-act="todoview" data-id="${esc(x.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer">
+      <b style="font-weight:600;${x.done ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(x.title)}${opt.fresh && opt.fresh(x) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
+      <span class="small">${isTermin(x) ? 'TERMIN' : 'AUFGABE'}${a && opt.withArtist !== false ? ' · ' + esc(a.name.toUpperCase()) : ''}${todoWho(x) ? ' · ' + esc(todoWho(x).toUpperCase()) : ''}${checkTxt(x)}${todoWhen(x) ? ' · ' + todoWhen(x) : ''}</span>
+      ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Questrial,Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</button>
+    ${safeUrl(x.link) ? `<a class="pill" href="${esc(x.link)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗</a>` : ''}${n ? `<span class="small" style="color:var(--sun);flex:none;margin-top:4px">💬 ${n}</span>` : ''}</div>`;
+}
+const TODO_KEYS = ['A', ...HELPER_KEYS];
+function sheetTodo(id, pre = {}){
+  const x = id ? S.todos?.[id] : {kind: pre.kind || 'Aufgabe', artist: pre.artist || '', owner: pre.artist ? 'A' : (myKey() || 'C'), title:''};
+  if(!x) return;
+  const term = isTermin(x);
+  const chips = `<div class="field"><span class="flabel">${term ? 'WER IST DABEI? (MEHRFACH)' : 'ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)'}</span><div class="gchips">${TODO_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${k === 'A' ? 'Artist' : esc(ownerName(k))}</span></label>`).join('')}</div></div>`;
+  const fields = `${Sel('kind','ART',[['Aufgabe','Aufgabe (mit Frist, abhakbar)'],['Termin','Termin (Datum, Uhrzeit, Ort)']],x.kind || 'Aufgabe')}
+    ${F('title', term ? 'TERMIN' : 'AUFGABE', x.title, 'text', 'required placeholder="' + (term ? 'z. B. Fotoshooting Pressebilder' : 'z. B. Dropbox Team-Tarif abschließen') + '"')}
+    ${Sel('artist','ARTIST (OPTIONAL)',[['','— keiner, nur Team —'], ...artists().map(a => [a.id, a.name])], x.artist||'')}
+    ${Sel('owner', term ? 'VERANTWORTLICH' : 'ZUSTÄNDIG', Object.entries(OWNERS), x.owner || 'C')}
+    ${chips}
+    <div data-tk="Aufgabe">${F('due','FÄLLIG',x.due||'','date')}</div>
+    <div data-tk="Termin"><div class="grid2">${F('date','DATUM',x.date||'','date')}${F('time','BEGINN',x.time||'','time')}</div><div class="grid2">${F('end','ENDE (OPTIONAL)',x.end||'','time')}${F('place','ORT',x.place||'','text','placeholder="z. B. CloudStudios"')}</div></div>
+    ${F('link','LINK (OPTIONAL)',x.link||'','url','placeholder="https://…"')}
+    ${CheckList(x)}
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="3" placeholder="Details, Absprachen, was mitzubringen ist">${esc(x.note||'')}</textarea></div>
+    ${id && !term ? `<label class="gchip" style="margin-bottom:12px"><input type="checkbox" name="done" ${x.done ? 'checked' : ''}><span>Erledigt</span></label>` : ''}
+    <p class="small" style="margin:0 0 12px;text-transform:none;letter-spacing:0;font-family:Questrial,Inter,system-ui,sans-serif;font-size:13px">Der Artist sieht die Karte nur, wenn er zuständig, dabei oder für einen Punkt eingetragen ist.</p>`;
+  const extra = id ? `${chatBox('todos:' + id, '', todoArtistIn(x) ? x.artist : '')}<button class="btn danger" type="button" id="delTodo" style="width:100%;margin-top:10px">Löschen</button>` : '';
+  const form = sheet(id ? (term ? 'Termin bearbeiten' : 'Aufgabe bearbeiten') : (term ? 'Neuer Termin' : 'Neue Aufgabe'), fields, async (fd, f) => {
+    const helpers = readHelpers(f, fd.owner), checks = readChecks(f);
+    const usesA = fd.owner === 'A' || helpers.includes('A') || checks.some(c => c.o === 'A');
+    if(usesA && !fd.artist){ toast('Bitte oben einen Artist auswählen'); return false; }
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    if(fd.kind === 'Termin' && !fd.date){ toast('Bitte ein Datum eintragen'); return false; }
+    const doc = {kind:fd.kind, title:(fd.title||'').trim(), artist:fd.artist||'', owner:fd.owner, helpers, checks, link:safeUrl(fd.link), note:(fd.note||'').trim(),
+      due: fd.kind === 'Aufgabe' ? (fd.due||'') : '', date: fd.kind === 'Termin' ? fd.date : '', time: fd.kind === 'Termin' ? (fd.time||'') : '', end: fd.kind === 'Termin' ? (fd.end||'') : '', place: fd.kind === 'Termin' ? (fd.place||'').trim() : ''};
+    if(!doc.title) return false;
+    if(id) return await put('todos', id, {...doc, done: fd.kind === 'Aufgabe' ? !!f.querySelector('[name=done]')?.checked : false}) ? undefined : false;
+    const ok = await put('todos', uid('td'), {...doc, done:false, by: account?.name || 'Team', byId: me || '', at: new Date().toISOString()}, false);
+    if(ok) toast((doc.kind === 'Termin' ? 'Termin' : 'Aufgabe') + ' angelegt');
+    return ok ? undefined : false;
+  }, extra);
+  const sync = () => { const k = form.querySelector('[name=kind]').value; form.querySelectorAll('[data-tk]').forEach(el => el.style.display = el.dataset.tk === k ? '' : 'none'); };
+  form.querySelector('[name=kind]').addEventListener('change', sync); sync();
+  bindChats(form);
+  const d = form.querySelector('#delTodo');
+  if(d) d.onclick = async () => { if(d.dataset.sure){ await del('todos', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+/* Lesende Ansicht für Artists: Infos, eigene Punkte abhaken, Chat */
+function sheetTodoView(id){
+  const x = S.todos?.[id]; if(!x) return; const a = person(x.artist);
+  const checks = checksOf(x).map((c, i) => `<div class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
+      ${c.o === 'A' ? `<button class="dot ${c.d ? 'ok' : ''}" data-todochk="${esc(id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(c.t)}</span><span class="small">${c.o ? '→ ' + esc((c.o === 'A' ? a?.name : ownerName(c.o)) || '').toUpperCase() : ''}</span></span>
+      ${safeUrl(c.l) ? `<a class="pill" href="${esc(c.l)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗 Öffnen</a>` : ''}</div>`).join('');
+  const root = $('#sheetRoot');
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(x.title)}"><div class="sheet"><div class="grab"></div>
+    <span class="small">${isTermin(x) ? 'TERMIN' : 'AUFGABE'} · VON ${esc((x.by || 'TEAM').toUpperCase())}</span>
+    <h2 class="h-sec" style="margin:6px 0 4px">${esc(x.title)}</h2>
+    <span class="small">${esc(todoWho(x).toUpperCase())}${todoWhen(x) ? ' · ' + todoWhen(x) : ''}${x.done ? ' · ERLEDIGT' : ''}</span>
+    ${x.note ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(x.note)}</div>` : ''}
+    ${safeUrl(x.link) ? `<a class="pill" href="${esc(x.link)}" target="_blank" rel="noopener" style="margin-top:12px">🔗 Link öffnen</a>` : ''}
+    ${checks ? `<div class="field" style="margin-top:14px"><span class="flabel">CHECKLISTE</span>${checks}</div>` : ''}
+    ${!isTermin(x) && todoAMine(x) ? `<button class="btn ${x.done ? 'alt' : ''}" type="button" data-todotick style="width:100%;margin-top:12px">${x.done ? 'Wieder öffnen' : '✓ Erledigt'}</button>` : ''}
+    ${chatBox('todos:' + id, '', x.artist)}
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:6px">Schließen</button></div></div>`;
+  root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  root.querySelector('[data-todotick]')?.addEventListener('click', async () => { await act('tododone', id); sheetTodoView(id); });
+  root.querySelectorAll('[data-todochk]').forEach(b => b.onclick = async () => { await act('todochk', b.dataset.todochk); sheetTodoView(id); });
+  bindChats(root);
+}
 /* ---------- Pinnwand: alles, was bei mir liegt + Nachrichten ---------- */
 const USER_KEY = {cem:'C', kasper:'K', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
 const myKey = () => account?.role === 'producer' ? 'P' : account?.role === 'artist' ? lockedArtist : (USER_KEY[account?.username] || null);
@@ -1599,6 +1683,9 @@ function pinItems(k){
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
+  for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
+    if(assigned(x, k)) out.push({src:'todos', id:x.id, title:x.title, sub:'Aufgabe' + (a ? ' · ' + a : '') + checkTxt(x), due:x.due, go:null, at:x._at, by:x._by, note:x.note});
+    else checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'todos', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“' + (a ? ' · ' + a : ''), due:x.due, go:null, at:x._at, by:x._by}); }); }
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
 }
@@ -1608,6 +1695,7 @@ function vPin(c){
   const isNew = x => x.at && x.by && x.by !== me && x.at > since;
   const items = k ? pinItems(k) : [];
   const t0 = todayIso(), wk = isoAdd(t0, 7);
+  const terms = k ? vals(S.todos||{}).filter(x => isTermin(x) && (!x.date || x.date >= t0) && assigned(x, k)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9')) : [];
   const over = items.filter(x => x.due && x.due < t0), week = items.filter(x => x.due && x.due >= t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
   const notes = k ? notesFor(k).filter(n => !(n.doneBy||[]).includes(k)) : [];
   const sent = vals(S.notes||{}).filter(n => n.fromId === me && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
@@ -1648,13 +1736,15 @@ function vPin(c){
   return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${pick}
+    ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button></div>` : ''}
     ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
     ${apvSec}
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
+    ${terms.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Termine</h2><span class="small">${terms.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${terms.map(x => todoRow(x)).join('')}</div>` : ''}
     ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
-    ${!notes.length && !items.length && !sReq.length && !cPend.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
+    ${!notes.length && !items.length && !sReq.length && !cPend.length && !terms.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
 function sheetNote(preTo){
@@ -1756,6 +1846,7 @@ function searchHits(q){
   for(const t of vals(S.tasks)){ const r = S.releases[t.release]; if(!r) continue; if(hit(t.title) || hit(t.note)) out.push({k:'Schritt', t:t.title, s:A(r.artist) + ' · ' + relName(r), act:[isPreview() ? 'taskview' : 'edittask', t.id]});
     checksOf(t).forEach(c => { if(hit(c.t)) out.push({k:'Punkt', t:c.t, s:'aus „' + t.title + '“ · ' + A(r.artist), act:[isPreview() ? 'taskview' : 'edittask', t.id]}); }); }
   for(const x of vals(S.content||{})) if(hit(x.title) || hit(x.note)) out.push({k:'Content', t:x.title || x.kind, s:A(x.artist) + ' · ' + (x.channel||''), act:['editcontent', x.id]});
+  for(const x of vals(S.todos||{})) if(hit(x.title) || hit(x.note) || hit(x.place) || checksOf(x).some(c => hit(c.t))) out.push({k: isTermin(x) ? 'Termin' : 'Aufgabe', t:x.title, s:(A(x.artist) ? A(x.artist) + ' · ' : '') + (isTermin(x) ? fmt(x.date) : (x.due ? 'bis ' + fmt(x.due) : '')), act:['todoview', x.id]});
   for(const x of vals(S.recordings||{})) if(hit(x.title) || hit(x.note)) out.push({k:'Recording', t:x.title, s:A(x.artist), go:['recordings', x.artist]});
   for(const r of vals(S.releases)) if(r.video){ const v = r.video; if(hit(v.title) || hit(v.concept)) out.push({k:'Musikvideo', t:v.title || relTitle(r), s:A(r.artist), go:['video', r.id]});
     for(const kind of ['locations','crew']) (v[kind]||[]).forEach(x => { if(hit(x.name)) out.push({k: kind === 'crew' ? 'Crew' : 'Location', t:x.name, s:'Musikvideo · ' + A(r.artist), go:['video', r.id]}); }); }
@@ -1784,7 +1875,7 @@ function vWeek(){
   const aid = lockedArtist || null, t0 = todayIso(), wk = isoAdd(t0, 7), since = new Date(Date.now() - 7*864e5).toISOString(), k = myKey();
   const relOk = r => r && (!aid || r.artist === aid);
   const mineT = t => aid ? (t.owner === 'A' || helpersOf(t).includes('A')) : true;
-  const tasks = vals(S.tasks).filter(t => relOk(S.releases[t.release]) && mineT(t));
+  const tasks = [...vals(S.tasks).filter(t => relOk(S.releases[t.release]) && mineT(t)), ...vals(S.todos||{}).filter(x => !isTermin(x) && (!aid || (x.artist === aid && todoAMine(x))))];
   const done = tasks.filter(t => t.done && (t._at||'') >= since), open = tasks.filter(t => !t.done), over = open.filter(t => taskDue(t) && taskDue(t) < t0), soon = open.filter(t => taskDue(t) && taskDue(t) >= t0 && taskDue(t) <= wk);
   const myOpen = !aid && k ? pinItems(k) : [];
   const posted = vals(S.content||{}).filter(x => (!aid || x.artist === aid) && x.status === 'Live' && (x._at||'') >= since);
@@ -1810,6 +1901,7 @@ function calEvents(aid){
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t:'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c:'#C2407A', go:['video', shootKey(p.id, x.id)]}));
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
+  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id]});
   if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
   return ev.sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
 }
@@ -1827,7 +1919,7 @@ function vCal(c){
   const groups = {}; list.forEach(e => (groups[e.date] ||= []).push(e));
   const row = e => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${e.dim ? 'opacity:.55' : ''}"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span>
     <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${e.time ? esc(e.time) + ' · ' : ''}${!aid && e.a ? esc((person(e.a)?.name||'').toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
-  const legend = [['#39FF88','Release'],['#FFCC00','Studio'],['#F26D6D','Musikvideo'],['#C2407A','Reel-Dreh'],['#5B8DEF','Content']].map(([col,l]) => `<span><i class="sw" style="background:${col}"></i>${l.toUpperCase()}</span>`).join('');
+  const legend = [['#39FF88','Release'],['#FFCC00','Studio'],['#F26D6D','Musikvideo'],['#C2407A','Reel-Dreh'],['#5B8DEF','Content'],['#22D3EE','Termin']].map(([col,l]) => `<span><i class="sw" style="background:${col}"></i>${l.toUpperCase()}</span>`).join('');
   return `${cloudSvg}${previewBanner()}<div class="topbar">${lockedArtist || c.a ? `<button class="back" data-act="back">${icon.back}Zurück</button>` : '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>'}<span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'ALLE ARTISTS'}</span></div>${banner()}
     <div class="pad between" style="padding-top:14px;align-items:center"><button class="iconbtn" data-act="calnav" data-id="${shift(-1)}|${aid||''}" aria-label="Vorheriger Monat">${icon.back}</button>
       <h1 class="h-big" style="font-size:30px;text-align:center">${first.toLocaleDateString('de-DE',{month:'long', year:'numeric'})}</h1>
@@ -1850,6 +1942,8 @@ function vArtistPin(c){
     .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => c.o === 'A' && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
     .sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
+  const atodos = todosOf(aid).filter(x => todoArtistIn(x) && !isTermin(x) && !x.done && (todoAMine(x) || checksOf(x).some(c => c.o === 'A' && !c.d))).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
+  const aterms = todosOf(aid).filter(x => todoArtistIn(x) && isTermin(x) && (!x.date || x.date >= t0)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
   const ptasks = planTasks().filter(t => t.o === aid);
   const shoots = [...relsOf(aid).flatMap(r => (r.video?.days||[]).filter(d => d.date && d.date >= t0).map(d => ({...d, r, key:r.id, lbl:relName(r).toUpperCase()}))),
     ...shootsOf(aid).filter(x => x.date && x.date >= t0).map(x => ({date:x.date, time:x.time, end:x.end, loc:(x.reels||[]).length + ' REELS', key:shootKey(aid, x.id), lbl:'CONTENT-DREHTAG'}))].sort((a,b) => a.date.localeCompare(b.date));
@@ -1868,12 +1962,14 @@ function vArtistPin(c){
  const shootRow2 = d => `<button class="vrow" data-go="video" data-id="${esc(d.key)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">Dreh · ${fmt(d.date)}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}</b><span class="small">${esc(d.lbl)}${d.loc ? ' · ' + esc(d.loc.toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
   if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
-  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !ptasks.length;
+  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !ptasks.length && !atodos.length && !aterms.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
       <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
     ${own ? pushBanner() : ''}${own && pushOn ? '<div class="row" style="margin:10px 20px 0"><button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button></div>' : ''}
     ${sec('Nachrichten', notes, noteCard)}
+    ${sec('Termine', aterms, x => todoRow(x, {fresh, withArtist:false}))}
+    ${sec('Aufgaben vom Team', atodos, x => todoRow(x, {fresh, withArtist:false}))}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
     ${sec('Planung', ptasks, t => `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:0"><button data-go="video" data-id="${esc(t.key)}" style="background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:center"><span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(t.title)}</b><span class="small">${esc(t.sub.toUpperCase())}${t.due ? ' · ' + fmt(t.due) : ''}</span></span>${icon.chev}</button>${own ? planQuick(t.key, t.kind, t.i) : ''}</div>`)}
     ${sec('Studio', studio, x => studioRow(x, false))}
@@ -2105,6 +2201,10 @@ async function act(a, id){
   if(a === 'exitpreview'){ const id = cur().preview; return tab('artiststart', {id}); }
   if(a === 'preview') return tab('artiststart', {id, preview:id});
   if(a === 'filter'){ filterArtist = id; return render(); }
+  if(a === 'addtodo'){ const [kind, artist] = id.split('|'); sheetTodo(null, {kind, artist}); return; }
+  if(a === 'todoview'){ if(lockedArtist || isPreview()) sheetTodoView(id); else sheetTodo(id); return; }
+  if(a === 'tododone'){ const x = S.todos?.[id]; if(x) await put('todos', id, {done: !x.done, doneAt: x.done ? '' : new Date().toISOString(), doneBy: x.done ? '' : (account?.name || '')}); return; }
+  if(a === 'todochk'){ const [tid, i] = id.split('|'); const x = S.todos?.[tid]; const cs = checksOf(x); if(x && cs[+i]){ await put('todos', tid, {checks: cs.map((c, j) => j === +i ? {...c, d: !c.d} : c)}); } return; }
   if(a === 'toggle'){ const t = S.tasks[id]; if(t) await put('tasks', id, {done: !t.done}); return; }
   if(a === 'chktoggle'){ const [tid, i] = id.split('|'); const t = S.tasks[tid]; const cs = checksOf(t); if(t && cs[+i]){ const n = cs.map((c, j) => j === +i ? {...c, d: !c.d} : c); await put('tasks', tid, {checks: n}); } return; }
   if(a === 'addperson') return sheetPerson();
@@ -2138,6 +2238,7 @@ async function act(a, id){
   if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
   if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
   if(a === 'pingo'){ const {g, src, id:xid} = JSON.parse(id);
+    if(src === 'todos'){ sheetTodo(xid); return; }
     if(g[0] === 'pmonth') go('pmonth', {id:g[1], m:g[2]}); else go(g[0], {id:g[1]});
     setTimeout(() => {
       if(src === 'tasks' && S.tasks[xid]) sheetTask(S.tasks[xid].release, xid);
@@ -2510,7 +2611,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122030';
+const APP_VERSION = '202611122130';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

@@ -46,10 +46,12 @@ async function allowed(uid: string, tag: string) {
 // Morgen-Erinnerung: pro Person überfällige / heute fällige Aufgaben und Termine von heute und morgen
 const PHASE_WEEKS: Record<string, number> = { "T-12": 12, "T-10": 10, "T-8": 8, "T-6": 6, "T-4": 4, "T-2": 2, "T-0": 0, "Nach Release": -2 };
 const ymd = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+// Aufgaben & Termine ohne Release: Beteiligte (A = Artist der Karte)
+const todoKeys = (x: any) => [x?.owner, ...((x?.helpers) || [])].filter((k: string) => k && k !== "T" && (k !== "A" || x?.artist)).map((k: string) => k === "A" ? x.artist : k);
 async function all(colName: string) { const { data } = await sb.from("docs").select("id,data").eq("col", colName).limit(5000); return (data || []).map((r: any) => ({ id: r.id, ...r.data })); }
 async function morning() {
   const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
-  const [tasks, rels, studio, people, content] = await Promise.all([all("tasks"), all("releases"), all("studio"), all("people"), all("content")]);
+  const [tasks, rels, studio, people, content, todos] = await Promise.all([all("tasks"), all("releases"), all("studio"), all("people"), all("content"), all("todos")]);
   const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
   const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
   const { data: members } = await sb.from("members").select("user_id,username,role,person");
@@ -60,13 +62,15 @@ async function morning() {
     if (!key) continue;
     const isArtist = m.role === "artist";
     const mine = (t: any) => !t.done && (isArtist ? (t.owner === "A" && R[t.release]?.artist === key) : (t.owner === key || (t.helpers || []).includes(key)));
-    const myTasks = tasks.filter(mine), over = myTasks.filter(t => due(t) && due(t) < today).length, now = myTasks.filter(t => due(t) === today).length;
+    const myTodos = todos.filter((x: any) => x.kind !== "Termin" && !x.done && todoKeys(x).includes(key)).map((x: any) => ({ due: x.due }));
+    const myTasks = [...tasks.filter(mine), ...myTodos], over = myTasks.filter(t => due(t) && due(t) < today).length, now = myTasks.filter(t => due(t) === today).length;
     const ev: string[] = [];
     for (const day of [today, tomorrow]) {
       const tag = day === today ? "Heute" : "Morgen";
       for (const s of studio) if (s.date === day && s.status === "Bestätigt" && (isArtist ? s.artist === key : key === "C")) ev.push(`${tag} Studio ${s.time || ""}`.trim());
       for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} Reel-Dreh ${x.time || ""}`.trim());
       for (const r of rels) for (const v of (r.video?.days || [])) if (v.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${v.time || ""}`.trim());
+      for (const x of todos) if (x.kind === "Termin" && x.date === day && todoKeys(x).includes(key)) ev.push(`${tag} ${x.title}${x.time ? " " + x.time : ""}`);
       if (day === today) for (const r of rels) if (r.date === day && (isArtist ? r.artist === key : true)) ev.push(`Heute Release: ${r.title || r.code}`);
     }
     if (!isArtist) { const posts = content.filter((c: any) => c.date === today && c.status !== "Live" && (c.owner === key || (c.helpers || []).includes(key))).length; if (posts) ev.push(`${posts} Post${posts > 1 ? "s" : ""} heute`); }
@@ -86,7 +90,7 @@ async function weekly() {
   const today = ymd(new Date()), in7 = ymd(new Date(Date.now() + 7 * 864e5)), since = new Date(Date.now() - 7 * 864e5).toISOString();
   const { data: trows } = await sb.from("docs").select("id,data,updated_at").eq("col", "tasks").limit(5000);
   const tasks = (trows || []).map((r: any) => ({ id: r.id, at: r.updated_at, ...r.data }));
-  const [rels, studio, people, content] = await Promise.all([all("releases"), all("studio"), all("people"), all("content")]);
+  const [rels, studio, people, content, todos] = await Promise.all([all("releases"), all("studio"), all("people"), all("content"), all("todos")]);
   const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
   const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
   const { data: members } = await sb.from("members").select("user_id,username,role,person");
@@ -97,12 +101,14 @@ async function weekly() {
     if (!key || !(await allowed(m.user_id, "weekly"))) continue;
     const isArtist = m.role === "artist";
     const scope = (t: any) => isArtist ? (t.owner === "A" && R[t.release]?.artist === key) : true;
-    const mine = tasks.filter(scope);
+    const tds = todos.filter((x: any) => x.kind !== "Termin" && (isArtist ? todoKeys(x).includes(key) : true)).map((x: any) => ({ done: x.done, at: x.doneAt || "", due: x.due }));
+    const mine = [...tasks.filter(scope), ...tds];
     const done = mine.filter(t => t.done && t.at >= since).length, over = mine.filter(t => !t.done && due(t) && due(t) < today).length;
     let terms = 0;
     for (const r of rels) { if (isArtist && r.artist !== key) continue; if (r.date >= today && r.date <= in7) terms++; for (const v of (r.video?.days || [])) if (v.date >= today && v.date <= in7) terms++; }
     for (const s of studio) if ((!isArtist || s.artist === key) && s.status === "Bestätigt" && s.date >= today && s.date <= in7) terms++;
     for (const p of people) if (!isArtist || p.id === key) for (const x of (p.shoots || [])) if (x.date >= today && x.date <= in7) terms++;
+    for (const x of todos) if (x.kind === "Termin" && x.date >= today && x.date <= in7 && (!isArtist || todoKeys(x).includes(key))) terms++;
     const posts = content.filter((c: any) => (!isArtist || c.artist === key) && c.date >= today && c.date <= in7).length;
     const body = [`${done} erledigt`, over ? `${over} überfällig` : "", terms ? `${terms} Termine nächste Woche` : "", posts ? `${posts} Posts geplant` : ""].filter(Boolean).join(" · ");
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
@@ -140,12 +146,25 @@ Deno.serve(async (req) => {
     for (const x of (d.checks || [])) if (x.o && !x.d && !before.has(`${x.t}|${x.o}`))
       out.push({ keys: [who(x.o)], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
   }
+  if (col === "todos") {
+    const term = d.kind === "Termin";
+    const now = todoKeys(d), before = op === "UPDATE" ? todoKeys(old) : [];
+    const added = now.filter((k: string) => !before.includes(k));
+    const when = term ? `${fmt(d.date)}${d.time ? " · " + d.time : ""}${d.place ? " · " + d.place : ""}` : (d.due ? "bis " + fmt(d.due) : "");
+    if (!d.done && added.length) out.push({ keys: added, title: term ? `Neuer Termin: ${d.title}` : "Neue Aufgabe für dich", body: term ? when : `${d.title}${when ? " · " + when : ""}`, tag: "task" });
+    if (term && op === "UPDATE" && (old?.date !== d.date || old?.time !== d.time || old?.place !== d.place)) {
+      const rest = now.filter((k: string) => before.includes(k)); if (rest.length) out.push({ keys: rest, title: `Termin geändert: ${d.title}`, body: when, tag: "task" });
+    }
+    const bc = new Set(((old?.checks) || []).map((x: any) => `${x.t}|${x.o || ""}`));
+    for (const x of (d.checks || [])) if (x.o && !x.d && !bc.has(`${x.t}|${x.o}`) && (x.o !== "A" || d.artist))
+      out.push({ keys: [x.o === "A" ? d.artist : x.o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
+  }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
   if (col === "chat" && op === "INSERT") {
     const [kind, rid] = String(d.ref || "").split(":");
     const keys = new Set<string>(); let title = "Karte";
-    if (kind === "tasks" || kind === "content") {
+    if (kind === "tasks" || kind === "content" || kind === "todos") {
       const { data: card } = await sb.from("docs").select("data").eq("col", kind).eq("id", rid).maybeSingle();
       const c: any = card?.data || {};
       title = c.title || c.kind || title;
