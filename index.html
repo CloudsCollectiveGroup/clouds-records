@@ -490,6 +490,7 @@ const icon = {
   cockpit:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20V8"/></svg>',
   home:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/></svg>',
   exit:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l-5-5 5-5M5 12h11M14 4h5v16h-5"/></svg>',
+  search:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   folder:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/></svg>'
 };
 const cloudSvg = ''; const _oldCloud = '<svg class="cloudbg" width="300" height="200" viewBox="0 0 300 200" aria-hidden="true"><path d="M70 160a55 55 0 0 1 8-109 70 70 0 0 1 132 14 48 48 0 0 1 20 95z" fill="#E6DFD0"/></svg>';
@@ -640,7 +641,7 @@ function shrinkImage(file){
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
-const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video','profile','cal'].includes(r) ? r : 'artiststart';
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video','profile','cal','search','week'].includes(r) ? r : 'artiststart';
   const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin' || ok === 'profile') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
 function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
@@ -689,7 +690,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
-  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo, profile:vProfile, cal:vCal}[c.r] || vRoster;
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo, profile:vProfile, cal:vCal, search:vSearch, week:vWeek}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
@@ -742,7 +743,7 @@ function vRoster(){
       <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${esc(p.name[0])}</div>
       <div class="stack" style="flex:1;gap:4px"><span style="font-weight:700;font-size:19px">${esc(p.name)}</span><span class="mono" style="font-size:11px;color:var(--soft)">${beatsOf(p.id).length} BEATS · ${beatsOf(p.id).filter(b => b.status === 'Neu').length} NEU · ${openFor('P')} OFFEN</span></div>${icon.chev}</button>`).join('');
   return `${cloudSvg}
-    <div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></div>
+    <div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></span></div>
     ${banner()}
     <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Artists</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
     <div class="pad legend" style="padding-top:16px"><span><i class="sw" style="background:var(--single)"></i>SINGLE</span><span><i class="sw" style="background:var(--ep)"></i>EP</span><span><i class="sw" style="background:var(--album)"></i>ALBUM</span><span><i class="box wip c-single" style="width:10px;height:10px"></i>LÄUFT</span></div>
@@ -1632,9 +1633,10 @@ function vPin(c){
   const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
-  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></div>${banner()}
+  return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${pick}
+    ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
     ${apvSec}
@@ -1720,6 +1722,74 @@ function sheetProfile(pid){
     return await put('profile', pid, doc, !!S.profile?.[pid]) ? undefined : false;
   });
 }
+/* ---------- Mitteilungen pro Person (im eigenen Konto gespeichert) ---------- */
+const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
+async function sheetPushPrefs(){
+  let cur0 = {}; try{ const {data} = await sb.auth.getUser(); cur0 = data?.user?.user_metadata?.push || {}; }catch(_){}
+  const fields = `<div class="field"><span class="flabel">WORÜBER WILLST DU BENACHRICHTIGT WERDEN?</span><div class="stack" style="gap:6px">${PUSH_CATS.map(([k,l]) => `<label class="check ${cur0[k] === false ? '' : 'ok'}" style="cursor:pointer"><input type="checkbox" name="pp_${k}" ${cur0[k] === false ? '' : 'checked'} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="tt">${esc(l)}</span></label>`).join('')}</div></div>
+    <span class="small" style="display:block;margin-bottom:12px">Gilt für alle deine Geräte. Ausgeschaltetes landet trotzdem auf der Pinnwand.</span>`;
+  sheet('Mitteilungen', fields, async (fd, f) => {
+    const push = {}; PUSH_CATS.forEach(([k]) => push[k] = !!f.querySelector(`[name=pp_${k}]`).checked);
+    const {error} = await sb.auth.updateUser({data:{push}}); if(error){ toast('Nicht gespeichert: ' + error.message); return false; } toast('Gespeichert');
+  });
+}
+/* ---------- Suche über alles ---------- */
+function searchHits(q){
+  q = q.trim().toLowerCase(); if(q.length < 2) return [];
+  const hit = s => String(s||'').toLowerCase().includes(q), out = [];
+  const A = id => person(id)?.name || '';
+  for(const p of artists()) if(hit(p.name)) out.push({k:'Artist', t:p.name, s:'', go:['artiststart', p.id]});
+  for(const r of vals(S.releases)) if(hit(r.title) || hit(relName(r)) && hit(A(r.artist)) || hit(r.code + ' ' + A(r.artist))) out.push({k:'Release', t:relTitle(r), s:A(r.artist) + ' · ' + relName(r), go:['release', r.id]});
+  for(const t of vals(S.tracks)) if(hit(t.title) || hit(t.isrc)){ const r = S.releases[t.release]; out.push({k:'Track', t:t.title, s:A(r?.artist) + ' · ' + relName(r), go:['track', t.id]}); }
+  for(const t of vals(S.tasks)){ const r = S.releases[t.release]; if(!r) continue; if(hit(t.title) || hit(t.note)) out.push({k:'Schritt', t:t.title, s:A(r.artist) + ' · ' + relName(r), act:[isPreview() ? 'taskview' : 'edittask', t.id]});
+    checksOf(t).forEach(c => { if(hit(c.t)) out.push({k:'Punkt', t:c.t, s:'aus „' + t.title + '“ · ' + A(r.artist), act:[isPreview() ? 'taskview' : 'edittask', t.id]}); }); }
+  for(const x of vals(S.content||{})) if(hit(x.title) || hit(x.note)) out.push({k:'Content', t:x.title || x.kind, s:A(x.artist) + ' · ' + (x.channel||''), act:['editcontent', x.id]});
+  for(const x of vals(S.recordings||{})) if(hit(x.title) || hit(x.note)) out.push({k:'Recording', t:x.title, s:A(x.artist), go:['recordings', x.artist]});
+  for(const r of vals(S.releases)) if(r.video){ const v = r.video; if(hit(v.title) || hit(v.concept)) out.push({k:'Musikvideo', t:v.title || relTitle(r), s:A(r.artist), go:['video', r.id]});
+    for(const kind of ['locations','crew']) (v[kind]||[]).forEach(x => { if(hit(x.name)) out.push({k: kind === 'crew' ? 'Crew' : 'Location', t:x.name, s:'Musikvideo · ' + A(r.artist), go:['video', r.id]}); }); }
+  for(const p of artists()) for(const sh of (p.shoots||[])){ const key = shootKey(p.id, sh.id); if(hit(sh.title) || hit(sh.concept)) out.push({k:'Reel-Drehtag', t:sh.title, s:p.name + (sh.date ? ' · ' + fmt(sh.date) : ''), go:['video', key]});
+    for(const kind of ['reels','locations','crew']) (sh[kind]||[]).forEach(x => { if(hit(x.title || x.name)) out.push({k:{reels:'Reel', locations:'Location', crew:'Crew'}[kind], t:x.title || x.name, s:'Reel-Drehtag · ' + p.name, go:['video', key]}); }); }
+  for(const n of vals(S.notes||{})) if(hit(n.text)) out.push({k:'Nachricht', t:n.text.slice(0,70), s:'von ' + (n.from||''), go:[lockedArtist ? 'apin' : 'pin', lockedArtist || '']});
+  for(const m of vals(S.chat||{})) if(hit(m.text)){ const [kind, id] = m.ref.split(':'); const go = kind === 'video' ? ['video', id] : kind === 'shoot' ? ['video', 'S~' + m.ref.split(':')[1] + '~' + m.ref.split(':')[2]] : null; const act = kind === 'tasks' ? [isPreview() ? 'taskview' : 'edittask', id] : kind === 'content' ? ['editcontent', id] : kind === 'studio' ? ['editstudio', id] : null;
+    out.push({k:'Chat', t:m.text.slice(0,70), s:(m.by||'') + (m.at ? ' · ' + new Date(m.at).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) : ''), go, act}); }
+  if(!lockedArtist) for(const b of vals(S.beats||{})) if(hit(b.title)) out.push({k:'Beat', t:b.title, s:'Anvmal', go:['beats', b.producer]});
+  return out.slice(0, 60);
+}
+const searchRows = q => { const hs = searchHits(q); if(q.trim().length < 2) return '<span class="small">Mindestens 2 Buchstaben – Songs, Releases, Aufgaben, Content, Locations, Reels, Chats …</span>'; if(!hs.length) return '<span class="small">Nichts gefunden.</span>';
+  return hs.map(h => `<button class="vrow" data-sgo="${esc(JSON.stringify(h.go ? {go:h.go} : {act:h.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="chip" style="background:var(--raise);color:var(--sun);flex:none;font-size:10px">${esc(h.k.toUpperCase())}</span>
+    <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h.t)}</b><span class="small">${esc((h.s||'').toUpperCase())}</span></span>${icon.chev}</button>`).join(''); };
+function vSearch(c){
+  setTimeout(() => { const i = $('#q'); if(!i) return; i.value = c.q || ''; i.focus();
+    const upd = () => { stack[stack.length-1].q = i.value; const box = $('#qres'); box.innerHTML = searchRows(i.value);
+      box.querySelectorAll('[data-sgo]').forEach(b => b.onclick = () => { const o = JSON.parse(b.dataset.sgo); if(o.go){ go(o.go[0], {id:o.go[1]}); } else if(o.act) act(o.act[0], o.act[1]); }); };
+    i.oninput = upd; upd(); }, 0);
+  return `${previewBanner()}<div class="topbar"><button class="back" data-act="back">${icon.back}Zurück</button><span class="small">SUCHE</span></div>
+    <div class="pad" style="padding-top:14px"><div class="field" style="margin:0"><input id="q" type="search" placeholder="Suchen …" autocomplete="off" style="font-size:18px;min-height:52px"></div></div>
+    <div class="pad stack" id="qres" style="gap:8px;padding-top:14px"></div>`;
+}
+/* ---------- Wochenbericht ---------- */
+function vWeek(){
+  const aid = lockedArtist || null, t0 = todayIso(), wk = isoAdd(t0, 7), since = new Date(Date.now() - 7*864e5).toISOString(), k = myKey();
+  const relOk = r => r && (!aid || r.artist === aid);
+  const mineT = t => aid ? (t.owner === 'A' || helpersOf(t).includes('A')) : true;
+  const tasks = vals(S.tasks).filter(t => relOk(S.releases[t.release]) && mineT(t));
+  const done = tasks.filter(t => t.done && (t._at||'') >= since), open = tasks.filter(t => !t.done), over = open.filter(t => taskDue(t) && taskDue(t) < t0), soon = open.filter(t => taskDue(t) && taskDue(t) >= t0 && taskDue(t) <= wk);
+  const myOpen = !aid && k ? pinItems(k) : [];
+  const posted = vals(S.content||{}).filter(x => (!aid || x.artist === aid) && x.status === 'Live' && (x._at||'') >= since);
+  const next = calEvents(aid).filter(e => e.date >= t0 && e.date <= wk);
+  const pend = !aid ? pendingContent().length : 0, sreq = !aid ? studioOf().filter(x => x.status === 'Angefragt').length : 0;
+  const tile = (n, l, hot) => `<div class="tile ${hot && n ? 'hot' : ''}"><b>${n}</b><span class="lbl" style="color:var(--ink)">${l}</span></div>`;
+  const byArtist = !aid ? artists().map(p => { const ts = tasks.filter(t => S.releases[t.release]?.artist === p.id); const d = ts.filter(t => t.done && (t._at||'') >= since).length, o = ts.filter(t => !t.done && taskDue(t) && taskDue(t) < t0).length;
+    return `<div class="vrow"><span class="avatar" style="width:34px;height:34px;font-size:14px;background:${esc(p.color)};color:#fff">${esc(p.name[0])}</span><span class="stack" style="flex:1;gap:2px"><b>${esc(p.name)}</b><span class="small">${d} ERLEDIGT${o ? ` · <span style="color:var(--danger)">${o} ÜBERFÄLLIG</span>` : ''}</span></span></div>`; }).join('') : '';
+  const ev = e => `<div class="vrow"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span><span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${parse(e.date).toLocaleDateString('de-DE',{weekday:'short', day:'2-digit', month:'2-digit'}).toUpperCase()}${e.time ? ' · ' + esc(e.time) : ''}${!aid && e.a ? ' · ' + esc((person(e.a)?.name||'').toUpperCase()) : ''}</span></span></div>`;
+  return `${cloudSvg}${previewBanner()}<div class="topbar"><button class="back" data-act="back">${icon.back}Zurück</button><span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'LABEL'}</span></div>
+    <div class="pad" style="padding-top:14px"><span class="lbl">LETZTE 7 TAGE · NÄCHSTE 7 TAGE</span><h1 class="h-giant" style="margin-top:6px">Woche</h1></div>
+    <div class="tiles">${tile(done.length, 'ERLEDIGT')}${tile(over.length, 'ÜBERFÄLLIG', true)}${tile(soon.length, 'FÄLLIG IN 7 TAGEN')}${tile(posted.length, 'POSTS LIVE')}</div>
+    ${!aid ? `<div class="tiles" style="padding-top:10px">${tile(pend, 'CONTENT ZUR FREIGABE', true)}${tile(sreq, 'STUDIO-ANFRAGEN', true)}${tile(myOpen.length, 'BEI DIR OFFEN')}${tile(next.length, 'TERMINE 7 TAGE')}</div>` : ''}
+    ${byArtist ? `<div class="pad" style="padding-top:24px"><h2 class="h-sec">Pro Artist</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${byArtist}</div>` : ''}
+    <div class="pad" style="padding-top:24px"><h2 class="h-sec">Erledigt</h2></div><div class="pad stack" style="gap:6px;padding-top:10px">${done.slice(0,15).map(t => `<div class="check ok"><span class="box2">${icon.check}</span><span class="stack" style="gap:1px"><span class="tt">${esc(t.title)}</span><span class="small">${esc((person(S.releases[t.release]?.artist)?.name||'').toUpperCase())} · ${esc(relName(S.releases[t.release]).toUpperCase())}</span></span></div>`).join('') || '<span class="small">Diese Woche noch nichts abgehakt.</span>'}</div>
+    <div class="pad" style="padding-top:24px"><h2 class="h-sec">Nächste 7 Tage</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${next.map(ev).join('') || '<span class="small">Keine Termine.</span>'}</div>`;
+}
 /* ---------- Kalender ---------- */
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
@@ -1789,8 +1859,8 @@ function vArtistPin(c){
   const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !ptasks.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand">CLOUDS RECORDS</span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
-      <div class="row" style="gap:8px;margin-top:12px"><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
-    ${own ? pushBanner() : ''}
+      <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
+    ${own ? pushBanner() : ''}${own && pushOn ? '<div class="row" style="margin:10px 20px 0"><button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button></div>' : ''}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
     ${sec('Planung', ptasks, t => `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:0"><button data-go="video" data-id="${esc(t.key)}" style="background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:center"><span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(t.title)}</b><span class="small">${esc(t.sub.toUpperCase())}${t.due ? ' · ' + fmt(t.due) : ''}</span></span>${icon.chev}</button>${own ? planQuick(t.key, t.kind, t.i) : ''}</div>`)}
@@ -2088,6 +2158,7 @@ async function act(a, id){
   if(a === 'rcdetails') return sheetRcDetails(id);
   if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(r) await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
   if(a === 'credits') return sheetCredits(id);
+  if(a === 'pushprefs') return sheetPushPrefs();
   if(a === 'editprofile') return sheetProfile(id);
   if(a === 'calfor') return go('cal', {a: id});
   if(a === 'calnav'){ const [m, aid] = id.split('|'); const c = cur(); stack[stack.length-1] = {...c, m, d:null, a: aid || c.a}; return render(); }
@@ -2427,7 +2498,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122130';
+const APP_VERSION = '202611122200';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
