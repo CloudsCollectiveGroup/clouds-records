@@ -36,6 +36,13 @@ async function usersFor(keys: string[]) {
   return [...ids];
 }
 
+// Mitteilungs-Einstellungen pro Person (user_metadata.push.<kategorie> = false → aus)
+const prefCache: Record<string, any> = {};
+async function allowed(uid: string, tag: string) {
+  const cat = tag.startsWith("chat") ? "chat" : tag;
+  if (!(uid in prefCache)) { const { data } = await sb.auth.admin.getUserById(uid); prefCache[uid] = data?.user?.user_metadata?.push || {}; }
+  return prefCache[uid][cat] !== false;
+}
 // Morgen-Erinnerung: pro Person überfällige / heute fällige Aufgaben und Termine von heute und morgen
 const PHASE_WEEKS: Record<string, number> = { "T-12": 12, "T-10": 10, "T-8": 8, "T-6": 6, "T-4": 4, "T-2": 2, "T-0": 0, "Nach Release": -2 };
 const ymd = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
@@ -64,7 +71,7 @@ async function morning() {
     }
     if (!isArtist) { const posts = content.filter((c: any) => c.date === today && c.status !== "Live" && (c.owner === key || (c.helpers || []).includes(key))).length; if (posts) ev.push(`${posts} Post${posts > 1 ? "s" : ""} heute`); }
     const parts = [over ? `${over} überfällig` : "", now ? `${now} heute fällig` : "", ...[...new Set(ev)]].filter(Boolean);
-    if (!parts.length) continue;
+    if (!parts.length || !(await allowed(m.user_id, "morning"))) continue;
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
     for (const s of subs || []) {
       try { await webpush.sendNotification(s.sub, JSON.stringify({ title: "Guten Morgen · Clouds Records", body: parts.join(" · "), tag: "morning" })); sent++; }
@@ -74,12 +81,46 @@ async function morning() {
   return `morgen: ${sent}`;
 }
 
+// Wochenbericht freitags: erledigt in 7 Tagen, offen/überfällig, Termine nächste 7 Tage
+async function weekly() {
+  const today = ymd(new Date()), in7 = ymd(new Date(Date.now() + 7 * 864e5)), since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const { data: trows } = await sb.from("docs").select("id,data,updated_at").eq("col", "tasks").limit(5000);
+  const tasks = (trows || []).map((r: any) => ({ id: r.id, at: r.updated_at, ...r.data }));
+  const [rels, studio, people, content] = await Promise.all([all("releases"), all("studio"), all("people"), all("content")]);
+  const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
+  const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
+  const { data: members } = await sb.from("members").select("user_id,username,role,person");
+  const KEY: Record<string, string> = { cem: "C", kasper: "K", nikolina: "N", torben: "TH" };
+  let sent = 0;
+  for (const m of members || []) {
+    const key = m.role === "producer" ? "P" : m.role === "artist" ? m.person : KEY[m.username];
+    if (!key || !(await allowed(m.user_id, "weekly"))) continue;
+    const isArtist = m.role === "artist";
+    const scope = (t: any) => isArtist ? (t.owner === "A" && R[t.release]?.artist === key) : true;
+    const mine = tasks.filter(scope);
+    const done = mine.filter(t => t.done && t.at >= since).length, over = mine.filter(t => !t.done && due(t) && due(t) < today).length;
+    let terms = 0;
+    for (const r of rels) { if (isArtist && r.artist !== key) continue; if (r.date >= today && r.date <= in7) terms++; for (const v of (r.video?.days || [])) if (v.date >= today && v.date <= in7) terms++; }
+    for (const s of studio) if ((!isArtist || s.artist === key) && s.status === "Bestätigt" && s.date >= today && s.date <= in7) terms++;
+    for (const p of people) if (!isArtist || p.id === key) for (const x of (p.shoots || [])) if (x.date >= today && x.date <= in7) terms++;
+    const posts = content.filter((c: any) => (!isArtist || c.artist === key) && c.date >= today && c.date <= in7).length;
+    const body = [`${done} erledigt`, over ? `${over} überfällig` : "", terms ? `${terms} Termine nächste Woche` : "", posts ? `${posts} Posts geplant` : ""].filter(Boolean).join(" · ");
+    const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
+    for (const s of subs || []) {
+      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: isArtist ? "Deine Woche · Clouds Records" : "Wochenbericht · Clouds Records", body, tag: "weekly" })); sent++; }
+      catch (e: any) { if ([404, 410].includes(e?.statusCode)) await sb.from("push_subs").delete().eq("endpoint", s.endpoint); }
+    }
+  }
+  return `woche: ${sent}`;
+}
+
 Deno.serve(async (req) => {
   const c = await config();
   if (new URL(req.url).searchParams.has("init")) return new Response("bereit");
   if (req.headers.get("x-push-secret") !== c.secret) return new Response("forbidden", { status: 403 });
   const { op, col, data: d, old, by } = await req.json();
   if (op === "CRON") return new Response(await morning());
+  if (op === "WEEKLY") return new Response(await weekly());
   const out: { keys: string[]; title: string; body: string; tag: string }[] = [];
 
   if (col === "notes" && op === "INSERT") {
@@ -122,7 +163,8 @@ Deno.serve(async (req) => {
 
   let sent = 0;
   for (const m of out) {
-    const users = [...new Set([...(await usersFor(m.keys)), ...(m.tag.startsWith("chat-") ? extraUsers : [])])].filter(u => u !== by && u !== d.byId);
+    const cand = [...new Set([...(await usersFor(m.keys)), ...(m.tag.startsWith("chat-") ? extraUsers : [])])].filter(u => u !== by && u !== d.byId);
+    const users: string[] = []; for (const u of cand) if (await allowed(u, m.tag)) users.push(u);
     if (!users.length) continue;
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").in("user_id", users);
     for (const s of subs || []) {
