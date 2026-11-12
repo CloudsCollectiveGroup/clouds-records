@@ -1067,7 +1067,7 @@ function sheetStudio(rid, id){
     ${Sel('room','RAUM',rooms,x.room||'Egal')}
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
     ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
-  const extra = id && team ? `<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
+  const extra = id && team ? `${chatBox('studio:' + id, x.release)}<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
   sheet(id ? 'Studio-Anfrage' : 'Studio-Slot anfragen', fields, async fd => {
     const doc = {release:fd.release, date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room || 'Egal', note:(fd.note||'').trim()};
     if(id) return await put('studio', id, team ? {...doc, status:fd.status, tt: fd.tt === '1'} : doc) ? undefined : false;
@@ -1077,8 +1077,22 @@ function sheetStudio(rid, id){
   }, extra);
   const d = $('#delStudio');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('studio', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+  bindChats($('#sheetForm'));
   const cp = $('#copyStudio');
   if(cp) cp.onclick = () => copyText(studioText(S.studio[id] || x));
+}
+function sheetStudioView(id){
+  const x = S.studio?.[id]; if(!x) return; const r = S.releases[x.release];
+  const root = $('#sheetRoot');
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="Studio-Anfrage"><div class="sheet"><div class="grab"></div>
+    <span class="small">STUDIO-ANFRAGE · ${esc(relName(r).toUpperCase())}</span>
+    <h2 class="h-sec" style="margin:6px 0 4px">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</h2>
+    <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(x.hours)} STUNDEN · <span style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></span>
+    ${x.note ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(x.note)}</div>` : ''}
+    ${chatBox('studio:' + id, x.release)}
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:6px">Schließen</button></div></div>`;
+  root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  bindChats(root);
 }
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); toast('Kopiert · in TimeTree einfügen'); }
@@ -1089,7 +1103,7 @@ function studioRow(x, withArtist){
   return `<button class="vrow" data-act="editstudio" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
     <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600">${x.hours}h</span>
     <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</b>
-      <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' : ''}${esc(relName(r).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
+      <span class="small">${chatOf('studio:' + x.id).length ? '<span style="color:var(--sun)">💬 ' + chatOf('studio:' + x.id).length + '</span> · ' : ''}${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' : ''}${esc(relName(r).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
     <span class="status" style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></button>`;
 }
 
@@ -1413,6 +1427,7 @@ function vPin(c){
           ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note)}</span>` : ''}</span>
         <span class="status" style="color:${SSTATUS_COL[x.status]}">● ${esc(x.status.toUpperCase())}</span></button>
       <div class="row" style="gap:8px;flex-wrap:wrap">${x.status === 'Angefragt' ? `<button class="pill sun" data-act="sconfirm" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} Bestätigen</button><button class="pill" data-act="sdecline" data-id="${esc(x.id)}" style="min-height:34px">Ablehnen</button>` : ''}
+        <button class="pill" data-act="editstudio" data-id="${esc(x.id)}" style="min-height:34px">💬 Chat${chatOf('studio:' + x.id).length ? ' · ' + chatOf('studio:' + x.id).length : ''}</button>
         <button class="pill" data-act="scopy" data-id="${esc(x.id)}" style="min-height:34px">Text kopieren</button>
         ${x.status === 'Bestätigt' ? `<button class="pill sun" data-act="stt" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} In TimeTree eingetragen</button>` : ''}</div></div>`; };
   const studioSec = k === 'C' ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
@@ -1807,7 +1822,7 @@ async function act(a, id){
   if(a === 'vprop'){ const [rid, i] = id.split('|'); const ps = [...(S.releases[rid]?.video?.props||[])]; if(ps[+i]){ ps[+i] = {...ps[+i], d: !ps[+i].d}; await saveVideo(rid, {props: ps}); } return; }
   if(a === 'vdelete'){ const el = document.querySelector(`[data-act="vdelete"]`); if(el && !el.dataset.sure){ el.dataset.sure = 1; el.textContent = 'Wirklich entfernen? Erneut tippen'; setTimeout(() => { if(el.isConnected){ delete el.dataset.sure; el.textContent = 'Musikvideo-Planung entfernen'; } }, 4000); return; } await put('releases', id, {video:null}); back(); return; }
   if(a === 'addstudioartist'){ const r = currentRelease(id) || nextPlanned(id) || relsOf(id)[0]; return r ? sheetStudio(r.id) : toast('Noch kein Release angelegt'); }
-  if(a === 'editstudio') return sheetStudio(null, id);
+  if(a === 'editstudio') return (lockedArtist || isPreview()) ? sheetStudioView(id) : sheetStudio(null, id);
   if(a === 'addvorab') return sheetVorab(id);
   if(a === 'template') return applyTemplate(id);
   if(a === 'genrels') return genReleases(id);
@@ -2105,7 +2120,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121905';
+const APP_VERSION = '202611121915';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

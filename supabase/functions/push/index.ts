@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
       title = c.title || c.kind || title;
       for (const k of [c.owner, ...(c.helpers || []), ...((c.checks || []).map((x: any) => x.o))]) if (k) keys.add(k === "A" ? (c.artist || d.artist) : k);
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
+    else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     keys.delete("T");
     const { data: prev } = await sb.from("docs").select("data").eq("col", "chat").eq("data->>ref", d.ref);
     (prev || []).forEach((m: any) => { if (m.data?.byId) extraUsers.push(m.data.byId); });
