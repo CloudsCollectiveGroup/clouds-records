@@ -736,7 +736,7 @@ function vRoster(){
     const st = r ? `<div class="status" style="color:${TYPE[r.type].c}">● ${esc(relName(r).toUpperCase())} · ${esc(r.status.toUpperCase())}</div>`
              : `<div class="status" style="color:var(--mute)">○ ${nx && nx.date ? 'NÄCHSTES: ' + esc(relName(nx).toUpperCase()) + ' · ' + fmt(nx.date) : 'FAHRPLAN OFFEN'}</div>`;
     const rs = relsOf(p.id).filter(x => x.pflicht), dn = rs.filter(x => x.status === 'Released').length;
-    const cv = r ? coverUrl(r) : null;
+    const cv = photoOf(p) || (r ? coverUrl(r) : null);
     return `<button class="tilecard" data-go="artiststart" data-id="${esc(p.id)}" aria-label="${esc(p.name)} öffnen">
       <div class="tc-art" style="background:${esc(p.color)}">${cv ? `<img src="${esc(cv)}" alt="">` : `<span class="tc-ini">${esc((p.name||'?')[0])}</span>`}<span class="tc-yr">${yearLabel(p)}</span>${newFor(p.id) ? `<span class="tc-new">${newFor(p.id)} NEU</span>` : ''}</div>
       <div class="tc-body"><span class="tc-name">${esc(p.name)}</span>${st}
@@ -2509,7 +2509,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122005';
+const APP_VERSION = '202611122010';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
