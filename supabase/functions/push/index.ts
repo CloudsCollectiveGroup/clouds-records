@@ -68,7 +68,7 @@ async function morning() {
     for (const day of [today, tomorrow]) {
       const tag = day === today ? "Heute" : "Morgen";
       for (const s of studio) if (s.date === day && s.status === "Bestätigt" && (isArtist ? s.artist === key : key === "C")) ev.push(`${tag} Studio ${s.time || ""}`.trim());
-      for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} Reel-Dreh ${x.time || ""}`.trim());
+      for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} ${x.type === "photo" ? "Fotoshooting" : "Reel-Dreh"} ${x.time || ""}`.trim());
       for (const r of rels) for (const vd of (r.video?.days || [])) if (vd.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${vd.time || ""}`.trim());
       for (const x of todos) if (x.kind === "Termin" && x.date === day && todoKeys(x).includes(key)) ev.push(`${tag} ${x.title}${x.time ? " " + x.time : ""}`);
       if (day === today) for (const r of rels) if (r.date === day && (isArtist ? r.artist === key : true)) ev.push(`Heute Release: ${r.title || r.code}`);
@@ -172,7 +172,12 @@ Deno.serve(async (req) => {
       if (kind === "content") { keys.add("C"); keys.add("N"); if (c.fromArtist) keys.add(c.artist || d.artist); }
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
-    else if (kind === "shoot") { title = "Reel-Drehtag"; keys.add("C"); keys.add("N"); if (d.artist) keys.add(d.artist); }
+    else if (kind === "shoot") {
+      const sid = String(d.ref || "").split(":")[2];
+      const { data: pd } = await sb.from("docs").select("data").eq("col", "people").eq("id", rid).maybeSingle();
+      const sh: any = ((pd?.data as any)?.shoots || []).find((x: any) => x.id === sid);
+      title = sh?.type === "photo" ? "Fotoshooting" : "Reel-Drehtag"; keys.add("C"); keys.add("N"); if (d.artist) keys.add(d.artist);
+    }
     keys.delete("T");
     const { data: prev } = await sb.from("docs").select("data").eq("col", "chat").eq("data->>ref", d.ref);
     (prev || []).forEach((m: any) => { if (m.data?.byId) extraUsers.push(m.data.byId); });
