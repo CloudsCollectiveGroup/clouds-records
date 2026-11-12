@@ -115,7 +115,13 @@ h1,h2{margin:0;text-wrap:balance}
 .ahead.hasphoto{min-height:380px;display:flex;flex-direction:column}.ahead.hasphoto > .between{margin-bottom:auto}
 .aheadimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 25%}
 .aheadshade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,27,49,.55) 0%,rgba(12,27,49,0) 30%,rgba(12,27,49,.35) 55%,#0C1B31 100%)}
-.meav{width:64px;height:64px;border-radius:32px;border:2px solid var(--sun);padding:0;cursor:pointer;flex:none}
+.starthero{position:relative;overflow:hidden;min-height:440px;display:flex;flex-direction:column}
+.starthero .aheadimg{object-position:center 22%}
+.starthero > .topbar,.starthero > .pad{position:relative;z-index:2}
+.starthero > [data-heroin]{margin-top:auto;padding-bottom:6px}
+.starthero .h-giant{text-shadow:0 2px 18px rgba(12,27,49,.6)}
+.starthero .small{color:#DCE3EE}
+.heroprof{position:absolute;inset:0;z-index:1;background:none;border:0;padding:0;cursor:pointer}
 .ahead .bigini{position:absolute;right:-20px;top:-10px;font-weight:700;font-size:200px;line-height:1;opacity:.12;pointer-events:none}
 .counters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
 .counter{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:10px 12px}
@@ -1491,9 +1497,9 @@ function vArtistStart(c){
   const yr = contractYear(p);
   const team = !isPreview();
   return `${cloudSvg}${previewBanner()}
-    <div class="topbar">${team ? `<button class="back" data-act="home">${icon.back}Artists</button>` : `<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>`}<span class="row" style="gap:8px">${team ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>` : `<span class="yearpill">${yearLabel(p)}</span>`}</span></div>
-    <div class="pad" style="padding-top:14px;position:relative"><div class="row" style="gap:14px;align-items:center">${photoOf(p) ? `<button class="avatar meav" data-go="profile" data-id="${esc(p.id)}" aria-label="Profil öffnen" style="background:${esc(p.color)}">${avIn(p)}</button>` : ''}<h1 class="h-giant" style="font-size:44px;min-width:0">${team ? esc(p.name) : `Hey ${esc(p.name)}.`}</h1></div>${team ? `<div class="small" style="margin-top:6px">${yearLabel(p)}${dropboxFolder(p, ' · DROPBOX-ORDNER →', 'small', 'font-weight:600;color:var(--sun);text-decoration:none')}</div>` : ''}
-      <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div>
+    ${photoOf(p) ? `<div class="starthero"><img class="aheadimg" src="${esc(photoOf(p))}" alt=""><span class="aheadshade"></span><button class="heroprof" data-go="profile" data-id="${esc(p.id)}" aria-label="Profil öffnen"></button>` : '<div>'}<div class="topbar">${team ? `<button class="back" data-act="home">${icon.back}Artists</button>` : `<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>`}<span class="row" style="gap:8px">${team ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>` : `<span class="yearpill">${yearLabel(p)}</span>`}</span></div>
+    <div class="pad" style="padding-top:14px;position:relative" ${photoOf(p) ? 'data-heroin' : ''}><div class="row" style="gap:14px;align-items:center"><h1 class="h-giant" style="font-size:44px;min-width:0">${team ? esc(p.name) : `Hey ${esc(p.name)}.`}</h1></div>${team ? `<div class="small" style="margin-top:6px">${yearLabel(p)}${dropboxFolder(p, ' · DROPBOX-ORDNER →', 'small', 'font-weight:600;color:var(--sun);text-decoration:none')}</div>` : ''}
+      <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div></div>
     <div class="row" style="gap:8px;margin:16px 16px 0;flex-wrap:wrap">
       <button class="pill" data-go="profile" data-id="${esc(p.id)}">👤 Profil · ${profileScore(p.id)} %</button>
       <button class="pill" data-act="calfor" data-id="${esc(p.id)}">📅 Kalender</button></div>
@@ -2685,7 +2691,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122315';
+const APP_VERSION = '202611122330';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
