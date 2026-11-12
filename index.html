@@ -59,8 +59,10 @@ h1,h2{margin:0;text-wrap:balance}
 .nextcard{margin:10px 16px 0;background:var(--sun);color:var(--on-sun);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .nextcard .tc-bar{background:rgba(12,27,49,.2);height:6px;border-radius:3px}.nextcard .tc-bar i{background:var(--on-sun)}
 .nextcard .pill.navy{background:var(--on-sun);color:var(--sun);border-color:var(--on-sun)}
-.nextcard .pill.line{background:transparent;color:var(--on-sun);border-color:var(--on-sun)}
-.brand i{display:block;font-style:normal;font-size:10.5px;color:var(--mute);letter-spacing:.02em;margin-top:2px}
+.nextcard .pill.nvline{background:transparent;color:var(--on-sun);border-color:var(--on-sun)}
+.brand i{display:block;font-style:normal;font-size:10.5px;color:var(--mute);letter-spacing:.02em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.ahead .brand i,.starthero .brand i{color:rgba(255,255,255,.85)}
+.sticker.tilt3{background:var(--sun);color:var(--on-sun)}
 .back{min-height:44px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-size:14px;font-weight:500;color:var(--ink2);background:none;border:0;padding:0 4px 0 0;cursor:pointer}
 .iconbtn{width:40px;height:40px;border-radius:20px;border:0;background:var(--raise);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .iconbtn.ghost{background:transparent;border:1px solid var(--line2)}
@@ -95,7 +97,7 @@ h1,h2{margin:0;text-wrap:balance}
 .tc-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .tc-ini{font-size:64px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:-.04em}
 .tc-new{position:absolute;right:8px;top:8px;font-family:var(--mono);font-size:10px;font-weight:600;background:var(--sun);color:var(--on-sun);padding:3px 7px;border-radius:5px}
-.tc-yr{position:absolute;left:8px;top:8px;font-family:var(--mono);font-size:10px;font-weight:600;background:rgba(0,0,0,.35);color:#fff;padding:3px 6px;border-radius:5px}
+.tc-yr{position:absolute;left:8px;top:8px;font-family:var(--mono);font-size:10px;font-weight:600;background:rgba(12,27,49,.72);color:#fff;padding:3px 6px;border-radius:5px}
 .tc-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
 .tc-name{font-weight:600;font-size:17px}
 .tc-body .status{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -674,6 +676,7 @@ function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); win
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 const isPreview = () => !!cur().preview;
+let myProducer = null; /* Produzent bleibt immer in seiner Leiste */
 
 function ctxArtist(c){
   if((c.r === 'artist' || c.r === 'artiststart') && S.people[c.id]?.role === 'Artist') return c.id;
@@ -692,7 +695,7 @@ function renderNav(){
     items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
-    const ctx = ctxArtist(c), pctx = ctxProducer(c);
+    const ctx = ctxArtist(c), pctx = ctxProducer(c) || (account?.role === 'producer' ? myProducer : null);
     if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
@@ -800,7 +803,7 @@ function vArtist(c){
   const head = `<div class="ahead" style="background:${esc(p.color)};${darkText?'color:var(--ink)':''}">
       <span class="bigini" aria-hidden="true" style="color:${esc(p.color2)};opacity:1">${esc(p.name[0])}</span>
       <div class="between" style="padding-top:12px;position:relative">
-        ${isPreview() ? '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>' : `<button class="back" style="color:inherit" data-act="back">${icon.back}ROSTER</button>`}
+        ${isPreview() ? '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>' : `<button class="back" style="color:inherit" data-act="back">${icon.back}ARTISTS</button>`}
         ${isPreview() ? '' : `<div class="row" style="gap:8px"><button class="chip" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button></div>`}
       </div>
       <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:18px;position:relative">ARTIST · ${startTxt} · ${yearLabel(p)}</div>
@@ -1504,13 +1507,13 @@ function vArtistStart(c){
       <button class="pill" data-go="profile" data-id="${esc(p.id)}">👤 Profil · ${profileScore(p.id)} %</button>
       <button class="pill" data-act="calfor" data-id="${esc(p.id)}">📅 Kalender</button></div>
     ${team ? (() => { const n = notesFor(p.id).filter(x => !(x.doneBy||[]).includes(p.id)).length, o = vals(S.tasks).filter(t => !t.done && t.owner === 'A' && S.releases[t.release]?.artist === p.id).length;
-      return `<button class="vrow" data-go="apin" data-id="${esc(p.id)}" style="margin:18px 16px 0;width:calc(100% - 32px);cursor:pointer;text-align:left;font:inherit"><span class="play">${icon.roster}</span><span class="stack" style="flex:1;gap:2px"><b>Pinnwand von ${esc(p.name)}</b><span class="small">${n} NACHRICHTEN · ${o} AUFGABEN OFFEN</span></span>${icon.chev}</button>`; })() : ''}
+      return `<button class="vrow" data-go="apin" data-id="${esc(p.id)}" style="margin:18px 16px 0;width:calc(100% - 32px);cursor:pointer;text-align:left;font:inherit"><span class="play">${icon.roster}</span><span class="stack" style="flex:1;gap:2px"><b>Pinnwand von ${esc(p.name)}</b><span class="small">${n} ${n === 1 ? 'NACHRICHT' : 'NACHRICHTEN'} · ${o} ${o === 1 ? 'AUFGABE' : 'AUFGABEN'} OFFEN</span></span>${icon.chev}</button>`; })() : ''}
     ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
     ${(() => { const st = rcState(r), n = st.filter(x => x.ok).length; return `<div class="nextcard">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700"><span class="sw" style="background:${TYPE[r.type].c};margin-right:6px"></span>${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="mono" style="font-size:11px;font-weight:700">${fmt(r.date)}</span>`:''}</div>
       <span style="font-family:var(--head);font-size:30px;line-height:1.05;text-transform:uppercase">${esc(next?.title || (team ? 'Noch kein Fahrplan' : 'Fahrplan folgt vom Team'))}</span>
       <div><div class="between mono" style="font-size:11px;font-weight:700;margin-bottom:6px"><span>RELEASE-CHECK</span><span>${n}/${st.length}</span></div><div class="tc-bar"><i style="width:${Math.round(n/st.length*100)}%"></i></div></div>
-      <div class="row" style="flex-wrap:wrap"><button class="pill navy" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill line" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>`; })()}` : ''}
+      <div class="row" style="flex-wrap:wrap"><button class="pill navy" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill nvline" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>`; })()}` : ''}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">${team ? 'Aufgaben' : 'Deine Aufgaben'}</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>
     ${(() => { const list = todosOf(p.id).filter(x => (team || todoArtistIn(x)) && (isTermin(x) ? (!x.date || x.date >= todayIso()) : !x.done)).sort((a,b) => ((a.date||a.due)||'9999').localeCompare((b.date||b.due)||'9999'));
@@ -2069,7 +2072,7 @@ function vMarketTeam(c){
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Artists</h2><span class="small">GEPICKT · MARKIERT</span></div>
     <div class="tilegrid" style="padding-top:12px">${artists().map(a => { const l = forA(a.id), pk = l.filter(b => pickedFor(b, a.id)).length, mk = l.length - pk;
       return `<button class="tilecard" data-act="mkt" data-id="${esc(JSON.stringify({a:a.id}))}" aria-label="Beats für ${esc(a.name)}">
-        <div class="tc-art" style="background:${esc(a.color)}">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini">${esc((a.name||'?')[0])}</span>`}${l.length ? `<span class="tc-new">${l.length} BEATS</span>` : ''}</div>
+        <div class="tc-art" style="background:${esc(a.color)}">${photoOf(a) ? `<img src="${esc(photoOf(a))}" alt="">` : `<span class="tc-ini">${esc((a.name||'?')[0])}</span>`}${l.length ? `<span class="tc-new">${l.length} ${l.length === 1 ? 'BEAT' : 'BEATS'}</span>` : ''}</div>
         <div class="tc-body"><span class="tc-name">${esc(a.name)}</span><span class="small">${pk} GEPICKT · ${mk} MARKIERT</span></div></button>`; }).join('')}</div>`;
 }
 function vMarket(c){
@@ -2667,7 +2670,7 @@ async function boot(session){
   $('#login').hidden = true;
   if(pushSupported()) navigator.serviceWorker.register('sw.js').then(() => pushState()).then(() => render()).catch(() => {});
   if(lockedArtist){ stack.length = 0; stack.push({r:'artiststart', id: lockedArtist, preview: lockedArtist}); }
-  else if(mem.role === 'producer' && mem.person){ stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
+  else if(mem.role === 'producer' && mem.person){ myProducer = mem.person; stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
     const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
     S[c] = o; loaded.add(c); render(); if(c === 'chat') refreshChats();
@@ -2691,7 +2694,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122330';
+const APP_VERSION = '202611122345';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
