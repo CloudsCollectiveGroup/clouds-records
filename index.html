@@ -201,6 +201,10 @@ h1,h2{margin:0;text-wrap:balance}
 .rooms .gchip{display:block;position:relative}
 .rooms .gchip span{width:100%;min-height:42px;justify-content:center;text-align:center;border-radius:12px}
 .rooms .gchip:last-child:nth-child(odd){grid-column:1/-1}
+.apv{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--n);border:1px solid var(--n);border-radius:8px;padding:3px 7px;box-shadow:0 0 10px color-mix(in srgb,var(--n) 55%,transparent),inset 0 0 8px color-mix(in srgb,var(--n) 25%,transparent);text-shadow:0 0 8px color-mix(in srgb,var(--n) 70%,transparent);white-space:nowrap}
+.apv.big{font-size:13px;padding:8px 12px;border-radius:12px}
+.apvbtn{flex:1;min-height:48px;border-radius:14px;border:1.5px solid var(--n);background:color-mix(in srgb,var(--n) 12%,transparent);color:var(--n);font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 0 14px color-mix(in srgb,var(--n) 40%,transparent);text-shadow:0 0 8px color-mix(in srgb,var(--n) 60%,transparent)}
+.vrow.apvrow{border-color:color-mix(in srgb,var(--n) 60%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--n) 22%,transparent)}
 .vstage{display:flex;gap:6px;overflow-x:auto;padding:14px 20px 2px;scrollbar-width:none}
 .vstage button{flex:1;min-width:64px;min-height:36px;border-radius:10px;border:1px solid var(--line2);background:var(--card);color:var(--mute);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
 .vstage button.done{color:var(--ink2);border-color:var(--line2);background:var(--raise)}
@@ -373,6 +377,12 @@ const CKINDS = ['Announcement','Pre-Save','Snippet','Reel','TikTok','Story','Pos
 const CCHANNELS = ['Instagram','TikTok','YouTube','Spotify','WhatsApp','Alle Kanäle'];
 const CSTATUS = ['Idee','In Arbeit','Bereit','Live'];
 const CSTATUS_COL = {'Idee':'var(--mute)','In Arbeit':'var(--single)','Bereit':'var(--sun)','Live':'var(--album)'};
+/* Content-Freigabe: Artist reicht ein, Team gibt frei / wünscht Änderung / lehnt ab */
+const APV = {offen:{l:'Zur Freigabe', c:'#FFE14D', i:'●'}, ok:{l:'Freigegeben', c:'#39FF88', i:'✓'}, aenderung:{l:'Änderung gewünscht', c:'#FF9F1C', i:'✎'}, nein:{l:'Abgelehnt', c:'#FF3B5C', i:'✕'}};
+const apvOf = c => c.apv || (c.fromArtist ? 'offen' : null);
+const apvBadge = (c, big) => { const k = apvOf(c); if(!k || (k === 'ok' && !c.fromArtist && !big)) return ''; const a = APV[k];
+  return `<span class="apv${big ? ' big' : ''}" style="--n:${a.c}">${a.i} ${esc(a.l.toUpperCase())}</span>`; };
+const pendingContent = () => vals(S.content||{}).filter(c => apvOf(c) === 'offen').sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
 const CONTENT_TEMPLATE = [[-14,'Announcement','Instagram','Release ankündigen'],[-10,'Pre-Save','Alle Kanäle','Pre-Save-Link teilen'],[-7,'Snippet','Instagram','Snippet als Reel'],[-5,'Snippet','TikTok','Snippet auf TikTok'],[-3,'Story','Instagram','Countdown 3 Tage'],[-1,'Story','Instagram','Countdown morgen'],[0,'Out Now','Instagram','Out-Now-Post'],[0,'Story','Instagram','Out-Now-Story mit Link'],[3,'Behind the Scenes','Instagram','Studio-Einblick'],[7,'Reel','TikTok','Reaktionen und Recap']];
 const contentOf = rid => vals(S.content||{}).filter(c => c.release === rid).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
 /* Studio */
@@ -818,10 +828,12 @@ function vRelease(c){
 function contentRow(c, withArtist){
   const r = S.releases[c.release], a = person(c.artist);
   const d = c.date ? daysTo(c.date) : null;
-  return `<button class="vrow" data-act="editcontent" data-id="${esc(c.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
+  const ak = apvOf(c), glow = ak && ak !== 'ok' ? ` apvrow" style="--n:${APV[ak].c};` : '" style="';
+  return `<button class="vrow${glow}cursor:pointer;width:100%;text-align:left;font:inherit" data-act="editcontent" data-id="${esc(c.id)}">
     <span class="play" style="flex-direction:column;gap:0;font-family:var(--mono);font-size:11px;font-weight:600;line-height:1.2;text-align:center">${c.date ? `<span>${parse(c.date).getDate()}.</span><span style="font-size:9px;color:var(--mute)">${parse(c.date).toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>` : '—'}</span>
     <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(c.title || c.kind)}</b>
-      <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' + esc(relName(r).toUpperCase()) + ' · ' : ''}${esc((c.kind||'').toUpperCase())} · ${esc((c.channel||'').toUpperCase())}${d !== null && d < 0 && c.status !== 'Live' ? ' · <span style="color:var(--danger)">ÜBERFÄLLIG</span>' : ''}</span></span>
+      <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' + esc(relName(r).toUpperCase()) + ' · ' : ''}${esc((c.kind||'').toUpperCase())} · ${esc((c.channel||'').toUpperCase())}${d !== null && d < 0 && c.status !== 'Live' ? ' · <span style="color:var(--danger)">ÜBERFÄLLIG</span>' : ''}</span>
+      ${apvBadge(c) ? `<span style="margin-top:3px">${apvBadge(c)}</span>` : ''}${c.apvNote && ak && ak !== 'ok' ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:${APV[ak].c}">„${esc(c.apvNote)}“</span>` : ''}</span>
     <span class="stack" style="gap:4px;align-items:flex-end;flex:none"><span class="status" style="color:${CSTATUS_COL[c.status]||'var(--mute)'}">● ${esc((c.status||'Idee').toUpperCase())}</span>${chatOf('content:' + c.id).length ? `<span class="small" style="color:var(--sun)">💬 ${chatOf('content:' + c.id).length}</span>` : ''}</span></button>`;
 }
 function contentSection(r){
@@ -1012,13 +1024,14 @@ function vContent(c){
   const t0 = todayIso(), wk = isoAdd(t0, 7);
   let items = vals(S.content||{}).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
   if(f === 'offen') items = items.filter(x => x.status !== 'Live');
+  if(f === 'freigabe') items = items.filter(x => apvOf(x) === 'offen' || apvOf(x) === 'aenderung');
   if(f === 'woche') items = items.filter(x => x.date && x.date >= t0 && x.date <= wk);
   const groups = {};
   items.forEach(x => { const k = x.date ? parse(x.date).toLocaleDateString('de-DE',{month:'long', year:'numeric'}) : 'Ohne Datum'; (groups[k] ||= []).push(x); });
   const chip = (k,l) => `<button class="pill ${f===k?'on':''}" data-act="cfilter" data-id="${k}">${l}</button>`;
   return `<div class="topbar"><span class="brand">CLOUDS RECORDS</span><span class="sticker">NUR TEAM</span></div>${banner()}
     <div class="pad" style="padding-top:18px"><h1 class="h-giant">Content</h1><div class="small" style="margin-top:6px">ALLE BEITRÄGE ALLER RELEASES</div></div>
-    <div class="chips">${chip('offen','Offen')}${chip('woche','Nächste 7 Tage')}${chip('alle','Alle')}</div>
+    <div class="chips">${pendingContent().length ? `<button class="pill ${f==='freigabe'?'on':''}" data-act="cfilter" data-id="freigabe" style="border-color:#FFE14D;color:${f==='freigabe'?'':'#FFE14D'};box-shadow:0 0 10px rgba(255,225,77,.4)">Zur Freigabe · ${pendingContent().length}</button>` : chip('freigabe','Freigaben')}${chip('offen','Offen')}${chip('woche','Nächste 7 Tage')}${chip('alle','Alle')}</div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${Object.keys(groups).length ? Object.entries(groups).map(([k, xs]) => `<div class="yearhead" style="margin:14px 0 4px"><span class="lbl">${esc(k.toUpperCase())}</span><i></i></div>${xs.map(x => contentRow(x, true)).join('')}`).join('') :
       `<div class="empty" style="margin:0"><b>Keine Beiträge in dieser Ansicht</b><span class="small">Content-Pläne legst du im jeweiligen Release unter „Content-Plan“ an.</span></div>`}</div>`;
 }
@@ -1027,9 +1040,18 @@ function sheetContent(rid, id){
   const isArtist = !!lockedArtist;
   const x = id ? S.content[id] : {release:rid, kind:'Post', channel:'Instagram', status:'Idee', owner: isArtist ? 'A' : 'N', date: S.releases[rid]?.date || ''};
   const r = S.releases[x.release];
-  const fields = `${F('title','TITEL',x.title||'','text','placeholder="Snippet als Reel"')}
+  const ak = id ? apvOf(x) : (isArtist ? 'offen' : null);
+  const lockLive = isArtist && (x.fromArtist || !id) && ak !== 'ok';
+  const stOpts = lockLive ? ['Idee','In Arbeit'].concat(['Idee','In Arbeit'].includes(x.status) ? [] : [x.status]) : CSTATUS;
+  const apvBlock = ak ? `<div class="field" style="gap:10px;margin-bottom:16px"><span class="flabel">FREIGABE</span>
+      <div class="row" style="gap:10px;flex-wrap:wrap">${apvBadge({...x, apv: ak, fromArtist: true}, true)}${x.apvBy && ak !== 'offen' ? `<span class="small">VON ${esc(x.apvBy.toUpperCase())}${x.apvAt ? ' · ' + new Date(x.apvAt).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) : ''}</span>` : ''}</div>
+      ${x.apvNote ? `<div class="vrow" style="white-space:pre-line;line-height:1.45;border-color:${APV[ak].c}">${esc(x.apvNote)}</div>` : ''}
+      ${isArtist ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">${ak === 'ok' ? 'Freigegeben – du kannst hochladen und den Status auf „Live“ setzen.' : ak === 'aenderung' ? 'Bitte anpassen und speichern – dann geht der Beitrag automatisch wieder zur Freigabe.' : ak === 'nein' ? 'Dieser Beitrag wird so nicht veröffentlicht. Fragen gern unten im Chat.' : 'Das Team schaut drüber. „Bereit“ und „Live“ gehen erst nach der Freigabe.'}</span>`
+        : id ? `<textarea data-apvnote rows="2" placeholder="Feedback / Verbesserungsvorschlag an den Artist (bei Änderung Pflicht)" style="min-height:80px;border:1px solid var(--line2);border-radius:12px;background:var(--paper);color:var(--ink);padding:10px 12px;font-size:15px"></textarea>
+          <div class="row" style="gap:8px"><button type="button" class="apvbtn" data-apv="ok" style="--n:#39FF88">✓ Freigeben</button><button type="button" class="apvbtn" data-apv="aenderung" style="--n:#FF9F1C">✎ Änderung</button><button type="button" class="apvbtn" data-apv="nein" style="--n:#FF3B5C">✕ Ablehnen</button></div>` : ''}</div>` : '';
+  const fields = `${apvBlock}${F('title','TITEL',x.title||'','text','placeholder="Snippet als Reel"')}
     <div class="grid2">${Sel('kind','ART',CKINDS,x.kind)}${Sel('channel','KANAL',CCHANNELS,x.channel)}</div>
-    <div class="grid2">${F('date','DATUM',x.date||'','date')}${Sel('status','STATUS',CSTATUS,x.status)}</div>
+    <div class="grid2">${F('date','DATUM',x.date||'','date')}${Sel('status','STATUS',stOpts,x.status)}</div>
     ${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),x.owner||'N')}
     ${isArtist ? '' : HelpChips(x)}
     ${F('link','DATEI ODER ENTWURF (DROPBOX-LINK)',x.link||'','url','placeholder="https://www.dropbox.com/…"')}
@@ -1040,9 +1062,24 @@ function sheetContent(rid, id){
   sheet(id ? 'Beitrag bearbeiten' : `Neuer Beitrag · ${relName(r)}`, fields, async (fd, f) => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, helpers: isArtist ? (x.helpers||[]) : readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
-    return (id ? await put('content', id, doc) : await put('content', uid('c'), {...doc, release:r.id, artist:r.artist, byId: me || '', by: account?.name || ''}, false)) ? undefined : false;
+    if(isArtist && x.fromArtist && id && ak !== 'ok') doc.apv = 'offen';   /* Artist hat nachgebessert → wieder zur Freigabe */
+    if(!id){
+      const nid = uid('c');
+      const ok = await put('content', nid, {...doc, release:r.id, artist:r.artist, byId: me || '', by: account?.name || '', ...(isArtist ? {fromArtist:true, apv:'offen'} : {})}, false);
+      if(ok && isArtist){ await put('chat', uid('m'), {ref:'content:' + nid, release:r.id, artist:r.artist, text:'Neuer Beitrag zur Freigabe eingereicht: ' + (doc.title || doc.kind), link:'', by: account?.name || '', byId: me || '', at:new Date().toISOString()}, false); toast('Zur Freigabe eingereicht'); }
+      return ok ? undefined : false;
+    }
+    return await put('content', id, doc) ? undefined : false;
   }, extra);
   bindChats($('#sheetForm'));
+  $('#sheetForm').querySelectorAll('[data-apv]').forEach(b => b.onclick = async () => {
+    const k = b.dataset.apv, note = ($('#sheetForm [data-apvnote]')?.value || '').trim();
+    if(k !== 'ok' && !note){ toast('Bitte kurz schreiben, was geändert werden soll'); $('#sheetForm [data-apvnote]').focus(); return; }
+    const ok = await put('content', id, {apv:k, apvNote:note, apvBy: account?.name || 'Team', apvAt: new Date().toISOString(), fromArtist: x.fromArtist || false});
+    if(!ok) return;
+    await put('chat', uid('m'), {ref:'content:' + id, release:x.release, artist:x.artist, text: APV[k].i + ' ' + APV[k].l + (note ? ': ' + note : (k === 'ok' ? ' – kann hochgeladen werden' : '')), link:'', by: account?.name || 'Team', byId: me || '', at:new Date().toISOString()}, false);
+    toast(APV[k].l); $('#sheetRoot').innerHTML = '';
+  });
   const d = $('#delContent');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('content', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
@@ -1434,6 +1471,8 @@ function vPin(c){
       <button class="tile ${sAsk ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sAsk}</b><span class="lbl" style="color:var(--ink)">STUDIO-ANFRAGEN</span></button>
       <button class="tile ${sTT ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sTT}</b><span class="lbl" style="color:var(--ink)">FÜR TIMETREE</span></button></div>
     ${sReq.length ? `<div class="pad between" id="pinStudio" style="padding-top:22px"><h2 class="h-sec">Studio-Anfragen</h2><span class="small">→ TIMETREE</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sReq.map(studioCard).join('')}</div>` : ''}` : '';
+  const cPend = (k === 'C' || k === 'N') ? pendingContent() : [];
+  const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
   return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></div>${banner()}
@@ -1441,9 +1480,10 @@ function vPin(c){
     ${pick}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
+    ${apvSec}
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
     ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
-    ${!notes.length && !items.length && !sReq.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
+    ${!notes.length && !items.length && !sReq.length && !cPend.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
 function sheetNote(preTo){
@@ -2120,7 +2160,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121915';
+const APP_VERSION = '202611121930';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
