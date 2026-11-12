@@ -1993,7 +1993,8 @@ function makeDb(client){
   const setLocal = (col, id, d, m) => { (cache[col] ||= {}); (meta[col] ||= {}); if(d === null){ delete cache[col][id]; delete meta[col][id]; } else { cache[col][id] = d; meta[col][id] = m || {at: new Date().toISOString(), by: me}; } emit(col); };
   let channel = null;
   const ensureChannel = () => {
-    if(channel) return;
+    if(channel && channel.state === 'joined') return;
+    if(channel){ try{ client.removeChannel(channel); }catch(_){} channel = null; }
     channel = client.channel('docs-live')
       .on('postgres_changes', {event:'*', schema:'public', table:'docs'}, p => {
         const row = p.new && p.new.col ? p.new : p.old;
@@ -2004,7 +2005,18 @@ function makeDb(client){
       .subscribe();
   };
   const fail = error => { const e = new Error(error.message || 'Fehler'); e.code = error.code === '42501' ? 'not_granted' : error.code; throw e; };
+  /* Nach Rückkehr aus dem Hintergrund (iPhone schläft die App ein): Live-Verbindung neu und alles frisch laden */
+  const refresh = async () => {
+    ensureChannel();
+    for(const col of Object.keys(subs)){
+      const {data, error} = await client.from('docs').select('id,data,updated_at,updated_by').eq('col', col).limit(1000);
+      if(error) continue;
+      cache[col] = {}; meta[col] = {}; (data||[]).forEach(r => { cache[col][r.id] = r.data || {}; meta[col][r.id] = {at: r.updated_at, by: r.updated_by}; });
+      emit(col);
+    }
+  };
   return {
+    refresh,
     collection(col){
       return {
         doc(id){
@@ -2093,7 +2105,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121900';
+const APP_VERSION = '202611121905';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
@@ -2102,7 +2114,10 @@ async function checkUpdate(){
   }catch(_){}
 }
 checkUpdate();
-document.addEventListener('visibilitychange', () => { if(!document.hidden) checkUpdate(); });
+let lastRefresh = Date.now();
+document.addEventListener('visibilitychange', () => { if(document.hidden) return; checkUpdate(); if(db && Date.now() - lastRefresh > 3000){ lastRefresh = Date.now(); db.refresh().then(refreshChats).catch(() => {}); } });
+window.addEventListener('focus', () => { if(db && Date.now() - lastRefresh > 3000){ lastRefresh = Date.now(); db.refresh().then(refreshChats).catch(() => {}); } });
+window.addEventListener('pageshow', e => { if(e.persisted && db){ lastRefresh = Date.now(); db.refresh().catch(() => {}); } });
 
 render();
 (async () => {
