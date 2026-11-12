@@ -891,6 +891,18 @@ const saveVideo = (rid, patch) => put('releases', rid, {video: {...(S.releases[r
 /* Planungs-Seite für Musikvideo (Schlüssel = Release-ID) und Content-Drehtag (Schlüssel = S~Artist~Drehtag) */
 const SSTAGES = ['Idee','Planung','Dreh','Schnitt','Gepostet'];
 const REEL_STATUS = ['Geplant','Gedreht','Geschnitten','Gepostet'];
+const CREW_STATUS = ['Angefragt','Zugesagt','Abgesagt'];
+/* Offene Planungs-Punkte mit Zuständigkeit (Location anfragen, Crew buchen, Reel vorbereiten) */
+const planOpen = (kind, x) => kind === 'locations' ? !['Bestätigt','Abgesagt'].includes(x.status) : kind === 'crew' ? (x.status || 'Angefragt') === 'Angefragt' : kind === 'reels' ? (x.status || 'Geplant') === 'Geplant' : false;
+const PLAN_VERB = {locations:'Location anfragen', crew:'Crew anfragen', reels:'Reel vorbereiten'};
+function planTasks(){
+  const out = [];
+  const scan = (key, v, artist, label, due) => { for(const kind of ['locations','crew','reels']) (v?.[kind]||[]).forEach((x, i) => { if(x.o && planOpen(kind, x)) out.push({key, kind, i, o: x.o === 'A' ? artist : x.o, title: PLAN_VERB[kind] + ': ' + (x.name || x.title || ''), sub: label, due}); }); };
+  for(const r of vals(S.releases)) if(r.video) scan(r.id, r.video, r.artist, (person(r.artist)?.name||'') + ' · Musikvideo ' + relName(r), (r.video.days||[]).map(d => d.date).filter(Boolean).sort()[0] || '');
+  for(const p of artists()) for(const x of (p.shoots||[])) scan(shootKey(p.id, x.id), x, p.id, p.name + ' · ' + (x.title || 'Content-Drehtag'), x.date || '');
+  return out;
+}
+const ownerOpts = artistName => [['','Niemand zugewiesen'],['A', artistName || 'Artist'],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben'],['P',ownerName('P')]];
 const REEL_COL = {'Geplant':'var(--mute)','Gedreht':'var(--single)','Geschnitten':'var(--sun)','Gepostet':'var(--album)'};
 const isShoot = k => String(k||'').startsWith('S~');
 const shootKey = (pid, sid) => `S~${pid}~${sid}`;
@@ -968,14 +980,16 @@ function vVideo(c){
   const cur0 = P.stages.indexOf(v.status || 'Idee');
   const stage = `<div class="vstage">${P.stages.map((x,i) => `<button ${team ? `data-act="vstage" data-id="${K}|${esc(x)}"` : 'disabled'} class="${i === cur0 ? 'on' : i < cur0 ? 'done' : ''}">${esc(x.toUpperCase())}</button>`).join('')}</div>`;
   const add = kind => team ? `<button class="pill" data-act="vadd" data-id="${K}|${kind}">${icon.plus} ${{days:'Drehtag', locations:'Location', crew:'Person', reels:'Reel'}[kind]}</button>` : '';
+  const who = x => x.o ? ` · <span style="color:var(--sun)">→ ${esc((x.o === 'A' ? (P.p?.name || 'Artist') : ownerName(x.o)).toUpperCase())}</span>` : '';
   const row = (kind, i, main, sub, right='', note='') => `<button class="vrow" ${team ? `data-act="vedit" data-id="${K}|${kind}|${i}"` : 'data-act="noop"'} style="cursor:${team ? 'pointer' : 'default'};width:100%;text-align:left;font:inherit;align-items:flex-start">
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${main}</b><span class="small">${sub}</span>${note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(note)}</span>` : ''}</span>${right}</button>`;
   const LCOL = {'Idee':'var(--mute)','Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgesagt':'var(--danger)'};
   const days = (v.days||[]).map((d,i) => ({...d, i})).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'))
     .map(d => row('days', d.i, `${d.date ? fmt(d.date) : 'Datum offen'}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}`, `${esc((d.loc || 'Location offen').toUpperCase())}${d.date && d.date < t0 ? ' · VORBEI' : ''}`, '', d.note)).join('');
-  const locs = (v.locations||[]).map((l,i) => row('locations', i, esc(l.name), `${l.address ? esc(l.address.toUpperCase()) : 'ADRESSE OFFEN'}${team && num(l.cost) ? ' · ' + eur(num(l.cost)) : ''}`, `<span class="status" style="color:${LCOL[l.status]||'var(--mute)'};flex:none">● ${esc((l.status||'Idee').toUpperCase())}</span>`, l.note)).join('');
-  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}`)).join('');
-  const reels = (v.reels||[]).map((x,i) => row('reels', i, `${i+1}. ${esc(x.title || 'Reel')}`, `${esc((x.loc || 'Location offen').toUpperCase())}${x.outfit ? ' · ' + esc(x.outfit.toUpperCase()) : ''}${x.cid ? ' · IM CONTENT-PLAN' : ''}`,
+  const locs = (v.locations||[]).map((l,i) => row('locations', i, esc(l.name), `${l.address ? esc(l.address.toUpperCase()) : 'ADRESSE OFFEN'}${team && num(l.cost) ? ' · ' + eur(num(l.cost)) : ''}${who(l)}`, `<span class="status" style="color:${LCOL[l.status]||'var(--mute)'};flex:none">● ${esc((l.status||'Idee').toUpperCase())}</span>`, l.note)).join('');
+  const CCOL = {'Angefragt':'var(--sun)','Zugesagt':'var(--album)','Abgesagt':'var(--danger)'};
+  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${who(x)}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
+  const reels = (v.reels||[]).map((x,i) => row('reels', i, `${i+1}. ${esc(x.title || 'Reel')}`, `${esc((x.loc || 'Location offen').toUpperCase())}${x.outfit ? ' · ' + esc(x.outfit.toUpperCase()) : ''}${x.cid ? ' · IM CONTENT-PLAN' : ''}${who(x)}`,
       `<span class="stack" style="gap:4px;align-items:flex-end;flex:none"><span class="status" style="color:${REEL_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'Geplant').toUpperCase())}</span>${safeUrl(x.link) ? '<span class="small" style="color:var(--sun)">🔗</span>' : ''}</span>`, x.note)).join('');
   const refs = (v.refs||'').split('\n').map(x => x.trim()).filter(Boolean);
   const checks = field => (v[field]||[]).map((x,i) => team
@@ -1044,17 +1058,20 @@ function sheetVItem(k, kind, idx){
       ${Sel('loc','LOCATION',locs,x.loc||'')}${area('note','NOTIZ',x.note,'Call Time, Szenen, Treffpunkt')}`; }
   else if(kind === 'locations'){ title = 'Location';
     fields = `${F('name','NAME',x.name||'','text','required placeholder="z. B. Hafen Hamburg, Studio 3"')}${F('address','ADRESSE',x.address||'')}
-      <div class="grid2">${Sel('status','STATUS',VLOC_STATUS,x.status||'Idee')}${F('cost','KOSTEN (€)',x.cost||'','text','inputmode="decimal"')}</div>${area('note','NOTIZ',x.note,'Ansprechpartner, Genehmigung, Strom …')}`; }
+      <div class="grid2">${Sel('status','STATUS',VLOC_STATUS,x.status||'Idee')}${F('cost','KOSTEN (€)',x.cost||'','text','inputmode="decimal"')}</div>
+      ${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name),x.o||'')}${area('note','NOTIZ',x.note,'Ansprechpartner, Genehmigung, Strom …')}`; }
   else if(kind === 'reels'){ title = 'Reel';
     const rels = [['','Noch keinem Release zuordnen'], ...relsOf(P.artist).filter(r => r.status !== 'Released').map(r => [r.id, relName(r) + (r.title ? ' · ' + r.title : '')])];
     fields = `${F('title','IDEE / TITEL',x.title||'','text','required placeholder="z. B. Hook-Snippet im Auto"')}
       <div class="grid2">${Sel('status','STATUS',REEL_STATUS,x.status||'Geplant')}${Sel('loc','LOCATION',locs,x.loc||'')}</div>
       ${F('outfit','OUTFIT / LOOK',x.outfit||'','text','placeholder="z. B. schwarze Lederjacke"')}
+      ${Sel('o','ZUSTÄNDIG',ownerOpts(P.p?.name),x.o||'')}
       ${F('link','DROPBOX-LINK (ROHMATERIAL / SCHNITT)',x.link||'','url','placeholder="https://www.dropbox.com/…"')}
       ${area('note','NOTIZ',x.note,'Szene, Text, Song-Stelle, Kameraeinstellung')}
       ${x.cid ? '<span class="small" style="display:block;margin-bottom:12px">Steht schon im Content-Plan.</span>' : Sel('toRel','IN DEN CONTENT-PLAN VON …',rels,'')}`; }
   else { title = 'Crew';
-    fields = `<div class="grid2">${Sel('role','ROLLE',VCREW_ROLES,x.role||(P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}`; }
+    fields = `<div class="grid2">${Sel('role','ROLLE',VCREW_ROLES,x.role||(P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}
+      <div class="grid2">${Sel('status','STATUS',CREW_STATUS,x.status||'Angefragt')}${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name),x.o||'')}</div>`; }
   const extra = isNew ? '' : `<button class="btn danger" type="button" id="delVItem" style="width:100%;margin-top:10px">${title} löschen</button>`;
   sheet((isNew ? 'Neu: ' : '') + title, fields, async fd => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
@@ -1488,6 +1505,7 @@ function pinItems(k){
   for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
+  for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
 }
@@ -1602,6 +1620,7 @@ function vArtistPin(c){
     .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => c.o === 'A' && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
     .sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
+  const ptasks = planTasks().filter(t => t.o === aid);
   const shoots = [...relsOf(aid).flatMap(r => (r.video?.days||[]).filter(d => d.date && d.date >= t0).map(d => ({...d, r, key:r.id, lbl:relName(r).toUpperCase()}))),
     ...shootsOf(aid).filter(x => x.date && x.date >= t0).map(x => ({date:x.date, time:x.time, end:x.end, loc:(x.reels||[]).length + ' REELS', key:shootKey(aid, x.id), lbl:'CONTENT-DREHTAG'}))].sort((a,b) => a.date.localeCompare(b.date));
   const taskRow = ({t, due, ci, c}) => { const r = S.releases[t.release], sub = ci != null;
@@ -1619,12 +1638,13 @@ function vArtistPin(c){
  const shootRow2 = d => `<button class="vrow" data-go="video" data-id="${esc(d.key)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">Dreh · ${fmt(d.date)}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}</b><span class="small">${esc(d.lbl)}${d.loc ? ' · ' + esc(d.loc.toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
   if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
-  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length;
+  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !ptasks.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand">CLOUDS RECORDS</span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div></div>
     ${own ? pushBanner() : ''}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
+    ${sec('Planung', ptasks, t => `<button class="vrow" data-go="video" data-id="${esc(t.key)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(t.title)}</b><span class="small">${esc(t.sub.toUpperCase())}${t.due ? ' · ' + fmt(t.due) : ''}</span></span>${icon.chev}</button>`)}
     ${sec('Studio', studio, x => studioRow(x, false))}
     ${sec('Drehtermine', shoots, shootRow2)}
     ${empty ? `<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landen Nachrichten vom Team, deine Aufgaben, Studio-Termine und Drehtage.${own ? ' Über „Nachricht“ schreibst du dem Team.' : ''}</span></div>` : ''}
@@ -2222,7 +2242,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121945';
+const APP_VERSION = '202611122000';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
