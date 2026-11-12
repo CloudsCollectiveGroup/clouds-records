@@ -205,6 +205,12 @@ h1,h2{margin:0;text-wrap:balance}
 .apv.big{font-size:13px;padding:8px 12px;border-radius:12px}
 .apvbtn{flex:1;min-height:48px;border-radius:14px;border:1.5px solid var(--n);background:color-mix(in srgb,var(--n) 12%,transparent);color:var(--n);font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 0 14px color-mix(in srgb,var(--n) 40%,transparent);text-shadow:0 0 8px color-mix(in srgb,var(--n) 60%,transparent)}
 .vrow.apvrow{border-color:color-mix(in srgb,var(--n) 60%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--n) 22%,transparent)}
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:10px}
+.calhd{font-family:var(--mono);font-size:10px;color:var(--mute);text-align:center;padding:4px 0}
+.calday{aspect-ratio:1/1.05;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0}
+.calday.today{border-color:var(--sun);color:var(--sun);font-weight:700}
+.calday.sel{background:var(--sun);color:var(--on-sun);border-color:var(--sun)}
+.calday .dots{display:flex;gap:2px;height:6px}.calday .dots i{width:5px;height:5px;border-radius:50%;display:block}
 .arch{margin:18px 0 6px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card)}
 .arch>summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);list-style:none}
 .arch>summary::before{content:'▸ ';color:var(--sun)}.arch[open]>summary::before{content:'▾ '}
@@ -320,7 +326,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -634,8 +640,8 @@ function shrinkImage(file){
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
-const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video'].includes(r) ? r : 'artiststart';
-  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video','profile','cal'].includes(r) ? r : 'artiststart';
+  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin' || ok === 'profile') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
 function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
@@ -646,7 +652,7 @@ function ctxArtist(c){
   if(c.r === 'release') return S.releases[c.id]?.artist || null;
   if(c.r === 'track'){ const t = S.tracks[c.id]; return t ? S.releases[t.release]?.artist || null : null; }
   if(c.r === 'tracks' && c.artist) return c.artist;
-  if((c.r === 'recordings' || c.r === 'market' || c.r === 'apin') && S.people[c.id]) return c.id;
+  if((c.r === 'recordings' || c.r === 'market' || c.r === 'apin' || c.r === 'profile') && S.people[c.id]) return c.id;
   if(c.r === 'video') return planCtx(c.id).artist || null;
   return null;
 }
@@ -662,7 +668,7 @@ function renderNav(){
     if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['market','Beat Market',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['cal','Kalender',icon.timeline,{}],['market','Beats',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = {release:'artist', video:'artist', track:'tracks', producer:'roster'}[c.r] || c.r;
@@ -683,7 +689,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
-  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo}[c.r] || vRoster;
+  const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo, profile:vProfile, cal:vCal}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
@@ -1440,6 +1446,9 @@ function vArtistStart(c){
     <div class="topbar">${team ? `<button class="back" data-act="home">${icon.back}Artists</button>` : `<span class="brand">CLOUDS RECORDS</span>`}<span class="row" style="gap:8px">${team ? `<button class="chip" style="background:var(--raise);color:var(--ink)" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" style="background:var(--raise);color:var(--ink)" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button>` : `<span class="small">${yearLabel(p)}</span>`}</span></div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant" style="font-size:44px">${team ? esc(p.name) : `Hey ${esc(p.name)}.`}</h1>${team ? `<div class="small" style="margin-top:6px">${yearLabel(p)}${dropboxFolder(p, ' · DROPBOX-ORDNER →', 'small', 'font-weight:600;color:var(--sun);text-decoration:none')}</div>` : ''}
       <div class="boxes" style="margin-top:16px" aria-label="Vertrag: ${esc(countLine(p))}">${boxesHTML(p)}</div><div class="small" style="margin-top:8px">${countLine(p)}</div></div>
+    <div class="row" style="gap:8px;margin:16px 16px 0;flex-wrap:wrap">
+      <button class="pill" data-go="profile" data-id="${esc(p.id)}">👤 Profil · ${profileScore(p.id)} %</button>
+      <button class="pill" data-act="calfor" data-id="${esc(p.id)}">📅 Kalender</button></div>
     ${team ? (() => { const n = notesFor(p.id).filter(x => !(x.doneBy||[]).includes(p.id)).length, o = vals(S.tasks).filter(t => !t.done && t.owner === 'A' && S.releases[t.release]?.artist === p.id).length;
       return `<button class="vrow" data-go="apin" data-id="${esc(p.id)}" style="margin:18px 16px 0;width:calc(100% - 32px);cursor:pointer;text-align:left;font:inherit"><span class="play">${icon.roster}</span><span class="stack" style="flex:1;gap:2px"><b>Pinnwand von ${esc(p.name)}</b><span class="small">${n} NACHRICHTEN · ${o} AUFGABEN OFFEN</span></span>${icon.chev}</button>`; })() : ''}
     ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
@@ -1678,6 +1687,74 @@ async function pushEnable(){
     pushOn = true; toast('Mitteilungen sind an'); render();
   }catch(e){ toast('Mitteilungen nicht möglich: ' + (e.message || e)); }
 }
+/* ---------- Artist-Profil (Bio, Fotos, Socials, EPK) ---------- */
+const PROFILE_FIELDS = [['bio','Bio','area','Kurz und knackig: Wer bist du, wofür stehst du, was macht deinen Sound aus?'],['genre','Genre / Sound','text','z. B. Deutschrap, melodisch, dunkel'],['city','Stadt','text','z. B. Hamburg'],
+  ['instagram','Instagram','url','https://instagram.com/…'],['tiktok','TikTok','url','https://tiktok.com/@…'],['spotify','Spotify','url','https://open.spotify.com/artist/…'],['youtube','YouTube','url','https://youtube.com/@…'],['soundcloud','SoundCloud','url','https://soundcloud.com/…'],['apple','Apple Music','url','https://music.apple.com/…'],
+  ['photos','Pressefotos (Dropbox-Ordner)','url','https://www.dropbox.com/…'],['epk','EPK / Pressemappe','url','https://…'],['booking','Booking-Kontakt','text','Name, Mail oder Telefon'],['facts','Fun Facts / Erfolge','area','Streams, Auftritte, Features, Presse …']];
+const profileOf = pid => S.profile?.[pid] || {};
+const profileScore = pid => { const pr = profileOf(pid); return Math.round(PROFILE_FIELDS.filter(([k]) => (pr[k]||'').trim()).length / PROFILE_FIELDS.length * 100); };
+function vProfile(c){
+  const p = person(c.id); if(!p) throw new Error('missing');
+  const pr = profileOf(p.id), canEdit = !isPreview() || lockedArtist === p.id, sc = profileScore(p.id);
+  const links = PROFILE_FIELDS.filter(([k,,t]) => t === 'url' && safeUrl(pr[k]));
+  const block = (k, l) => pr[k] ? `<div class="pad" style="padding-top:18px"><span class="lbl">${esc(l.toUpperCase())}</span><div class="vrow" style="margin-top:8px;white-space:pre-line;line-height:1.5;font-size:15px">${esc(pr[k])}</div></div>` : '';
+  return `${banner()}${previewBanner()}
+    <div class="ahead" style="background:${esc(p.color)}">
+      <div class="between" style="padding-top:12px;position:relative"><button class="back" style="color:inherit" data-act="back">${icon.back}ZURÜCK</button>${canEdit ? `<button class="chip" data-act="editprofile" data-id="${esc(p.id)}">BEARBEITEN</button>` : ''}</div>
+      <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:18px;position:relative">ARTIST-PROFIL${pr.genre ? ' · ' + esc(pr.genre.toUpperCase()) : ''}${pr.city ? ' · ' + esc(pr.city.toUpperCase()) : ''}</div>
+      <h1 class="h-giant" style="position:relative;margin-top:6px;font-size:56px">${esc(p.name)}</h1>
+      <div class="tc-bar" style="position:relative;margin-top:12px;background:rgba(0,0,0,.25)"><i style="width:${sc}%;background:#fff"></i></div>
+      <div class="small" style="position:relative;margin-top:6px;color:inherit;opacity:.85">PROFIL ${sc} % VOLLSTÄNDIG</div></div>
+    ${links.length ? `<div class="chips" style="padding-top:16px">${links.map(([k,l]) => `<a class="pill" href="${esc(pr[k])}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join('')}</div>` : ''}
+    ${block('bio','Bio')}${block('facts','Fun Facts / Erfolge')}
+    ${pr.booking ? `<div class="pad" style="padding-top:18px"><span class="lbl">BOOKING</span><div class="vrow" style="margin-top:8px">${esc(pr.booking)}</div></div>` : ''}
+    ${sc < 100 ? `<div class="pad" style="padding-top:18px"><div class="tip" style="background:var(--sun-bg);border:1px solid rgba(212,175,55,.35);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45">Noch offen: ${esc(PROFILE_FIELDS.filter(([k]) => !(pr[k]||'').trim()).map(([,l]) => l).join(', '))}.${canEdit ? ' Über „Bearbeiten“ ergänzen.' : ''}</div></div>` : ''}`;
+}
+function sheetProfile(pid){
+  const pr = profileOf(pid);
+  const fields = PROFILE_FIELDS.map(([k, l, t, ph]) => t === 'area'
+    ? `<div class="field"><label for="f-${k}">${esc(l.toUpperCase())}</label><textarea id="f-${k}" name="${k}" rows="4" placeholder="${esc(ph)}">${esc(pr[k]||'')}</textarea></div>`
+    : F(k, esc(l.toUpperCase()), pr[k]||'', t, `placeholder="${esc(ph)}"`)).join('');
+  sheet('Profil · ' + (person(pid)?.name||''), fields, async fd => {
+    const doc = {artist: pid}; for(const [k,,t] of PROFILE_FIELDS){ const v = (fd[k]||'').trim(); if(t === 'url' && v && !safeUrl(v)){ toast('Links müssen mit https:// beginnen'); return false; } doc[k] = v; }
+    return await put('profile', pid, doc, !!S.profile?.[pid]) ? undefined : false;
+  });
+}
+/* ---------- Kalender ---------- */
+function calEvents(aid){
+  const ev = [], mine = x => !aid || x === aid;
+  for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r), a:r.artist, c:'#39FF88', go:['release', r.id]});
+  for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && mine(x.artist)) ev.push({date:x.date, time:x.time, t:'Studio · ' + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#D4AF37', act:['editstudio', x.id]});
+  for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
+  for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t:'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c:'#C2407A', go:['video', shootKey(p.id, x.id)]}));
+  for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
+  if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
+  return ev.sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
+}
+function vCal(c){
+  const aid = lockedArtist || c.a || null, t0 = todayIso();
+  const ym = c.m || t0.slice(0,7), [Y, M] = ym.split('-').map(Number);
+  const first = new Date(Y, M-1, 1), days = new Date(Y, M, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const ev = calEvents(aid).filter(e => e.date.startsWith(ym)), byDay = {};
+  ev.forEach(e => (byDay[e.date] ||= []).push(e));
+  const iso = d => `${ym}-${String(d).padStart(2,'0')}`, sel = c.d && c.d.startsWith(ym) ? c.d : null;
+  const shift = n => { const d = new Date(Y, M-1+n, 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+  const cells = Array(lead).fill('<span></span>').join('') + Array.from({length:days}, (_, i) => { const d = iso(i+1), es = byDay[d]||[];
+    return `<button class="calday ${d === t0 ? 'today' : ''} ${d === sel ? 'sel' : ''}" data-act="calday" data-id="${d}"><span>${i+1}</span><span class="dots">${es.slice(0,4).map(e => `<i style="background:${e.c}"></i>`).join('')}</span></button>`; }).join('');
+  const list = (sel ? (byDay[sel]||[]) : ev);
+  const groups = {}; list.forEach(e => (groups[e.date] ||= []).push(e));
+  const row = e => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${e.dim ? 'opacity:.55' : ''}"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span>
+    <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${e.time ? esc(e.time) + ' · ' : ''}${!aid && e.a ? esc((person(e.a)?.name||'').toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
+  const legend = [['#39FF88','Release'],['#D4AF37','Studio'],['#F26D6D','Musikvideo'],['#C2407A','Reel-Dreh'],['#5B8DEF','Content']].map(([col,l]) => `<span><i class="sw" style="background:${col}"></i>${l.toUpperCase()}</span>`).join('');
+  return `${cloudSvg}${previewBanner()}<div class="topbar">${lockedArtist || c.a ? `<button class="back" data-act="back">${icon.back}Zurück</button>` : '<span class="brand">CLOUDS RECORDS</span>'}<span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'ALLE ARTISTS'}</span></div>${banner()}
+    <div class="pad between" style="padding-top:14px;align-items:center"><button class="iconbtn" data-act="calnav" data-id="${shift(-1)}|${aid||''}" aria-label="Vorheriger Monat">${icon.back}</button>
+      <h1 class="h-big" style="font-size:30px;text-align:center">${first.toLocaleDateString('de-DE',{month:'long', year:'numeric'})}</h1>
+      <button class="iconbtn" data-act="calnav" data-id="${shift(1)}|${aid||''}" aria-label="Nächster Monat">${icon.chev}</button></div>
+    <div class="pad"><div class="calgrid">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => `<span class="calhd">${d}</span>`).join('')}${cells}</div></div>
+    <div class="pad legend" style="padding-top:10px;flex-wrap:wrap;row-gap:6px">${legend}</div>
+    <div class="pad between" style="padding-top:18px"><h2 class="h-sec">${sel ? fmt(sel) : 'Alle Termine'}</h2>${sel ? `<button class="pill" data-act="calday" data-id="">Ganzer Monat</button>` : `<span class="small">${ev.length}</span>`}</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${Object.keys(groups).length ? Object.entries(groups).map(([d, es]) => `${sel ? '' : `<div class="yearhead" style="margin:10px 0 2px"><span class="lbl">${parse(d).toLocaleDateString('de-DE',{weekday:'short', day:'2-digit', month:'2-digit'}).toUpperCase()}</span><i></i></div>`}${es.map(row).join('')}`).join('') : '<span class="small">Keine Termine.</span>'}</div>`;
+}
 /* ---------- Artist: Pinnwand ---------- */
 function vArtistPin(c){
   const aid = c.id, p = person(aid); if(!p) throw new Error('missing');
@@ -1711,7 +1788,8 @@ function vArtistPin(c){
   if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
   const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !ptasks.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand">CLOUDS RECORDS</span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
-    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div></div>
+    <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
+      <div class="row" style="gap:8px;margin-top:12px"><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
     ${own ? pushBanner() : ''}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
@@ -2010,6 +2088,11 @@ async function act(a, id){
   if(a === 'rcdetails') return sheetRcDetails(id);
   if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(r) await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
   if(a === 'credits') return sheetCredits(id);
+  if(a === 'editprofile') return sheetProfile(id);
+  if(a === 'calfor') return go('cal', {a: id});
+  if(a === 'calnav'){ const [m, aid] = id.split('|'); const c = cur(); stack[stack.length-1] = {...c, m, d:null, a: aid || c.a}; return render(); }
+  if(a === 'calday'){ const c = cur(); stack[stack.length-1] = {...c, d: id || null}; return render(); }
+  if(a === 'calgo'){ const o = JSON.parse(id); if(o.go) return go(o.go[0], {id:o.go[1]}); return act(o.act[0], o.act[1]); }
   if(a === 'vprops'){ const [k, field] = id.split('|'); return sheetVProps(k, field || 'props'); }
   if(a === 'shootnew'){ const p = person(id); if(!p) return; const sid = uid('sh'); if(await put('people', id, {shoots:[...(p.shoots||[]), {id:sid, title:'Reel-Drehtag', status:'Idee', date:'', reels:[], locations:[], crew:[], props:[], food:[]}]})) go('video', {id: shootKey(id, sid)}); return; }
   if(a === 'vadd'){ const [rid, kind] = id.split('|'); return sheetVItem(rid, kind); }
@@ -2344,7 +2427,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122100';
+const APP_VERSION = '202611122130';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
