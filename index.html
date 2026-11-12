@@ -190,6 +190,11 @@ h1,h2{margin:0;text-wrap:balance}
 .field input[type=date]::-webkit-date-and-time-value,.field input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
 .field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.8)}
 .field select{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:32px}
+/* Zwei Felder nebeneinander mit Datum: auf dem Handy untereinander, damit nichts überlappt */
+@media (max-width:560px){ .grid2:has(input[type=date]),.grid2:has(input[type=time]){grid-template-columns:1fr} }
+/* Notizfelder überall großzügig, nach unten aufziehbar */
+.field textarea{min-height:110px;resize:vertical;line-height:1.45}
+.field textarea[name=note],.field textarea[name=concept],.field textarea[name=text]{min-height:150px}
 .rooms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .rooms .gchip{display:block;position:relative}
 .rooms .gchip span{width:100%;min-height:42px;justify-content:center;text-align:center;border-radius:12px}
@@ -272,14 +277,16 @@ const checksOf = x => Array.isArray(x?.checks) ? x.checks.filter(c => c && c.t) 
 const checkTxt = x => { const c = checksOf(x); return c.length ? ` · ☑ ${c.filter(i => i.d).length}/${c.length}` : ''; };
 const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTERPUNKTE)</span><div class="stack" id="chkList" style="gap:6px">${checksOf(x).map((c,i) => chkRow(c, i)).join('')}</div>
   <button class="pill" type="button" id="chkAdd" style="margin-top:8px;min-height:34px">${icon.plus} Punkt</button></div>`;
-const chkRow = (c, i) => `<div class="row chkrow" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>`;
+const CHK_OWNERS = () => [['','Wer? (optional)'],['A','Artist'],['P',ownerName('P')],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben']];
+const chkRow = (c, i) => `<div class="chkrow" style="display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>
+  <select name="chk_o" aria-label="Zuständig für diesen Punkt" style="margin-left:28px;width:calc(100% - 70px);min-height:34px;padding:4px 30px 4px 10px;font-size:13px;border-radius:10px;${c.o ? 'color:var(--sun);border-color:rgba(212,175,55,.45)' : 'color:var(--mute)'}">${CHK_OWNERS().map(([v,l]) => `<option value="${v}" ${v === (c.o||'') ? 'selected' : ''}>${v ? '→ ' + esc(l) : esc(l)}</option>`).join('')}</select></div>`;
 function bindChecks(form){
   const list = form.querySelector('#chkList'); if(!list) return;
   const wire = row => { row.querySelector('.chkdel').onclick = () => { row.remove(); form.dispatchEvent(new Event('input')); }; };
   list.querySelectorAll('.chkrow').forEach(wire);
   form.querySelector('#chkAdd').onclick = () => { list.insertAdjacentHTML('beforeend', chkRow({t:'', d:false})); const r = list.lastElementChild; wire(r); r.querySelector('input[name=chk_t]').focus(); };
 }
-const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => ({t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked})).filter(c => c.t);
+const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => { const o = r.querySelector('select[name=chk_o]')?.value || ''; return {t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked, ...(o ? {o} : {})}; }).filter(c => c.t);
 const readHelpers = (form, owner) => [...form.querySelectorAll('input[name=helpers]:checked')].map(i => i.value).filter(k => k !== owner);
 const OWNER_COL = {A:null, P:'#D4AF37', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
@@ -324,7 +331,10 @@ const stageIdx = s => STAGES.indexOf(s);
 const isActive = r => stageIdx(r.status) >= 2 && r.status !== 'Released';
 const vals = o => Object.values(o);
 const person = id => S.people[id];
-const relsOf = a => vals(S.releases).filter(r => r.artist === a).sort((x,y) => (x.year-y.year) || (x.order-y.order));
+/* Vertragsjahr eines Releases: steht ein Release-Datum fest, zählt das Datum (relativ zum Vertragsbeginn), sonst das geplante Jahr */
+const yearOfDate = (p, iso) => { const s = parse(p?.start), d = parse(iso); if(!s || !d) return null; const y = Math.floor((d - s) / (365.25*864e5)) + 1; return Math.max(1, Math.min(y, p.years || y)); };
+const relYear = r => yearOfDate(S.people[r.artist], r.date) || r.year || 1;
+const relsOf = a => vals(S.releases).filter(r => r.artist === a).sort((x,y) => (relYear(x)-relYear(y)) || (x.date && y.date ? x.date.localeCompare(y.date) : x.date ? -1 : y.date ? 1 : 0) || (x.order-y.order));
 const tasksOf = rid => vals(S.tasks).filter(t => t.release === rid).sort((x,y) => (PHASES.indexOf(x.phase)-PHASES.indexOf(y.phase)) || ((x.order||0)-(y.order||0)));
 const tracksOf = rid => vals(S.tracks).filter(t => t.release === rid).sort((a,b) => (a.title||'').localeCompare(b.title||''));
 const versionsOf = tid => vals(S.versions).filter(v => v.track === tid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
@@ -692,7 +702,7 @@ function vArtist(c){
   const cs = counts(p);
   const done = t => cs.find(x => x.type===t).list.filter(r => r.status==='Released').length;
   const curR = currentRelease(p.id);
-  const years = [...new Set(rs.map(r => r.year))].sort((a,b)=>a-b);
+  const years = [...new Set(rs.map(relYear))].sort((a,b)=>a-b);
   const pfl = rs.filter(r => r.pflicht).length, vor = rs.length - pfl;
   const startTxt = p.start ? `VERTRAG ${parse(p.start).getFullYear()}–${parse(p.start).getFullYear()+p.years}` : 'VERTRAGSBEGINN OFFEN';
   const darkText = p.color === '#F2C94C';
@@ -711,7 +721,7 @@ function vArtist(c){
       </div></div>`;
   const body = years.map(y => `
     <div class="yearhead"><span class="lbl">JAHR ${y}${yearRange(p,y)}</span><i></i></div>
-    ${rs.filter(r => r.year === y).map(r => relRow(r, r === curR)).join('')}`).join('');
+    ${rs.filter(r => relYear(r) === y).map(r => relRow(r, r === curR)).join('')}`).join('');
   return `${head}${banner()}${previewBanner()}
     <div class="pad" style="padding-top:22px">
       <div class="between"><h2 class="h-sec">Projekte</h2><span class="small">${pfl} PFLICHT${vor?` + ${vor} VORAB`:''}</span></div>
@@ -745,7 +755,9 @@ function vRelease(c){
     const dueTxt = due ? fmt(due) : '';
     const ownerTxt = (t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '') + checkTxt(t);
     const late = !ok && due && daysTo(due) < 0;
-    const noteTxt = t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '';
+    const cl = checksOf(t);
+    const chkTxt = cl.length ? `<span style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:4px">${cl.map(c => `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;${c.d ? 'text-decoration:line-through;color:var(--mute)' : 'color:var(--ink2)'}">${c.d ? '☑' : '☐'} ${esc(c.t)}${c.o ? ` <span style="color:var(--sun)">→ ${esc(c.o === 'A' ? p.name : ownerName(c.o))}</span>` : ''}</span>`).join('')}</span>` : '';
+    const noteTxt = (t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '') + chkTxt;
     return `<div class="step">
       <span class="ph" style="${isCur?`color:${T.c}`:''}">${esc(t.phase)}</span>
       <span class="rail">${isRel ? `<button class="dot ${ok?'ok':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}" style="border-radius:4px;transform:rotate(45deg);${ok?'':`background:${T.c}`}">${ok?'<span style="transform:rotate(-45deg);display:flex">'+icon.check+'</span>':''}</button>`
@@ -1001,7 +1013,7 @@ function sheetStudio(rid, id){
   const fields = `${Sel('release','FÜR RELEASE',rels,x.release)}
     ${F('date','WUNSCHDATUM',x.date||'','date',`required min="${id ? '' : todayIso()}"`)}
     <div class="grid2">${Sel('time','BEGINN',times,x.time||'14:00')}${Sel('hours','DAUER',[['4','4 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}</div>
-    <div class="field"><span class="flabel">RAUM</span><div class="gchips rooms">${rooms.map(r => `<label class="gchip"><input type="radio" name="room" value="${esc(r)}" ${r === (x.room||'Egal') ? 'checked' : ''}><span>${esc(r)}</span></label>`).join('')}</div></div>
+    ${Sel('room','RAUM',rooms,x.room||'Egal')}
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
     ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
   const extra = id && team ? `<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
@@ -1311,6 +1323,8 @@ const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort
 function pinItems(k){
   const out = [];
   for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r) + checkTxt(t), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
+  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)) checksOf(t).forEach(c => { if(c.o === k && !c.d){ const r = S.releases[t.release]; if(r) out.push({src:'tasks', id:t.id, title:c.t, sub:'Punkt aus „' + t.title + '“ · ' + (person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by}); } });
+  for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
@@ -1391,14 +1405,16 @@ function vArtistPin(c){
   const fresh = x => x._at && x._by && x._by !== me && x._at > since;
   const notes = notesFor(aid).filter(n => !(n.doneBy||[]).includes(aid));
   const sent = vals(S.notes||{}).filter(n => n.fromArtist === aid && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
-  const tasks = vals(S.tasks).filter(t => !t.done && (t.owner === 'A' || helpersOf(t).includes('A')) && S.releases[t.release]?.artist === aid)
-    .map(t => ({t, due: taskDue(t)})).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
+  const mineT = t => t.owner === 'A' || helpersOf(t).includes('A');
+  const tasks = vals(S.tasks).filter(t => !t.done && S.releases[t.release]?.artist === aid)
+    .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => c.o === 'A' && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
+    .sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
   const shoots = relsOf(aid).flatMap(r => (r.video?.days||[]).filter(d => d.date && d.date >= t0).map(d => ({...d, r}))).sort((a,b) => a.date.localeCompare(b.date));
-  const taskRow = ({t, due}) => { const r = S.releases[t.release];
-    return `<div class="vrow" style="align-items:flex-start"><button class="dot" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} abhaken" style="flex:none;margin-top:2px"></button>
-      <button data-go="release" data-id="${esc(r.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer"><b style="font-weight:600">${esc(t.title)}${fresh(t) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
-      <span class="small">${esc(relName(r).toUpperCase())}${r.title ? ' · ' + esc(r.title.toUpperCase()) : ''}${checkTxt(t)}${due ? ' · ' + (due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(due) + '</b>' : 'BIS ' + fmt(due)) : ''}</span>
+  const taskRow = ({t, due, ci, c}) => { const r = S.releases[t.release], sub = ci != null;
+    return `<div class="vrow" style="align-items:flex-start"><button class="dot" data-act="${sub ? 'chktoggle' : 'toggle'}" data-id="${esc(t.id)}${sub ? '|' + ci : ''}" aria-label="${esc(sub ? c.t : t.title)} abhaken" style="flex:none;margin-top:2px"></button>
+      <button data-go="release" data-id="${esc(r.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer"><b style="font-weight:600">${esc(sub ? c.t : t.title)}${fresh(t) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
+      <span class="small">${sub ? 'PUNKT AUS „' + esc(t.title.toUpperCase()) + '“ · ' : ''}${esc(relName(r).toUpperCase())}${r.title ? ' · ' + esc(r.title.toUpperCase()) : ''}${sub ? '' : checkTxt(t)}${due ? ' · ' + (due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(due) + '</b>' : 'BIS ' + fmt(due)) : ''}</span>
       ${t.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : ''}</button></div>`; };
   const noteCard = n => `<div class="vrow" style="align-items:flex-start;border-color:rgba(212,175,55,.35);background:var(--sun-bg)">
       <span class="stack" style="flex:1;gap:4px;min-width:0"><span class="small">VON ${esc((n.from||'').toUpperCase())} · ${n.at ? new Date(n.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}${n.due ? ' · BIS ' + fmt(n.due) : ''}${fresh(n) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</span>
@@ -1644,6 +1660,7 @@ async function act(a, id){
   if(a === 'preview') return tab('artiststart', {id, preview:id});
   if(a === 'filter'){ filterArtist = id; return render(); }
   if(a === 'toggle'){ const t = S.tasks[id]; if(t) await put('tasks', id, {done: !t.done}); return; }
+  if(a === 'chktoggle'){ const [tid, i] = id.split('|'); const t = S.tasks[tid]; const cs = checksOf(t); if(t && cs[+i]){ const n = cs.map((c, j) => j === +i ? {...c, d: !c.d} : c); await put('tasks', tid, {checks: n}); } return; }
   if(a === 'addperson') return sheetPerson();
   if(a === 'editperson') return sheetPerson(id);
   if(a === 'editrel') return sheetRelease(id);
@@ -1793,12 +1810,13 @@ function sheetRelease(id){
   const r = S.releases[id];
   const fields = `${F('title','ARBEITSTITEL',r.title||'','text','placeholder="Titel offen"')}
     <div class="grid2">${Sel('status','STATUS',STAGES,r.status)}${F('date','RELEASE-DATUM',r.date||'','date')}</div>
-    <div class="grid2">${F('year','VERTRAGSJAHR',r.year,'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>
+    <div class="grid2">${F('year','VERTRAGSJAHR',relYear(r),'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>
+    <span class="small" style="display:block;margin:-4px 0 12px">Steht ein Release-Datum, rechnet die App das Vertragsjahr selbst aus dem Datum.</span>
     <div class="upl"><label for="f-cover" class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em">COVER ${r.cover ? '(VORHANDEN, NEUES ERSETZT ES)' : '(JPG/PNG)'}</label>
       <input id="f-cover" type="file" accept="image/jpeg,image/png,image/webp,image/heic"></div>`;
   const extra = r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">Vorab-Single entfernen</button>`;
   const form = sheet(`${relName(r)} bearbeiten`, fields, async (fd, f) => {
-    const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year:+fd.year||r.year, countsTo:fd.countsTo};
+    const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year: yearOfDate(person(r.artist), fd.date) || +fd.year || r.year, countsTo:fd.countsTo};
     const img = f.querySelector('#f-cover').files[0];
     if(img){
       const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Lädt hoch …';
@@ -1991,7 +2009,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121700';
+const APP_VERSION = '202611121730';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
