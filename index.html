@@ -823,10 +823,10 @@ function contentRow(c, withArtist){
     <span class="status" style="color:${CSTATUS_COL[c.status]||'var(--mute)'}">● ${esc((c.status||'Idee').toUpperCase())}</span></button>`;
 }
 function contentSection(r){
-  const items = contentOf(r.id), team = !isPreview();
-  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Content-Plan</h2>${team ? `<button class="pill" data-act="addcontent" data-id="${esc(r.id)}">${icon.plus} Beitrag</button>` : `<span class="small">${items.length} BEITRÄGE</span>`}</div>
+  const items = contentOf(r.id), team = !isPreview(), canAdd = team || !!lockedArtist;
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Content-Plan</h2>${canAdd ? `<button class="pill" data-act="addcontent" data-id="${esc(r.id)}">${icon.plus} Beitrag</button>` : `<span class="small">${items.length} BEITRÄGE</span>`}</div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${items.length ? items.map(c => contentRow(c, false)).join('') :
-      `<div class="empty" style="margin:0"><b>Noch kein Content-Plan</b><span class="small">Standard: 10 Beiträge von Ankündigung (T-14) bis Recap (T+7). Daten rechnen sich aus dem Release-Datum.</span>${team ? `<button class="pill sun" data-act="contenttemplate" data-id="${esc(r.id)}">Standard-Plan anlegen</button>` : ''}</div>`}</div>`;
+      `<div class="empty" style="margin:0"><b>Noch kein Content-Plan</b><span class="small">${team ? 'Standard: 10 Beiträge von Ankündigung (T-14) bis Recap (T+7). Daten rechnen sich aus dem Release-Datum.' : 'Über „Beitrag“ trägst du eigene Posts, Reels und TikToks ein – das Team sieht sie sofort.'}</span>${team ? `<button class="pill sun" data-act="contenttemplate" data-id="${esc(r.id)}">Standard-Plan anlegen</button>` : ''}</div>`}</div>`;
 }
 
 /* ---------- Musikvideo & Kooperation (am Release) ---------- */
@@ -978,21 +978,23 @@ function vContent(c){
 }
 
 function sheetContent(rid, id){
-  const x = id ? S.content[id] : {release:rid, kind:'Post', channel:'Instagram', status:'Idee', owner:'N', date: S.releases[rid]?.date || ''};
+  const isArtist = !!lockedArtist;
+  const x = id ? S.content[id] : {release:rid, kind:'Post', channel:'Instagram', status:'Idee', owner: isArtist ? 'A' : 'N', date: S.releases[rid]?.date || ''};
   const r = S.releases[x.release];
   const fields = `${F('title','TITEL',x.title||'','text','placeholder="Snippet als Reel"')}
     <div class="grid2">${Sel('kind','ART',CKINDS,x.kind)}${Sel('channel','KANAL',CCHANNELS,x.channel)}</div>
     <div class="grid2">${F('date','DATUM',x.date||'','date')}${Sel('status','STATUS',CSTATUS,x.status)}</div>
     ${Sel('owner','ZUSTÄNDIG',Object.entries(OWNERS),x.owner||'N')}
-    ${HelpChips(x)}
+    ${isArtist ? '' : HelpChips(x)}
     ${F('link','DATEI ODER ENTWURF (DROPBOX-LINK)',x.link||'','url','placeholder="https://www.dropbox.com/…"')}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(x.note||'')}</textarea></div>
     ${x.link ? `<a class="small" href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener" style="font-weight:600;color:var(--sun)">DATEI ÖFFNEN →</a>` : ''}`;
-  const extra = id ? `<button class="btn danger" type="button" id="delContent" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '';
+  const canDel = id && (!isArtist || x.byId === me);
+  const extra = canDel ? `<button class="btn danger" type="button" id="delContent" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '';
   sheet(id ? 'Beitrag bearbeiten' : `Neuer Beitrag · ${relName(r)}`, fields, async (fd, f) => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
-    const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, helpers:readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
-    return (id ? await put('content', id, doc) : await put('content', uid('c'), {...doc, release:r.id, artist:r.artist}, false)) ? undefined : false;
+    const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, helpers: isArtist ? (x.helpers||[]) : readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
+    return (id ? await put('content', id, doc) : await put('content', uid('c'), {...doc, release:r.id, artist:r.artist, byId: me || '', by: account?.name || ''}, false)) ? undefined : false;
   }, extra);
   const d = $('#delContent');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('content', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
@@ -1737,7 +1739,7 @@ async function act(a, id){
   if(a === 'interest') return toggleInterest(id);
   if(a === 'noop') return;
   if(a === 'addcontent') return sheetContent(id);
-  if(a === 'editcontent'){ if(isPreview() || lockedArtist){ const x = S.content[id]; if(x?.link) window.open(safeUrl(x.link), '_blank', 'noopener'); return; } return sheetContent(null, id); }
+  if(a === 'editcontent'){ if(isPreview() && !lockedArtist){ const x = S.content[id]; if(x?.link) window.open(safeUrl(x.link), '_blank', 'noopener'); return; } return sheetContent(null, id); }
   if(a === 'contenttemplate') return contentTemplate(id);
   if(a === 'cfilter') return tab('content', {f:id});
   if(a === 'addstudio') return sheetStudio(id);
@@ -2041,7 +2043,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121815';
+const APP_VERSION = '202611121830';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
