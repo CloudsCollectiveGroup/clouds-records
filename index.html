@@ -1373,6 +1373,7 @@ function vPin(c){
   return `${cloudSvg}<div class="topbar"><span class="brand">CLOUDS RECORDS</span><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">${k ? (c.k && c.k !== myKey() ? 'ANSICHT VON ' + esc(ownerName(k).toUpperCase()) : 'ALLES, WAS BEI DIR LIEGT · ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${pick}
+    ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
     ${sec('Überfällig', over, true)}${sec('Diese Woche', week)}${sec('Später', later)}
@@ -1396,6 +1397,32 @@ function sheetNote(preTo){
     if(ok) toast('Angepinnt bei ' + to.map(x => ownerName(x)).join(', '));
     return ok ? undefined : false;
   });
+}
+/* ---------- Push-Mitteilungen ---------- */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let pushOn = false;
+async function pushState(){ try{ if(!pushSupported()) return; const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); pushOn = !!sub && Notification.permission === 'granted'; }catch(_){} }
+function pushBanner(){
+  if(pushOn) return '';
+  if(isIOS && !isStandalone()) return `<div class="vrow" style="margin:14px 16px 0;align-items:flex-start;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="stack" style="gap:4px"><b>Mitteilungen aufs Handy</b><span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">Erst in Safari unten auf „Teilen“ → „Zum Home-Bildschirm“, dann die App von dort öffnen. Danach erscheint hier der Knopf zum Aktivieren.</span></span></div>`;
+  if(!pushSupported() || Notification.permission === 'denied') return '';
+  return `<div class="vrow" style="margin:14px 16px 0;border-color:rgba(212,175,55,.35);background:var(--sun-bg)"><span class="stack" style="flex:1;gap:2px"><b>Mitteilungen aktivieren</b><span class="small">NEUE NACHRICHTEN, ANFRAGEN, AUFGABEN</span></span><button class="pill sun" data-act="pushon" style="min-height:36px;flex:none">Aktivieren</button></div>`;
+}
+const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function pushEnable(){
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){ toast('Mitteilungen wurden nicht erlaubt'); return; }
+    const {data: key, error} = await sb.rpc('push_public_key');
+    if(error || !key){ toast('Mitteilungen werden gerade noch eingerichtet – bitte später erneut'); return; }
+    const reg = await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey: b64u(key)});
+    const {error: e2} = await sb.rpc('push_subscribe', {p_sub: sub.toJSON(), p_ua: navigator.userAgent.slice(0,120)});
+    if(e2){ toast('Anmeldung fehlgeschlagen: ' + e2.message); return; }
+    pushOn = true; toast('Mitteilungen sind an'); render();
+  }catch(e){ toast('Mitteilungen nicht möglich: ' + (e.message || e)); }
 }
 /* ---------- Artist: Pinnwand ---------- */
 function vArtistPin(c){
@@ -1429,6 +1456,7 @@ function vArtistPin(c){
   const empty = !notes.length && !tasks.length && !studio.length && !shoots.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand">CLOUDS RECORDS</span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div></div>
+    ${own ? pushBanner() : ''}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
     ${sec('Studio', studio, x => studioRow(x, false))}
@@ -1686,6 +1714,7 @@ async function act(a, id){
   if(a === 'pcfilter'){ const [f, pid] = id.split('|'); return tab('pcontent', {id:pid, f}); }
   if(a === 'fav'){ const b = S.beats?.[id]; if(!b || !me) return; const f = {...favsOf(b)}; if(f[me]) delete f[me]; else f[me] = account?.name || 'Team'; await put('beats', id, {favs:f}); return; }
   if(a === 'addnote') return sheetNote();
+  if(a === 'pushon') return pushEnable();
   if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
   if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
   if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
@@ -1984,6 +2013,7 @@ async function boot(session){
   db = makeDb(sb);
   dbState = 'on';
   $('#login').hidden = true;
+  if(pushSupported()) navigator.serviceWorker.register('sw.js').then(() => pushState()).then(() => render()).catch(() => {});
   if(lockedArtist){ stack.length = 0; stack.push({r:'artiststart', id: lockedArtist, preview: lockedArtist}); }
   else if(mem.role === 'producer' && mem.person){ stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
@@ -2009,7 +2039,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121730';
+const APP_VERSION = '202611121800';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
