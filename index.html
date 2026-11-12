@@ -821,6 +821,9 @@ function vRelease(c){
     </div>
     ${contentSection(r)}
     ${videoSection(r)}
+    ${(() => { const team = !isPreview(), sh = shootsOf(r.artist).filter(x => x.status !== 'Gepostet');
+      return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Reel-Drehtage</h2>${team ? `<button class="pill" data-act="shootnew" data-id="${esc(r.artist)}">${icon.plus} Drehtag</button>` : ''}</div>
+      <div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(r.artist, x)).join('') || '<span class="small">Ein Tag, viele Reels (Instagram, TikTok, YouTube Shorts) – wie ein Musikvideo komplett planen.</span>'}</div>` : ''; })()}
     ${coopSection(r)}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
@@ -916,7 +919,7 @@ const isShoot = k => String(k||'').startsWith('S~');
 const shootKey = (pid, sid) => `S~${pid}~${sid}`;
 function planCtx(k){
   if(isShoot(k)){ const [, pid, sid] = k.split('~'); const p = person(pid); const v = (p?.shoots||[]).find(x => x.id === sid);
-    return {shoot:true, pid, sid, p, v, artist:pid, rel:'', chat:`shoot:${pid}:${sid}`, back:p?.name || 'Zurück', label:'CONTENT-DREHTAG · ' + (p?.name||'').toUpperCase(), title:v?.title || 'Content-Drehtag', stages:SSTAGES, noun:'Drehtag'}; }
+    return {shoot:true, pid, sid, p, v, artist:pid, rel:'', chat:`shoot:${pid}:${sid}`, back:p?.name || 'Zurück', label:'REEL-DREHTAG · ' + (p?.name||'').toUpperCase(), title:v?.title || 'Reel-Drehtag', stages:SSTAGES, noun:'Drehtag'}; }
   const r = S.releases[k];
   return {shoot:false, r, v:r?.video, artist:r?.artist, p:person(r?.artist), rel:k, chat:'video:' + k, back:relName(r), label:'MUSIKVIDEO · ' + (r ? relTitle(r).toUpperCase() : ''), title:r?.video?.title || r?.title || 'Musikvideo', stages:VSTAGES, noun:'Musikvideo'};
 }
@@ -1387,7 +1390,7 @@ function vArtistStart(c){
       <div class="row" style="flex-wrap:wrap"><button class="pill sun" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill" style="background:transparent;color:#fff;border-color:#fff" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>` : ''}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">${team ? 'Aufgaben' : 'Deine Aufgaben'}</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>
-    ${(() => { const sh = shootsOf(p.id).filter(x => !x.date || x.date >= todayIso() || x.status !== 'Gepostet'); return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Content-Drehtage</h2>${team ? `<button class="pill" data-act="shootnew" data-id="${esc(p.id)}">${icon.plus} Drehtag</button>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(p.id, x)).join('') || '<span class="small">Noch kein Content-Drehtag. Ein Tag, viele Reels – hier komplett planen.</span>'}</div>` : ''; })()}
+    ${(() => { const sh = shootsOf(p.id).filter(x => !x.date || x.date >= todayIso() || x.status !== 'Gepostet'); return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Reel-Drehtage</h2>${team ? `<button class="pill" data-act="shootnew" data-id="${esc(p.id)}">${icon.plus} Drehtag</button>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(p.id, x)).join('') || '<span class="small">Noch kein Content-Drehtag. Ein Tag, viele Reels – hier komplett planen.</span>'}</div>` : ''; })()}
     <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio</h2><button class="pill" data-act="addstudioartist" data-id="${esc(p.id)}">${icon.plus} Anfragen</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${studioOf(p.id).filter(x => x.status !== 'Abgelehnt' || x.date >= todayIso()).slice(-4).map(x => studioRow(x, false)).join('') || '<span class="small">Keine Studio-Anfragen. Über „Anfragen“ einen Slot bei CloudStudios wünschen.</span>'}</div>
     ${(() => { const rs = recsOf(p.id).filter(x => x.status !== 'Übernommen').slice(0,3); return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Recordings</h2><button class="pill" data-act="addrec" data-id="${esc(p.id)}">${icon.plus} Recording</button></div><div class="pad stack" style="gap:8px;padding-top:10px">${rs.map(recRow).join('') || '<span class="small">Noch keine Aufnahmen. Alles, was im Studio entsteht, hier mit Dropbox-Link ablegen.</span>'}${recsOf(p.id).length > 3 ? `<button class="pill" data-go="recordings" data-id="${esc(p.id)}" style="align-self:flex-start">Alle Recordings · ${recsOf(p.id).length}</button>` : ''}</div>`; })()}
@@ -1946,7 +1949,7 @@ async function act(a, id){
   if(a === 'vbase') return sheetVideoBase(id);
   if(a === 'planset') return planSet(id);
   if(a === 'vprops'){ const [k, field] = id.split('|'); return sheetVProps(k, field || 'props'); }
-  if(a === 'shootnew'){ const p = person(id); if(!p) return; const sid = uid('sh'); if(await put('people', id, {shoots:[...(p.shoots||[]), {id:sid, title:'Content-Drehtag', status:'Idee', date:'', reels:[], locations:[], crew:[], props:[], food:[]}]})) go('video', {id: shootKey(id, sid)}); return; }
+  if(a === 'shootnew'){ const p = person(id); if(!p) return; const sid = uid('sh'); if(await put('people', id, {shoots:[...(p.shoots||[]), {id:sid, title:'Reel-Drehtag', status:'Idee', date:'', reels:[], locations:[], crew:[], props:[], food:[]}]})) go('video', {id: shootKey(id, sid)}); return; }
   if(a === 'vadd'){ const [rid, kind] = id.split('|'); return sheetVItem(rid, kind); }
   if(a === 'vedit'){ const [rid, kind, i] = id.split('|'); return sheetVItem(rid, kind, +i); }
   if(a === 'vstage'){ const [k, st] = id.split('|'); return planSave(k, {status: st}); }
@@ -2252,7 +2255,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611122010';
+const APP_VERSION = '202611122020';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
