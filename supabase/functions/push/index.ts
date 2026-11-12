@@ -60,11 +60,27 @@ Deno.serve(async (req) => {
     for (const x of (d.checks || [])) if (x.o && !x.d && !before.has(`${x.t}|${x.o}`))
       out.push({ keys: [who(x.o)], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
   }
+  // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
+  const extraUsers: string[] = [];
+  if (col === "chat" && op === "INSERT") {
+    const [kind, rid] = String(d.ref || "").split(":");
+    const keys = new Set<string>(); let title = "Karte";
+    if (kind === "tasks" || kind === "content") {
+      const { data: card } = await sb.from("docs").select("data").eq("col", kind).eq("id", rid).maybeSingle();
+      const c: any = card?.data || {};
+      title = c.title || c.kind || title;
+      for (const k of [c.owner, ...(c.helpers || []), ...((c.checks || []).map((x: any) => x.o))]) if (k) keys.add(k === "A" ? (c.artist || d.artist) : k);
+    } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
+    keys.delete("T");
+    const { data: prev } = await sb.from("docs").select("data").eq("col", "chat").eq("data->>ref", d.ref);
+    (prev || []).forEach((m: any) => { if (m.data?.byId) extraUsers.push(m.data.byId); });
+    out.push({ keys: [...keys], title: `${d.by || "Jemand"} · ${title}`, body: String(d.text || "").slice(0, 160), tag: "chat-" + d.ref });
+  }
   if (!out.length) return new Response("nichts");
 
   let sent = 0;
   for (const m of out) {
-    const users = (await usersFor(m.keys)).filter(u => u !== by);
+    const users = [...new Set([...(await usersFor(m.keys)), ...(m.tag.startsWith("chat-") ? extraUsers : [])])].filter(u => u !== by && u !== d.byId);
     if (!users.length) continue;
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").in("user_id", users);
     for (const s of subs || []) {

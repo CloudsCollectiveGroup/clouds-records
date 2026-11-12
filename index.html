@@ -281,6 +281,7 @@ const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTE
   <button class="pill" type="button" id="chkAdd" style="margin-top:8px;min-height:34px">${icon.plus} Punkt</button></div>`;
 const CHK_OWNERS = () => [['','Wer? (optional)'],['A','Artist'],['P',ownerName('P')],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben']];
 const chkRow = (c, i) => `<div class="chkrow" style="display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>
+  <div class="row" style="gap:6px;margin-left:28px;width:calc(100% - 70px)"><input name="chk_l" type="url" value="${esc(c.l||'')}" placeholder="Link (optional), z. B. Dropbox" style="flex:1;min-width:0;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:13px">${safeUrl(c.l) ? `<a href="${esc(c.l)}" target="_blank" rel="noopener" class="small" style="color:var(--sun);font-weight:700;flex:none;text-decoration:none">ÖFFNEN</a>` : ''}</div>
   <select name="chk_o" aria-label="Zuständig für diesen Punkt" style="margin-left:28px;width:calc(100% - 70px);min-height:34px;padding:4px 30px 4px 10px;font-size:13px;border-radius:10px;${c.o ? 'color:var(--sun);border-color:rgba(212,175,55,.45)' : 'color:var(--mute)'}">${CHK_OWNERS().map(([v,l]) => `<option value="${v}" ${v === (c.o||'') ? 'selected' : ''}>${v ? '→ ' + esc(l) : esc(l)}</option>`).join('')}</select></div>`;
 function bindChecks(form){
   const list = form.querySelector('#chkList'); if(!list) return;
@@ -288,7 +289,7 @@ function bindChecks(form){
   list.querySelectorAll('.chkrow').forEach(wire);
   form.querySelector('#chkAdd').onclick = () => { list.insertAdjacentHTML('beforeend', chkRow({t:'', d:false})); const r = list.lastElementChild; wire(r); r.querySelector('input[name=chk_t]').focus(); };
 }
-const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => { const o = r.querySelector('select[name=chk_o]')?.value || ''; return {t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked, ...(o ? {o} : {})}; }).filter(c => c.t);
+const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => { const o = r.querySelector('select[name=chk_o]')?.value || '', l = safeUrl((r.querySelector('input[name=chk_l]')?.value || '').trim()); return {t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked, ...(o ? {o} : {}), ...(l ? {l} : {})}; }).filter(c => c.t);
 const readHelpers = (form, owner) => [...form.querySelectorAll('input[name=helpers]:checked')].map(i => i.value).filter(k => k !== owner);
 const OWNER_COL = {A:null, P:'#D4AF37', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
@@ -311,7 +312,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -758,8 +759,9 @@ function vRelease(c){
     const ownerTxt = (t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '') + checkTxt(t);
     const late = !ok && due && daysTo(due) < 0;
     const cl = checksOf(t);
-    const chkTxt = cl.length ? `<span style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:4px">${cl.map(c => `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;${c.d ? 'text-decoration:line-through;color:var(--mute)' : 'color:var(--ink2)'}">${c.d ? '☑' : '☐'} ${esc(c.t)}${c.o ? ` <span style="color:var(--sun)">→ ${esc(c.o === 'A' ? p.name : ownerName(c.o))}</span>` : ''}</span>`).join('')}</span>` : '';
-    const noteTxt = (t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '') + chkTxt;
+    const chkTxt = cl.length ? `<span style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:4px">${cl.map(c => `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;${c.d ? 'text-decoration:line-through;color:var(--mute)' : 'color:var(--ink2)'}">${c.d ? '☑' : '☐'} ${esc(c.t)}${c.o ? ` <span style="color:var(--sun)">→ ${esc(c.o === 'A' ? p.name : ownerName(c.o))}</span>` : ''}${safeUrl(c.l) ? ' <span style="color:var(--sun)">🔗</span>' : ''}</span>`).join('')}</span>` : '';
+    const nChat = chatOf('tasks:' + t.id).length;
+    const noteTxt = (t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '') + chkTxt + (nChat ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:600">💬 ${nChat} ${nChat === 1 ? 'Nachricht' : 'Nachrichten'}</span>` : '');
     return `<div class="step">
       <span class="ph" style="${isCur?`color:${T.c}`:''}">${esc(t.phase)}</span>
       <span class="rail">${isRel ? `<button class="dot ${ok?'ok':''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${esc(t.title)} ${ok?'zurücksetzen':'abhaken'}" style="border-radius:4px;transform:rotate(45deg);${ok?'':`background:${T.c}`}">${ok?'<span style="transform:rotate(-45deg);display:flex">'+icon.check+'</span>':''}</button>`
@@ -820,7 +822,7 @@ function contentRow(c, withArtist){
     <span class="play" style="flex-direction:column;gap:0;font-family:var(--mono);font-size:11px;font-weight:600;line-height:1.2;text-align:center">${c.date ? `<span>${parse(c.date).getDate()}.</span><span style="font-size:9px;color:var(--mute)">${parse(c.date).toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>` : '—'}</span>
     <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(c.title || c.kind)}</b>
       <span class="small">${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' + esc(relName(r).toUpperCase()) + ' · ' : ''}${esc((c.kind||'').toUpperCase())} · ${esc((c.channel||'').toUpperCase())}${d !== null && d < 0 && c.status !== 'Live' ? ' · <span style="color:var(--danger)">ÜBERFÄLLIG</span>' : ''}</span></span>
-    <span class="status" style="color:${CSTATUS_COL[c.status]||'var(--mute)'}">● ${esc((c.status||'Idee').toUpperCase())}</span></button>`;
+    <span class="stack" style="gap:4px;align-items:flex-end;flex:none"><span class="status" style="color:${CSTATUS_COL[c.status]||'var(--mute)'}">● ${esc((c.status||'Idee').toUpperCase())}</span>${chatOf('content:' + c.id).length ? `<span class="small" style="color:var(--sun)">💬 ${chatOf('content:' + c.id).length}</span>` : ''}</span></button>`;
 }
 function contentSection(r){
   const items = contentOf(r.id), team = !isPreview(), canAdd = team || !!lockedArtist;
@@ -829,6 +831,49 @@ function contentSection(r){
       `<div class="empty" style="margin:0"><b>Noch kein Content-Plan</b><span class="small">${team ? 'Standard: 10 Beiträge von Ankündigung (T-14) bis Recap (T+7). Daten rechnen sich aus dem Release-Datum.' : 'Über „Beitrag“ trägst du eigene Posts, Reels und TikToks ein – das Team sieht sie sofort.'}</span>${team ? `<button class="pill sun" data-act="contenttemplate" data-id="${esc(r.id)}">Standard-Plan anlegen</button>` : ''}</div>`}</div>`;
 }
 
+/* ---------- Chat pro Karte (Fahrplan-Schritt, Content-Beitrag, Musikvideo) ---------- */
+const chatOf = ref => vals(S.chat||{}).filter(m => m.ref === ref).sort((a,b) => (a.at||'').localeCompare(b.at||''));
+const chatMsgs = ref => { const ms = chatOf(ref); return ms.length ? ms.map(m => { const mine = m.byId && m.byId === me;
+    return `<div style="display:flex;flex-direction:column;align-items:${mine ? 'flex-end' : 'flex-start'};gap:2px"><span class="small" style="font-size:10px">${esc((m.by||'').toUpperCase())} · ${m.at ? new Date(m.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+      <span style="max-width:85%;padding:8px 12px;border-radius:14px;font-size:15px;line-height:1.4;white-space:pre-line;word-break:break-word;${mine ? 'background:var(--sun);color:var(--on-sun)' : 'background:var(--raise);color:var(--ink)'}">${esc(m.text)}${safeUrl(m.link) ? `<br><a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:inherit;font-weight:700">↗ Link öffnen</a>` : ''}</span></div>`; }).join('')
+  : '<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">Noch keine Nachrichten. Fragen, Feedback und Absprachen zu genau dieser Karte – alle Beteiligten sehen es.</span>'; };
+const chatBox = (ref, rid) => `<div class="field" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px"><span class="flabel">CHAT ZU DIESER KARTE</span>
+  <div class="stack" data-chatlist="${esc(ref)}" style="gap:10px;margin:8px 0 10px">${chatMsgs(ref)}</div>
+  <textarea data-chattext rows="2" placeholder="Nachricht schreiben … (Links werden erkannt)" style="min-height:70px"></textarea>
+  <button type="button" class="pill sun" data-chatsend="${esc(ref)}" data-rel="${esc(rid||'')}" style="align-self:flex-end;margin-top:8px">Senden</button></div>`;
+function bindChats(root){
+  root.querySelectorAll('[data-chatsend]').forEach(btn => btn.onclick = async e => {
+    e.preventDefault();
+    const box = btn.closest('.field'), ta = box.querySelector('[data-chattext]'), txt = (ta.value||'').trim(); if(!txt) return;
+    const r = S.releases[btn.dataset.rel], link = (txt.match(/https:\/\/\S+/) || [''])[0];
+    btn.disabled = true;
+    const ok = await put('chat', uid('m'), {ref: btn.dataset.chatsend, release: r?.id || '', artist: r?.artist || '', text: txt, link: safeUrl(link), by: account?.name || 'Team', byId: me || '', at: new Date().toISOString()}, false);
+    btn.disabled = false; if(ok){ ta.value = ''; refreshChats(); }
+  });
+}
+function refreshChats(){ document.querySelectorAll('[data-chatlist]').forEach(el => { el.innerHTML = chatMsgs(el.dataset.chatlist); }); }
+/* Lesende Ansicht eines Fahrplan-Schritts (Artist bzw. Artist-Sicht): Infos, Checkliste mit Links, Chat */
+function sheetTaskView(id){
+  const t = S.tasks[id]; if(!t) return; const r = S.releases[t.release], p = person(r?.artist);
+  const own = t.owner === 'A' ? (p?.name || 'Artist') : ownerName(t.owner), due = taskDue(t);
+  const checks = checksOf(t).map((c, i) => `<div class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
+      ${c.o === 'A' && lockedArtist ? `<button class="dot ${c.d ? 'ok' : ''}" data-chkview="${esc(t.id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(c.t)}</span>
+      <span class="small">${c.o ? '→ ' + esc((c.o === 'A' ? p?.name : ownerName(c.o)) || '').toUpperCase() : ''}</span></span>
+      ${safeUrl(c.l) ? `<a class="pill" href="${esc(c.l)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗 Öffnen</a>` : ''}</div>`).join('');
+  const root = $('#sheetRoot');
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(t.title)}"><div class="sheet"><div class="grab"></div>
+    <span class="small">${esc(relName(r).toUpperCase())}${r?.title ? ' · ' + esc(r.title.toUpperCase()) : ''} · ${esc(t.phase)}</span>
+    <h2 class="h-sec" style="margin:6px 0 4px">${esc(t.title)}</h2>
+    <span class="small">${esc(own.toUpperCase())}${due ? ' · BIS ' + fmt(due) : ''}${t.done ? ' · ERLEDIGT' : ''}</span>
+    ${t.note ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(t.note)}</div>` : ''}
+    ${checks ? `<div class="field" style="margin-top:14px"><span class="flabel">CHECKLISTE</span>${checks}</div>` : ''}
+    ${chatBox('tasks:' + t.id, t.release)}
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:6px">Schließen</button></div></div>`;
+  root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  root.querySelectorAll('[data-chkview]').forEach(b => b.onclick = async () => { await act('chktoggle', b.dataset.chkview); sheetTaskView(id); });
+  bindChats(root);
+}
 /* ---------- Musikvideo & Kooperation (am Release) ---------- */
 const saveVideo = (rid, patch) => put('releases', rid, {video: {...(S.releases[rid]?.video || {}), ...patch}});
 function videoSummary(v){
@@ -921,7 +966,8 @@ function vVideo(c){
       <div class="between small"><span>CREW</span><b>${eur((v.crew||[]).reduce((a,x) => a + num(x.cost), 0))}</b></div>
       <div class="between small"><span>SONSTIGES (CATERING, TECHNIK …)</span><b>${eur(num(v.other))}</b></div>
       <div class="between" style="border-top:1px solid var(--line);padding-top:8px;font-weight:700"><span>TATSÄCHLICH</span><span style="color:${over ? 'var(--danger)' : 'var(--ink)'}">${eur(s.cost)}${budget ? ' · ' + (over ? eur(s.cost - budget) + ' DRÜBER' : eur(budget - s.cost) + ' FREI') : ''}</span></div></div>
-    <div class="pad" style="padding-top:28px"><button class="pill dash" style="width:100%;justify-content:center;color:var(--danger)" data-act="vdelete" data-id="${esc(r.id)}">Musikvideo-Planung entfernen</button></div>` : '<div class="pad small" style="padding-top:18px">Plan vom Team · nur lesend.</div>'}`;
+    <div class="pad" style="padding-top:28px"><button class="pill dash" style="width:100%;justify-content:center;color:var(--danger)" data-act="vdelete" data-id="${esc(r.id)}">Musikvideo-Planung entfernen</button></div>` : '<div class="pad small" style="padding-top:18px">Plan vom Team · nur lesend.</div>'}
+    <div class="pad" style="padding-top:8px">${chatBox('video:' + r.id, r.id)}</div>`;
 }
 function sheetVideoBase(rid){
   const r = S.releases[rid], v = r?.video || {};
@@ -990,12 +1036,13 @@ function sheetContent(rid, id){
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(x.note||'')}</textarea></div>
     ${x.link ? `<a class="small" href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener" style="font-weight:600;color:var(--sun)">DATEI ÖFFNEN →</a>` : ''}`;
   const canDel = id && (!isArtist || x.byId === me);
-  const extra = canDel ? `<button class="btn danger" type="button" id="delContent" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '';
+  const extra = (id ? chatBox('content:' + id, x.release) : '') + (canDel ? `<button class="btn danger" type="button" id="delContent" style="width:100%;margin-top:10px">Beitrag löschen</button>` : '');
   sheet(id ? 'Beitrag bearbeiten' : `Neuer Beitrag · ${relName(r)}`, fields, async (fd, f) => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     const doc = {title:(fd.title||'').trim(), kind:fd.kind, channel:fd.channel, date:fd.date||'', status:fd.status, owner:fd.owner, helpers: isArtist ? (x.helpers||[]) : readHelpers(f, fd.owner), link:safeUrl(fd.link), note:(fd.note||'').trim()};
     return (id ? await put('content', id, doc) : await put('content', uid('c'), {...doc, release:r.id, artist:r.artist, byId: me || '', by: account?.name || ''}, false)) ? undefined : false;
   }, extra);
+  bindChats($('#sheetForm'));
   const d = $('#delContent');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('content', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
@@ -1446,7 +1493,7 @@ function vArtistPin(c){
     return `<div class="vrow" style="align-items:flex-start"><button class="dot" data-act="${sub ? 'chktoggle' : 'toggle'}" data-id="${esc(t.id)}${sub ? '|' + ci : ''}" aria-label="${esc(sub ? c.t : t.title)} abhaken" style="flex:none;margin-top:2px"></button>
       <button data-go="release" data-id="${esc(r.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer"><b style="font-weight:600">${esc(sub ? c.t : t.title)}${fresh(t) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
       <span class="small">${sub ? 'PUNKT AUS „' + esc(t.title.toUpperCase()) + '“ · ' : ''}${esc(relName(r).toUpperCase())}${r.title ? ' · ' + esc(r.title.toUpperCase()) : ''}${sub ? '' : checkTxt(t)}${due ? ' · ' + (due < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(due) + '</b>' : 'BIS ' + fmt(due)) : ''}</span>
-      ${t.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : ''}</button></div>`; };
+      ${t.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : ''}</button>${sub && safeUrl(c.l) ? `<a class="pill" href="${esc(c.l)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗 Link</a>` : ''}<button class="iconbtn ghost" data-act="taskview" data-id="${esc(t.id)}" aria-label="Chat zu ${esc(t.title)}" style="width:34px;height:34px;flex:none">💬</button></div>`; };
   const noteCard = n => `<div class="vrow" style="align-items:flex-start;border-color:rgba(212,175,55,.35);background:var(--sun-bg)">
       <span class="stack" style="flex:1;gap:4px;min-width:0"><span class="small">VON ${esc((n.from||'').toUpperCase())} · ${n.at ? new Date(n.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}${n.due ? ' · BIS ' + fmt(n.due) : ''}${fresh(n) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</span>
       <span style="font-size:15px;line-height:1.4;white-space:pre-line">${esc(n.text)}</span>${safeUrl(n.link) ? `<a class="small" href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">LINK ÖFFNEN →</a>` : ''}</span>
@@ -1673,6 +1720,7 @@ function bind(){
   const v = $('#view');
   v.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const c = cur(); go(el.dataset.go, {id:el.dataset.id, preview:c.preview}); }));
   v.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); act(el.dataset.act, el.dataset.id); }));
+  bindChats(v);
   v.querySelectorAll('form[data-form="comment"]').forEach(f => f.addEventListener('submit', async e => {
     e.preventDefault();
     const text = f.text.value.trim(); if(!text) return;
@@ -1696,7 +1744,8 @@ async function act(a, id){
   if(a === 'addperson') return sheetPerson();
   if(a === 'editperson') return sheetPerson(id);
   if(a === 'editrel') return sheetRelease(id);
-  if(a === 'edittask') return isPreview() ? null : sheetTask(S.tasks[id]?.release, id);
+  if(a === 'edittask') return isPreview() ? sheetTaskView(id) : sheetTask(S.tasks[id]?.release, id);
+  if(a === 'taskview') return sheetTaskView(id);
   if(a === 'addtask') return sheetTask(id);
   if(a === 'addtrack') return sheetTrack(id);
   if(a === 'edittrack') return sheetTrack(S.tracks[id]?.release, id);
@@ -1883,13 +1932,14 @@ function sheetTask(rid, id){
     ${F('due','FÄLLIG (LEER = AUS RELEASE-DATUM)',t.due||'','date')}
     ${CheckList(t)}
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="4" placeholder="z. B. Wünsche des Artists, Referenzen, Absprachen">${esc(t.note||'')}</textarea></div>`;
-  const extra = id ? `<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
+  const extra = id ? `${chatBox('tasks:' + id, t.release)}<button class="btn danger" type="button" id="delTask" style="width:100%;margin-top:10px">Schritt löschen</button>` : '';
   const form = sheet(id ? 'Schritt bearbeiten' : 'Neuer Schritt', fields, async (fd, f) => {
     const doc = {title:fd.title.trim(), phase:fd.phase, owner:fd.owner, helpers:readHelpers(f, fd.owner), due:fd.due||'', note:(fd.note||'').trim(), checks:readChecks(f)};
     if(!doc.title) return false;
     if(id) return await put('tasks', id, doc) ? undefined : false;
     return await put('tasks', uid('t'), {...doc, release:rid, artist:S.releases[rid].artist, done:false, order:tasksOf(rid).length}, false) ? undefined : false;
   }, extra);
+  bindChats(form);
   const d = form.querySelector('#delTask');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('tasks', id); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
@@ -2022,7 +2072,7 @@ async function boot(session){
   else if(mem.role === 'producer' && mem.person){ stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
     const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
-    S[c] = o; loaded.add(c); render();
+    S[c] = o; loaded.add(c); render(); if(c === 'chat') refreshChats();
   }, err => { toast('Daten konnten nicht geladen werden: ' + err.message); }));
   render();
 }
@@ -2043,7 +2093,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611121830';
+const APP_VERSION = '202611121900';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
