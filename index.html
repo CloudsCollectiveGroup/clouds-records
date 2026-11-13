@@ -2689,6 +2689,18 @@ function artistStrip(){
     <div class="pad" style="padding-top:10px"><div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory">${as.map(p => { const r = currentRelease(p.id) || nextPlanned(p.id), ph = photoOf(p);
       return `<button data-go="artist" data-id="${esc(p.id)}" style="flex:none;width:112px;scroll-snap-align:start;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer"><span style="display:block;width:112px;height:112px;border-radius:18px;overflow:hidden;background:var(--card) center/cover no-repeat${ph ? ` url('${esc(ph)}')` : ''};border:1px solid var(--line)"></span><b style="display:block;margin-top:6px;font-size:14px">${esc(p.name)}</b><span class="small" style="display:block">${r ? esc(relTitle(r).toUpperCase()) + ' · ' + esc((r.status||'').toUpperCase()) : 'KEIN RELEASE GEPLANT'}</span></button>`; }).join('')}</div></div>`;
 }
+/* Für Cem & Thorben: was bei den anderen überfällig oder in 7 Tagen fällig ist */
+function teamTasksBlock(k){
+  const t0 = todayIso(), wk = isoAdd(t0, 7), out = [];
+  const whoT = t => [t.owner, ...helpersOf(t)].filter(Boolean).map(o => o === 'A' ? (person(S.releases[t.release]?.artist || t.artist)?.name || 'Artist') : ownerName(o)).join(' + ');
+  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)){ const r = S.releases[t.release], d = taskDue(t); if(r && d && d <= wk) out.push({d, t:t.title, sub:whoT(t) + ' · ' + (person(r.artist)?.name||'') + ' · ' + relTitle(r), go:{go:['release', r.id]}}); }
+  for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done && !assigned(x, k) && x.due && x.due <= wk) out.push({d:x.due, t:x.title, sub:whoT(x) + (x.artist ? ' · ' + (person(x.artist)?.name||'') : ''), go:{act:['todoview', x.id]}});
+  out.sort((a,b) => a.d.localeCompare(b.d));
+  const over = out.filter(x => x.d < t0).length;
+  const row = x => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(x.go))}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(x.t)}</b><span class="small">${esc(x.sub.toUpperCase())} · ${x.d < t0 ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.d) + '</b>' : 'BIS ' + fmt(x.d)}</span></span>${icon.chev}</button>`;
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Team-Aufgaben</h2><span class="small">${over ? '<b style="color:var(--danger)">' + over + ' ÜBERFÄLLIG</b> · ' : ''}${out.length} BIS ${fmt(wk)}</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${out.slice(0, 12).map(row).join('') || '<span class="small">Im Team ist nichts überfällig oder diese Woche fällig.</span>'}${out.length > 12 ? `<span class="small">+ ${out.length - 12} weitere</span>` : ''}</div>`;
+}
 function vPin(c){
   const k = c.k || myKey();
   const since = SEEN.__pin || '';
@@ -2751,6 +2763,7 @@ function vPin(c){
     ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
     ${k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-big" style="font-size:30px">${ownView ? 'Meine Aufgaben' : 'Aufgaben'}</h2><span class="small">${items.length} OFFEN</span></div>${items.length ? '' : `<div class="pad small" style="padding-top:8px">${ownView ? 'Gerade ist dir nichts zugeordnet.' : 'Nichts zugeordnet.'}</div>`}` : ''}
     <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
+    ${ownView && ['C','TH'].includes(k) ? teamTasksBlock(k) : ''}
     ${pick}
     ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button>${ownView && !myProducer ? '<button class="pill" data-act="reqnew">🛒 Kaufanfrage</button><button class="pill" data-act="tech">🛠 Technik</button>' : ''}</div>` : ''}
     ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${isAdmin() && !viewAs ? '<button class="pill" data-act="viewas">👁 Team-Sicht</button>' : ''}${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
@@ -3795,7 +3808,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140720';
+const APP_VERSION = '202611140740';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
