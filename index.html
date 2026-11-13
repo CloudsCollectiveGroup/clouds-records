@@ -2402,7 +2402,8 @@ function vArtistStart(c){
   const r = currentRelease(p.id) || nextPlanned(p.id);
   const teamMode = !isPreview();
   const allTasks = vals(S.tasks).filter(t => S.releases[t.release]?.artist === p.id && (teamMode || t.owner === 'A' || t.owner === 'T'));
-  const next = r ? tasksOf(r.id).find(t => !t.done && (!isPreview() || t.owner === 'A')) : null;
+  const openT = r ? tasksOf(r.id).filter(t => !t.done && (!isPreview() || t.owner === 'A' || helpersOf(t).includes('A'))) : [];
+  const nexts = openT.filter(t => t.phase === openT[0]?.phase), next = nexts[0] || null;
   const week = allTasks.filter(t => S.releases[t.release] === r).slice(0,5);
   const yr = contractYear(p);
   const team = !isPreview();
@@ -2419,7 +2420,8 @@ function vArtistStart(c){
     ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
     ${(() => { const st = rcState(r), n = st.filter(x => x.ok).length; return `<div class="nextcard">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700"><span class="sw" style="background:${TYPE[r.type].c};margin-right:6px"></span>${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="mono" style="font-size:11px;font-weight:700">${fmt(r.date)}</span>`:''}</div>
-      <span style="font-family:var(--head);font-size:30px;line-height:1.05;text-transform:uppercase">${esc(next?.title || (team ? 'Noch kein Fahrplan' : 'Fahrplan folgt vom Team'))}</span>
+      ${nexts.length > 1 ? `<div class="stack" style="gap:10px"><span class="mono" style="font-size:11px;font-weight:700">LÄUFT PARALLEL · ${esc(next.phase)} · ${nexts.length} PUNKTE</span>${nexts.map(t => `<button data-act="taskview" data-id="${esc(t.id)}" class="stack" style="gap:2px;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer"><span style="font-family:var(--head);font-size:22px;line-height:1.05;text-transform:uppercase">${esc(t.title)}</span><span class="mono" style="font-size:11px;font-weight:700;opacity:.75">${taskDue(t) ? (taskDue(t) < todayIso() ? 'ÜBERFÄLLIG · ' : 'BIS ') + fmt(taskDue(t)) : 'OHNE FRIST'}${team ? ' · ' + esc(ownerName(t.owner).toUpperCase()) : ''}</span></button>`).join('')}</div>`
+        : `<span style="font-family:var(--head);font-size:30px;line-height:1.05;text-transform:uppercase">${esc(next?.title || (team ? 'Noch kein Fahrplan' : 'Fahrplan folgt vom Team'))}</span>${next && taskDue(next) ? `<span class="mono" style="font-size:11px;font-weight:700;opacity:.75">${taskDue(next) < todayIso() ? 'ÜBERFÄLLIG · ' : 'BIS '}${fmt(taskDue(next))}</span>` : ''}`}
       <div><div class="between mono" style="font-size:11px;font-weight:700;margin-bottom:6px"><span>RELEASE-CHECK</span><span>${n}/${st.length}</span></div><div class="tc-bar"><i style="width:${Math.round(n/st.length*100)}%"></i></div></div>
       <div class="row" style="flex-wrap:wrap"><button class="pill navy" data-go="release" data-id="${esc(r.id)}">Zum Release</button>${tracksOf(r.id)[0] ? `<button class="pill nvline" data-go="track" data-id="${esc(tracksOf(r.id)[0].id)}">${icon.up} Upload</button>` : ''}</div></div>`; })()}` : ''}
     ${team ? `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">${team ? 'Aufgaben' : 'Deine Aufgaben'}</h2><span class="small">${week.filter(t=>t.done).length} / ${week.length} ERLEDIGT</span></div>
@@ -3792,7 +3794,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140640';
+const APP_VERSION = '202611140700';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
