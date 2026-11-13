@@ -1091,6 +1091,7 @@ function planTasks(){
   for(const g of vals(S.gigs||{})) if(gigOpen(g) && g.status !== 'Gespielt' && g.status !== 'Abgerechnet'){
     const lbl = gigNames(g) + ' · Live · ' + (g.title || 'Auftritt');
     scan(gigKey(g.id), g, g.artist, lbl, g.date || '');
+    (g.crew||[]).forEach((c, i) => { if(c.member && (c.status||'Angefragt') !== 'Abgesagt' && (!g.date || g.date >= todayIso())) out.push({key: gigKey(g.id), kind:'crew', i, o: c.member, title: 'Crew: ' + (c.role || 'Einsatz') + ' · ' + (g.title || 'Auftritt'), sub: lbl + (g.stage ? ' · Stage ' + g.stage : ''), due: g.date || ''}); });
     (g.checks||[]).forEach((c, i) => { if(!c.d) chkOwners(c).forEach(o => out.push({key: gigKey(g.id), kind:'checks', i, o: o === 'A' ? g.artist : o, title: c.t, sub: lbl, due: g.date || ''})); });
   }
   return out;
@@ -1117,6 +1118,7 @@ const gigOpen = g => g && g.req !== 'abgelehnt' && g.status !== 'Abgesagt';
 const gigIn = (g, pid) => !!pid && (g.artist === pid || (g.co||[]).includes(pid));
 const gigCo = g => (g.co||[]).map(id => person(id)).filter(Boolean);
 const gigNames = g => [person(g.artist)?.name, ...gigCo(g).map(p => p.name)].filter(Boolean).join(' + ');
+const crewMembers = v => [['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben'], ...producers().map(p => ['P', p.name + ' (Produzent)'])];  /* Artists laufen über „Gast-Artists“ – die sehen den Auftritt dann auch selbst */
 const gigsOf = pid => vals(S.gigs||{}).filter(g => gigIn(g, pid)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
 const gigFin = gid => (S.gigfin||{})[gid] || {};
 const shootKey = (pid, sid) => `S~${pid}~${sid}`;
@@ -1328,12 +1330,16 @@ function sheetVItem(k, kind, idx){
       ${area('note','NOTIZ',x.note,'Szene, Text, Song-Stelle, Kameraeinstellung')}
       ${x.cid ? '<span class="small" style="display:block;margin-bottom:12px">Steht schon im Content-Plan.</span>' : Sel('toRel','IN DEN CONTENT-PLAN VON …',rels,'')}`; }
   else { title = 'Crew';
-    fields = `<div class="grid2">${Sel('role','ROLLE',P.gig ? GCREW_ROLES : VCREW_ROLES,x.role||(P.gig ? 'DJ' : P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}
-      <div class="grid2">${Sel('status','STATUS',CREW_STATUS,x.status||'Angefragt')}${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name, P.gig ? gigCo(P.v).map(p => [p.id, p.name]) : []),x.o||'')}</div>`; }
+    const mem = P.gig ? crewMembers(P.v) : [];
+    fields = `${P.gig ? Sel('member','AUS UNSEREM TEAM?',[['','Nein – externe Person (Name unten)'], ...mem],x.member||'') : ''}<div class="grid2">${Sel('role','ROLLE',P.gig ? GCREW_ROLES : VCREW_ROLES,x.role||(P.gig ? 'DJ' : P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name', P.gig ? 'NAME (BEI EXTERNEN)' : 'NAME',x.name||'','text', P.gig ? 'placeholder="wird bei Team automatisch gesetzt"' : 'required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}
+      <div class="grid2">${Sel('status','STATUS',CREW_STATUS,x.status||'Angefragt')}${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name, P.gig ? gigCo(P.v).map(p => [p.id, p.name]) : []),x.o||'')}</div>
+      ${P.gig ? `<div class="field"><label for="f-msg">NACHRICHT AN DIE PINNWAND (NUR BEI TEAM, OPTIONAL)</label><textarea id="f-msg" name="msg" rows="2" placeholder="Leer = automatischer Text mit Event, Datum und Rolle"></textarea></div>` : ''}`; }
   const extra = isNew ? '' : `<button class="btn danger" type="button" id="delVItem" style="width:100%;margin-top:10px">${title} löschen</button>`;
   sheet((isNew ? 'Neu: ' : '') + title, fields, async fd => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     const toRel = fd.toRel; delete fd.toRel;
+    const msg = String(fd.msg||'').trim(); delete fd.msg;
+    if(kind === 'crew' && P.gig){ const lbl = (crewMembers(P.v).find(([k]) => k === fd.member) || [])[1]; if(fd.member && lbl) fd.name = lbl.replace(/ \((Produzent|Artist)\)$/, ''); if(!fd.name && !fd.member){ toast('Name oder Teammitglied wählen'); return false; } }
     const doc = {...x}; for(const [kk, val] of Object.entries(fd)) doc[kk] = String(val).trim();
     if(kind === 'reels' && toRel && !doc.cid){
       const r = S.releases[toRel], cid = uid('c');
@@ -1341,7 +1347,12 @@ function sheetVItem(k, kind, idx){
       if(await put('content', cid, {release:toRel, artist:r.artist, title:doc.title, kind:'Reel', channel:'Instagram', date:'', status:st, owner:'N', helpers:[], link:safeUrl(doc.link), note:doc.note||'', byId:me||'', by:account?.name||'', apv:'ok'}, false)){ doc.cid = cid; toast('Im Content-Plan von ' + relName(r) + ' angelegt'); }
     }
     if(isNew) arr.push(doc); else arr[idx] = doc;
-    return await planSave(k, {[kind]: arr}) ? undefined : false;
+    if(!await planSave(k, {[kind]: arr})) return false;
+    if(kind === 'crew' && P.gig && doc.member && (msg || doc.member !== x.member)){ const v = P.v;
+      const text = msg || `Du bist als ${doc.role || 'Crew'} beim Auftritt „${v.title || 'Auftritt'}“ (${gigNames(v)}) eingeplant${v.date ? ' – ' + fmt(v.date) : ''}${v.stage ? ', Stage ' + v.stage : ''}${v.venue ? ', ' + v.venue : ''}.`;
+      await put('notes', uid('n'), {text, to:[doc.member], due: v.date || '', link:'', from:account?.name || 'Team', fromKey: myKey() || '', fromId: me || '', doneBy:[], at:new Date().toISOString(), ref: k}, false);
+      toast('Eingeplant · Nachricht an ' + doc.name + ' geschickt'); }
+    return undefined;
   }, extra);
   const d = $('#delVItem');
   if(d) d.onclick = async () => { if(d.dataset.sure){ arr.splice(idx, 1); await planSave(k, {[kind]: arr}); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
@@ -1426,7 +1437,7 @@ function vGig(c){
   const guestsOk = (v.guests||[]).filter(g => g.status !== 'Abgelehnt'), guestN = guestsOk.reduce((a, g) => a + 1 + (+g.plus||0), 0);
   const guests = (v.guests||[]).map((x,i) => row('guests', i, `${esc(x.name)}${+x.plus ? ' <span class="small">+' + esc(x.plus) + '</span>' : ''}`, `LISTE VON ${esc(forName(x.for))}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}`, `<span class="status" style="color:${GCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`, x.note)).join('');
   const setlist = rs.map((x,i) => row('reels', i, `${i+1}. ${esc(x.title || 'Song')}`, `${x.dur ? esc(x.dur) : 'LÄNGE OFFEN'}${safeUrl(x.link) ? ' · PLAYBACK DA' : ' · PLAYBACK FEHLT'}${who(x)}`, `<span class="status" style="color:${SCOL[x.status]||'var(--mute)'};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span>`, x.note)).join('');
-  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${x.o ? ` · <span style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
+  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name) + (x.member ? ' <span class="small" style="color:var(--sun)">TEAM</span>' : ''), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${x.o ? ` · <span style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
   const checks = field => (v[field]||[]).map((x,i) => canEdit
     ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${K}|${i}|${field}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></button>`
     : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></div>`).join('');
@@ -3051,7 +3062,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131820';
+const APP_VERSION = '202611131840';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
