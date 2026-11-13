@@ -1304,6 +1304,70 @@ async function mwToCredits(rid){
   }
   toast(n ? n + ' Beteiligte übernommen · Anteile im Track eintragen' : 'Alle Mitwirkenden stehen schon in den Credits');
 }
+/* Kaufanfragen (Team, col 'expenses' mit kind 'req'): bis 100 € reicht Cem ODER Thorben, darüber beide; nie selbst genehmigen */
+const REQ_LIMIT = 100;
+const reqApvOf = (x, k) => { const a = x.apv?.[k]; return a && String(a.amt ?? '') === String(x.amt ?? '') ? a : null; };
+const reqNeed = x => CAMP_APPROVERS.map(([k]) => k).filter(k => k !== x.byKey);
+function reqState(x){
+  if(x.status === 'gekauft') return {k:'done', l:'GEKAUFT ✓', c:'var(--album)'};
+  const need = reqNeed(x), recs = need.map(k => reqApvOf(x, k));
+  if(recs.some(a => a?.v === 'no')) return {k:'no', l:'ABGELEHNT', c:'var(--danger)'};
+  const n = recs.filter(a => a?.v === 'ok').length, req = num(x.amt) > REQ_LIMIT ? need.length : Math.min(1, need.length);
+  return n >= req ? {k:'ok', l:'GENEHMIGT · KAUFEN', c:'#39ff88'} : {k:'open', l:'FREIGABE ' + n + '/' + req + (num(x.amt) > REQ_LIMIT ? ' · ÜBER ' + REQ_LIMIT + ' €' : ''), c:'var(--sun)'};
+}
+const reqsOpen = () => vals(S.expenses||{}).filter(x => x.kind === 'req' && x.status !== 'gekauft').sort((a,b) => (b.at||'').localeCompare(a.at||''));
+function reqRow(x){
+  const st = reqState(x);
+  return `<button class="vrow" data-act="reqedit" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;border-color:${st.k === 'open' ? 'rgba(255,204,0,.35)' : 'var(--line)'}"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(x.title || 'Kaufanfrage')}</b><span class="small">VON ${esc((x.by || '').toUpperCase())} · ${esc(expScopeName(x.scope).toUpperCase())}${x.need ? ' · BIS ' + fmt(x.need) : ''}</span><span class="small" style="color:${st.c}">${st.l}</span></span><b style="flex:none">${eur(num(x.amt))}</b></button>`;
+}
+function reqSection(){
+  const rs = reqsOpen();
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kaufanfragen</h2><button class="pill" data-act="reqnew">${icon.plus} Anfrage</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${rs.map(reqRow).join('') || '<span class="small">Firmenkäufe (Equipment, Software, Material …) hier anfragen. Bis ' + REQ_LIMIT + ' € genehmigt Cem oder Thorben, darüber beide. Nach dem Kauf: „Gekauft“ + Beleg-Nr. → landet in den Ausgaben.</span>'}</div>`;
+}
+function sheetReq(id){
+  const x = id ? S.expenses?.[id] : {kind:'req', status:'angefragt', scope:'label', cat:'Equipment'}; if(!x) return;
+  const mk = myKey(), st = reqState(x), mine = !id || x.byKey === mk || x.byId === me, canApv = id && reqNeed(x).includes(mk) && x.status !== 'gekauft';
+  const scopes = [['label','Firma / Label allgemein'], ...artists().map(p => ['a:' + p.id, 'Artist · ' + p.name]), ...producers().map(p => ['p:' + p.id, 'Produzent · ' + p.name])];
+  const apvBox = !id ? `<p class="small" style="margin:-6px 0 14px">Bis ${REQ_LIMIT} € genehmigt Cem oder Thorben, darüber beide. Du bekommst eine Mitteilung.</p>` : `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:8px;margin-bottom:16px;border-color:${st.c}">
+      <div class="between"><span class="flabel">FREIGABE · ${eur(num(x.amt))} · VON ${esc((x.by||'').toUpperCase())}</span><b class="small" style="color:${st.c}">${st.l}</b></div>
+      ${reqNeed(x).map(k => { const a = reqApvOf(x, k), old = x.apv?.[k] && !a; return `<div class="between small"><span>${esc(ownerName(k).toUpperCase())}</span><span style="color:${a ? (a.v === 'ok' ? '#39ff88' : 'var(--danger)') : 'var(--sun)'}">${a ? (a.v === 'ok' ? '✓ GENEHMIGT' : '✗ ABGELEHNT') + (a.note ? ' · ' + esc(a.note) : '') : old ? 'BETRAG GEÄNDERT · NEU FREIGEBEN' : 'OFFEN'}</span></div>`; }).join('')}
+      ${canApv ? `<input id="reqNote" placeholder="Kommentar (optional)" style="min-height:40px"><div class="row" style="gap:8px"><button type="button" class="pill sun" data-reqapv="ok" style="flex:1;justify-content:center">✓ Genehmigen</button><button type="button" class="pill" data-reqapv="no" style="flex:1;justify-content:center">✗ Ablehnen</button></div>` : ''}
+      ${st.k === 'ok' && mine ? `<button type="button" class="pill sun" id="reqBought" style="justify-content:center">🛒 Gekauft – Beleg eintragen</button>` : ''}</div>`;
+  const fields = `${F('title','WAS?',x.title||'','text','required placeholder="z. B. Ringlicht für Reels"')}
+    <div class="grid2">${F('amt','BETRAG CA. (€)',x.amt||'','text','required inputmode="decimal"')}${Sel('cat','KATEGORIE',EXP_CAT,x.cat||'Equipment')}</div>
+    <div class="field"><label for="f-why">WOFÜR / WARUM?</label><textarea id="f-why" name="why" rows="2" required placeholder="z. B. für die Reel-Drehtage, aktuelles ist kaputt">${esc(x.why||'')}</textarea></div>
+    <div class="grid2">${Sel('scope','FÜR',scopes,x.scope||'label')}${F('need','BENÖTIGT BIS (OPTIONAL)',x.need||'','date')}</div>
+    ${F('link','LINK ZUM PRODUKT (OPTIONAL)',x.link||'','url','placeholder="https://…"')}`;
+  const extra = id && (mine || !lockedArtist) && x.status !== 'gekauft' ? `<button class="btn danger" type="button" id="delReq" style="width:100%;margin-top:10px">Anfrage zurückziehen</button>` : '';
+  const form = sheet(id ? 'Kaufanfrage' : 'Neue Kaufanfrage', apvBox + fields, async fd => {
+    if(!num(fd.amt)){ toast('Betrag fehlt'); return false; }
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const doc = {title:(fd.title||'').trim(), amt:String(fd.amt).trim(), cat:fd.cat, why:(fd.why||'').trim(), scope:fd.scope, need:fd.need||'', link:safeUrl(fd.link)};
+    if(id) return await put('expenses', id, doc) ? undefined : false;
+    const ok = await put('expenses', uid('rq'), {...doc, kind:'req', status:'angefragt', rhy:'einmalig', by:account?.name || '', byKey: mk || '', byId: me || '', apv:{}, at:new Date().toISOString()}, false);
+    if(ok) toast('Angefragt · Cem und Thorben bekommen eine Mitteilung');
+    return ok ? undefined : false;
+  }, extra);
+  form.querySelectorAll('[data-reqapv]').forEach(b => b.onclick = async () => {
+    const note = (form.querySelector('#reqNote')?.value || '').trim();
+    const apv = {...(S.expenses[id].apv || {}), [mk]: {v: b.dataset.reqapv, by: account?.name || '', at: new Date().toISOString(), amt: S.expenses[id].amt ?? '', ...(note ? {note} : {})}};
+    if(await put('expenses', id, {apv})){ toast(b.dataset.reqapv === 'ok' ? 'Genehmigt' : 'Abgelehnt'); S.expenses[id] = {...S.expenses[id], apv}; sheetReq(id); }
+  });
+  const bo = form.querySelector('#reqBought'); if(bo) bo.onclick = () => sheetReqBought(id);
+  const d = form.querySelector('#delReq'); if(d) d.onclick = async () => { if(d.dataset.sure){ await del('expenses', id); $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich zurückziehen? Erneut tippen'; } };
+}
+function sheetReqBought(id){
+  const x = S.expenses?.[id]; if(!x) return;
+  const fields = `<p class="small" style="margin:0 0 12px">${esc(x.title)} – genehmigt. Trag den tatsächlichen Betrag und die Beleg-Nr. aus dem CloudStudios-System ein; danach steht der Kauf in den Ausgaben.</p>
+    <div class="grid2">${F('amt','BETRAG (€)',x.amt||'','text','required inputmode="decimal"')}${F('date','KAUFDATUM',todayIso(),'date')}</div>
+    <div class="grid2">${F('beleg','BELEG-NR.',x.beleg||'','text','placeholder="z. B. BE-0124"')}${Sel('paid','BEZAHLT',[['1','Ja'],['','Nein']],'1')}</div>`;
+  sheet('Gekauft · ' + x.title, fields, async fd => {
+    const ok = await put('expenses', id, {status:'gekauft', amtReq: x.amt, amt:String(fd.amt).trim(), date:fd.date||todayIso(), beleg:(fd.beleg||'').trim(), paid: fd.paid === '1', boughtAt:new Date().toISOString()});
+    if(ok) toast('In den Ausgaben eingetragen');
+    return ok ? undefined : false;
+  });
+}
 /* Ausgaben (nur Team, col 'expenses') – Übersicht; Buchhaltung bleibt im CloudStudios-System, Beleg-Nr. verbindet */
 const EXP_CAT = ['Abo / Software','Beatstars','Equipment','Distributor / Gebühren','GEMA / GVL / DPMA','Studio','Reise / Fahrt','Werbung','Dienstleister','Sonstiges'];
 const EXP_RHY = [['einmalig','Einmalig'],['monatlich','Monatlich'],['jährlich','Jährlich']];
@@ -1319,7 +1383,7 @@ const expMonthly = x => !expActive(x) ? 0 : x.rhy === 'monatlich' ? num(x.amt) :
 const expScopeName = sc => !sc || sc === 'label' ? 'Label allgemein' : sc.startsWith('r:') ? (S.releases[sc.slice(2)] ? (person(S.releases[sc.slice(2)].artist)?.name || '') + ' · ' + relTitle(S.releases[sc.slice(2)]) : 'Release') : (person(sc.slice(2))?.name || sc);
 const expOwner = sc => !sc || sc === 'label' ? 'label' : sc.startsWith('r:') ? (S.releases[sc.slice(2)]?.artist || 'label') : sc.slice(2);
 function expensesOverview(){
-  const ex = vals(S.expenses||{});
+  const ex = vals(S.expenses||{}).filter(x => x.kind !== 'req' || x.status === 'gekauft');
   const fix = ex.reduce((a, x) => a + expMonthly(x), 0);
   const mwOpen = vals(S.releases).flatMap(r => mwOf(r).map(e => mwFin(r.id, e.id))).filter(f => f && !f.paid).reduce((a, f) => a + num(f.amt), 0);
   const exOpen = ex.filter(x => x.rhy === 'einmalig' && !x.paid).reduce((a, x) => a + num(x.amt), 0);
@@ -2108,6 +2172,7 @@ function vCockpit(){
     <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
     ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}
     ${campaignOverview()}
+    ${reqSection()}
     ${expensesOverview()}
     ${contactsOverview()}`;
 }
@@ -2383,6 +2448,7 @@ function pinItems(k){
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + ' · ' + (x.status||'Geplant') + (x.from ? ' ab ' + fmt(x.from) : ''), due:x.to || x.from || '', go:['release', r.id]}); });
   if(CAMP_APPROVERS.some(([kk]) => kk === k)) for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && !campApvOf(x, k) && !chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne freigeben · ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + (num(x.budget) ? ' · Budget ' + eur(num(x.budget)) : '') + ' · ' + campApvState(x).l, due:x.from || '', go:['release', r.id]}); });
+  for(const x of reqsOpen()){ const st = reqState(x); if(st.k === 'open' && reqNeed(x).includes(k) && !reqApvOf(x, k)) out.push({src:'req', id:x.id, title:'Kaufanfrage freigeben · ' + x.title, sub:(x.by||'') + ' · ' + eur(num(x.amt)) + ' · ' + st.l, due:x.need || '', go:['cockpit', '']}); else if(x.byKey === k && st.k !== 'open') out.push({src:'req', id:x.id, title:(st.k === 'ok' ? 'Genehmigt – kaufen: ' : 'Kaufanfrage abgelehnt: ') + x.title, sub:eur(num(x.amt)) + ' · ' + st.l, due:x.need || '', go:['cockpit', '']}); }
   for(const r of vals(S.releases)) if(r.status !== 'Released' && r.rc?.meta) rcState(r).forEach(x => { if(!x.ok && chkHas(x, k)) out.push({tick:['rctoggle', r.id + '|' + x.k], src:'rc', id:r.id, title:x.l, sub:(person(r.artist)?.name||'') + ' · Release-Check ' + relName(r) + (x.note ? ' · ' + x.note : ''), due:r.date || '', go:['release', r.id]}); });
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
@@ -2439,7 +2505,7 @@ function vPin(c){
   const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
-  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
+  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button>${!lockedArtist && !myProducer ? '<button class="iconbtn" data-act="reqnew" aria-label="Kaufanfrage" title="Kaufanfrage">🛒</button>' : ''}<button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">${k && ownView ? (new Date().getHours() < 11 ? 'Moin' : new Date().getHours() < 18 ? 'Hey' : 'N\'Abend') + ' ' + esc(ownerName(k).split(' ')[0]) + '.' : k ? esc(ownerName(k)) : 'Pinnwand'}</h1><div class="small" style="margin-top:6px">${k ? (ownView ? esc(new Date().toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'}).toUpperCase()) + ' · DEINE PINNWAND' : 'PINNWAND VON ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${k ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
       <button class="tile ${over.length ? 'hot' : ''}" data-act="pinjump" data-id="pinOver" style="text-align:left;cursor:pointer;color:inherit;font:inherit${over.length ? ';border-color:rgba(255,90,110,.5);background:rgba(255,90,110,.12)' : ''}"><b ${over.length ? 'style="color:#FF5A6E"' : ''}>${over.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></button>
@@ -2553,7 +2619,7 @@ function sheetProfile(pid){
   });
 }
 /* ---------- Mitteilungen pro Person (im eigenen Konto gespeichert) ---------- */
-const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['gig','Live · Auftritte & Änderungen'],['camp','Kampagnen & Freigaben'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
+const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['gig','Live · Auftritte & Änderungen'],['camp','Kampagnen, Kaufanfragen & Freigaben'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
 const pushCats = () => PUSH_CATS.filter(([k]) => k !== 'camp' || !['artist','producer'].includes(account?.role));
 async function sheetPushPrefs(){
   let cur0 = {}; try{ const {data} = await sb.auth.getUser(); cur0 = data?.user?.user_metadata?.push || {}; }catch(_){}
@@ -3013,6 +3079,7 @@ async function act(a, id){
   if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
   if(a === 'pingo'){ const {g, src, id:xid} = JSON.parse(id);
     if(src === 'todos'){ sheetTodo(xid); return; }
+    if(src === 'req' && S.expenses?.[xid]) return sheetReq(xid);
     if(src === 'camp'){ const [crid, ci] = String(xid).split('|'); if(ci !== undefined && S.releases[crid]) return sheetCamp(crid, +ci); }
     if(g[0] === 'pmonth') go('pmonth', {id:g[1], m:g[2]}); else go(g[0], {id:g[1]});
     setTimeout(() => {
@@ -3054,6 +3121,8 @@ async function act(a, id){
   if(a === 'ctedit') return sheetContact(id);
   if(a === 'ctint') return sheetContactInt(id);
   if(a === 'expnew') return sheetExpense(null);
+  if(a === 'reqnew') return sheetReq(null);
+  if(a === 'reqedit') return sheetReq(id);
   if(a === 'expedit') return sheetExpense(id);
   if(a === 'dlcat'){ dlCat = id; return render(); }
   if(a === 'campnew') return sheetCamp(id);
@@ -3439,7 +3508,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132345';
+const APP_VERSION = '202611140000';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

@@ -204,6 +204,21 @@ Deno.serve(async (req) => {
         out.push({ keys: owners(c).length ? owners(c) : ["K"], title: "Kampagne freigegeben ✓", body: label + " · kann starten", tag: "camp" });
     }
   }
+  // Kaufanfragen: bis 100 € reicht Cem oder Thorben, darüber beide (nie die eigene)
+  if (col === "expenses" && d.kind === "req") {
+    const APPR: Record<string, string> = { C: "Cem", TH: "Thorben" };
+    const need = Object.keys(APPR).filter(k => k !== d.byKey);
+    const okOf = (x: any, k: string) => { const a = x?.apv?.[k]; return a && String(a.amt ?? "") === String(x.amt ?? "") ? a : null; };
+    const state = (x: any) => { if (x?.status === "gekauft") return "done"; const r = need.map(k => okOf(x, k)); if (r.some(a => a?.v === "no")) return "no"; const n = r.filter(a => a?.v === "ok").length; return n >= (Number(String(x?.amt ?? "0").replace(",", ".")) > 100 ? need.length : Math.min(1, need.length)) ? "ok" : "open"; };
+    const label = `${d.title || "Kaufanfrage"} · ${d.amt || "?"} € · von ${d.by || "Team"}`;
+    if (op === "INSERT") out.push({ keys: need, title: "Kaufanfrage zur Freigabe", body: label, tag: "camp" });
+    if (op === "UPDATE") {
+      for (const k of need) { const n = d.apv?.[k], p = old?.apv?.[k]; if (n && n.at !== p?.at) out.push({ keys: need.filter(x => x !== k), title: `Kaufanfrage ${n.v === "ok" ? "genehmigt" : "abgelehnt"} von ${APPR[k]}`, body: label, tag: "camp" }); }
+      const s0 = state(old), s1 = state(d);
+      if (s1 !== s0 && (s1 === "ok" || s1 === "no") && d.byKey) out.push({ keys: [d.byKey], title: s1 === "ok" ? "Genehmigt ✓ · du kannst kaufen" : "Kaufanfrage abgelehnt", body: label, tag: "camp" });
+      if (String(old?.amt ?? "") !== String(d.amt ?? "") && d.status !== "gekauft" && need.some(k => old?.apv?.[k])) out.push({ keys: need, title: "Betrag geändert · neu freigeben", body: label, tag: "camp" });
+    }
+  }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
   if (col === "chat" && op === "INSERT") {
