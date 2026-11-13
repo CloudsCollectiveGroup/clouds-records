@@ -1008,6 +1008,7 @@ function vRelease(c){
     ${songOnly ? '' : videoSection(r)}
     ${songOnly ? '' : campaignSection(r)}
     ${songOnly ? '' : coopSection(r)}
+    ${(() => { const ss = vals(S.studio||{}).filter(x => x.release === r.id && x.status !== 'Abgelehnt').sort((a,b) => (a.date||'').localeCompare(b.date||'')); return ss.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio-Sessions</h2><span class="small">${ss.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${ss.map(x => studioRow(x, false)).join('')}</div>` : ''; })()}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
 
@@ -1690,7 +1691,7 @@ function sheetStudio(rid, id, aid){
     ${Sel('room','RAUM',rooms,x.room||'Egal')}
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
     ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
-  const extra = id && team ? `${chatBox('studio:' + id, x.release, x.artist)}<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
+  const extra = id && team ? `${!x.release ? '<button class="btn alt" type="button" id="linkStudio" style="width:100%;margin-top:14px">🎯 Wird ein Release · zuordnen</button>' : ''}${chatBox('studio:' + id, x.release, x.artist)}<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
   sheet(id ? 'Studio-Anfrage' : 'Studio-Slot anfragen', fields, async fd => {
     const doc = {release:fd.release||'', song: fd.release ? '' : (fd.song||'').trim(), date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room || 'Egal', note:(fd.note||'').trim()};
     if(id) return await put('studio', id, team ? {...doc, status:fd.status, tt: fd.tt === '1'} : doc) ? undefined : false;
@@ -1703,8 +1704,42 @@ function sheetStudio(rid, id, aid){
   const rs = $('#sheetForm [name=release]'), sw = $('#songWrap');
   if(rs && sw) rs.onchange = () => { sw.style.display = rs.value ? 'none' : ''; };
   bindChats($('#sheetForm'));
+  const lk = $('#linkStudio');
+  if(lk) lk.onclick = () => sheetStudioLink(id);
   const cp = $('#copyStudio');
   if(cp) cp.onclick = () => copyText(studioText(S.studio[id] || x));
+}
+/* Freie Session → Release */
+function sheetStudioLink(id){
+  const x = S.studio?.[id]; if(!x) return;
+  const pid = x.artist, rels = relsOf(pid).filter(r => r.status !== 'Released');
+  const parents = rels.filter(r => r.type === 'EP' || r.type === 'Album');
+  const same = vals(S.studio||{}).filter(s => s.artist === pid && !s.release && s.id !== id && x.song && (s.song||'').trim().toLowerCase() === x.song.trim().toLowerCase());
+  const opts = [...rels.map(r => [r.id, relName(r) + (r.title ? ' · ' + r.title : ' · Titel offen')]), ...parents.map(r => ['new:' + r.id, '+ Neuer Song auf ' + relName(r) + (r.title ? ' · ' + r.title : '')])];
+  if(!opts.length) return toast('Für ' + (person(pid)?.name || 'den Artist') + ' ist noch kein Release angelegt');
+  const fields = `${Sel('target','ZU WELCHEM RELEASE?',opts,opts[0][0])}
+    ${F('title','SONGTITEL',x.song||'','text','placeholder="Titel offen"')}
+    <p class="small" style="margin:-4px 0 12px">Hat das Release noch keinen Titel, übernimmt es diesen.${same.length ? ' ' + same.length + ' weitere freie Session(s) mit demselben Arbeitstitel werden mit zugeordnet.' : ''}</p>`;
+  sheet('Session einem Release zuordnen', fields, async fd => {
+    const title = (fd.title||'').trim();
+    let rid = fd.target;
+    if(rid.startsWith('new:')){
+      const par = S.releases[rid.slice(4)]; if(!par) return false;
+      const kids = childrenOf(par), n = vals(S.releases).filter(r => r.artist === pid && r.type === 'Song').length + 1;
+      const code = par.code + '-' + String(n).padStart(2,'0');
+      rid = `${pid}-${code}`; if(S.releases[rid]) rid = uid(pid + '-' + code);
+      const doc = {artist:pid, code, type:'Song', year:relYear(par), order:par.order + 0.01 * n, pflicht:false, countsTo:relName(par), parent:par.id, pos:kids.length + 1, status:'Recording', date:'', title};
+      if(!await put('releases', rid, doc, false)) return false;
+      S.releases[rid] = {id:rid, ...doc};
+      await applyTemplate(rid);
+      if(title) await put('tracks', uid('tr'), {release:rid, title, producer: producers()[0]?.name || '', stage:'Recording'}, false);
+    } else {
+      const r = S.releases[rid]; if(!r) return false;
+      if(title && !r.title){ await put('releases', rid, {title}); if(!tracksOf(rid).length) await put('tracks', uid('tr'), {release:rid, title, producer: producers()[0]?.name || '', stage:'Recording'}, false); }
+    }
+    for(const s of [x, ...same]) await put('studio', s.id, {release:rid, song:''});
+    toast('Zugeordnet · ' + relName(S.releases[rid]) + (title ? ' · ' + title : ''));
+  });
 }
 function sheetStudioView(id){
   const x = S.studio?.[id]; if(!x) return; const r = S.releases[x.release];
@@ -3142,7 +3177,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132015';
+const APP_VERSION = '202611132030';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
