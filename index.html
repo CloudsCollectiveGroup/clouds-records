@@ -3275,7 +3275,7 @@ async function toggleInterest(bid){
 /* Abschnitte auf Start/Pinnwand ein- und ausklappen (für alle, Zustand pro Gerät gemerkt) */
 let FOLD = new Set(); try{ FOLD = new Set(JSON.parse(localStorage.getItem('cr_fold') || '[]')); }catch(_){}
 function foldSections(v){
-  const r = cur().r; if(!['pin','apin','artiststart'].includes(r)) return;
+  const r = cur().r; if(!['pin','apin','artiststart','release','video'].includes(r)) return;
   v.querySelectorAll('.between').forEach(hd => {
     const h = hd.querySelector(':scope > h2.h-sec'); if(!h) return;
     const body = hd.nextElementSibling; if(!body || body.querySelector(':scope > h2.h-sec') || body.matches('.between')) return;
@@ -3792,7 +3792,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140620';
+const APP_VERSION = '202611140640';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
