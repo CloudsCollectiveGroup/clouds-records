@@ -114,6 +114,9 @@ h1,h2{margin:0;text-wrap:balance}
 .navbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(min(430px,100%) - 24px);display:grid;background:rgba(19,40,74,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line2);border-radius:22px;padding:6px;z-index:20}
 .navbar button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:16px;background:transparent;border:0;color:var(--mute);font-size:11px;cursor:pointer}
 .navbar button.on{background:var(--raise);color:var(--sun);font-weight:600}
+.navbar button{min-width:0}
+.navbar.n8 button{font-size:9.5px;letter-spacing:-.02em;padding:8px 0 7px}
+.navbar.n8 button svg{width:18px;height:18px}
 .ahead{margin:0;padding:0 20px 24px;position:relative;overflow:hidden;color:#fff}
 .ahead.hasphoto{min-height:380px;display:flex;flex-direction:column}.ahead.hasphoto > .between{margin-bottom:auto}
 .aheadimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 25%}
@@ -496,8 +499,20 @@ const TIMES = (() => { const o = []; for(let h = 8; h <= 23; h++) for(const m of
 const endTime = (t, h) => { if(!t) return ''; const [a,b] = t.split(':').map(Number); const m = (a*60 + b + (+h||0)*60) % 1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); };
 const studioGuests = x => Array.isArray(x.guests) ? x.guests : [];
 const guestName = k => person(k)?.name || ownerName(k);
+const rsvpOf = (x, k) => (x.rsvp || {})[k] || 'offen';
+const RSVP_MARK = {ja:' ✓', nein:' ✗', offen:' ?'};
+const guestList = x => studioGuests(x).map(k => guestName(k) + RSVP_MARK[rsvpOf(x, k)]).join(', ');
+const guestIn = (x, k) => !!k && studioGuests(x).includes(k) && rsvpOf(x, k) === 'ja';
+const myInvites = k => k ? vals(S.studio||{}).filter(x => x.artist !== k && studioGuests(x).includes(k) && rsvpOf(x, k) === 'offen' && x.status !== 'Abgelehnt' && (!x.date || x.date >= todayIso())).sort((a,b) => (a.date||'9').localeCompare(b.date||'9')) : [];
+function inviteBlock(k, canAnswer){
+  const list = myInvites(k); if(!list.length) return '';
+  return `<div class="pad between" style="padding-top:22px"><h2 class="h-sec" style="color:var(--sun)">Einladungen</h2><span class="small">${list.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(x => `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:10px;border-color:rgba(255,204,0,.35);background:var(--sun-bg)">
+    <span class="stack" style="gap:3px"><b style="font-weight:600">Studio mit ${esc(person(x.artist)?.name || '')} · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</b>
+    <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(studioLbl(x).toUpperCase())} · SLOT ${esc((x.status||'').toUpperCase())}${studioGuests(x).length > 1 ? ' · GÄSTE: ' + esc(guestList(x).toUpperCase()) : ''}</span></span>
+    ${canAnswer ? `<div class="row" style="gap:8px"><button class="pill sun" data-act="rsvp" data-id="${esc(x.id)}|ja" style="min-height:36px">${icon.check} Zusagen</button><button class="pill" data-act="rsvp" data-id="${esc(x.id)}|nein" style="min-height:36px">Absagen</button></div>` : '<span class="small">WARTET AUF ANTWORT</span>'}</div>`).join('')}</div>`;
+}
 const studioLbl = x => { const r = S.releases[x.release]; return r ? relName(r) + (r.title ? ' · ' + r.title : '') : 'Freie Session' + (x.song ? ' · ' + x.song : ''); };
-const studioText = x => { const a = person(x.artist); return `CloudStudios · ${x.room||'Raum offen'} · ${a?.name||''}${studioGuests(x).length ? ' + ' + studioGuests(x).map(guestName).join(', ') : ''} (${studioLbl(x)}) · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' ' + x.time + '–' + endTime(x.time, x.hours) : ''}${x.note ? ' · ' + x.note : ''}`; };
+const studioText = x => { const a = person(x.artist); return `CloudStudios · ${x.room||'Raum offen'} · ${a?.name||''}${studioGuests(x).filter(k => rsvpOf(x, k) !== 'nein').length ? ' + ' + studioGuests(x).filter(k => rsvpOf(x, k) !== 'nein').map(guestName).join(', ') : ''} (${studioLbl(x)}) · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' ' + x.time + '–' + endTime(x.time, x.hours) : ''}${x.note ? ' · ' + x.note : ''}`; };
 /* Musikvideo (liegt am Release unter „video“) */
 const VSTAGES = ['Idee','Planung','Dreh','Schnitt','Fertig'];
 const VLOC_STATUS = ['Idee','Angefragt','Bestätigt','Abgesagt'];
@@ -619,6 +634,7 @@ const icon = {
   edit:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
   send:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   roster:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
+  cal:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   timeline:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>',
   tracks:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
   cockpit:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10M9 20V4M15 20v-7M21 20V8"/></svg>',
@@ -800,16 +816,17 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['live','Live',icon.live,{preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['cal','Kalender',icon.cal,{a:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['live','Live',icon.live,{preview:a}],['recordings','Recs',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c) || (account?.role === 'producer' ? myProducer : null);
     if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['live','Live',icon.live,{a:ctx, inArtist:true}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['pin','Start',icon.home,{}],['cal','Kalender',icon.timeline,{}],['live','Live',icon.live,{}],['roster','Artists',icon.roster,{}],['content','Content',icon.mic,{}],['market','Beats',icon.tracks,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['pin','Start',icon.home,{}],['cal','Kalender',icon.cal,{}],['live','Live',icon.live,{}],['roster','Artists',icon.roster,{}],['content','Content',icon.mic,{}],['market','Beats',icon.tracks,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
+  nav.classList.toggle('n8', items.length >= 8);
   const active = c.r === 'video' && isGig(c.id) ? 'live' : ({release:'artist', video:'artist', track:'tracks', producer:'roster'}[c.r] || c.r);
   nav.innerHTML = items.map(([r,l,ic],i) => `<button data-i="${i}" class="${r===active?'on':''}" ${r===active?'aria-current="page"':''}>${ic}${l}</button>`).join('');
   nav.querySelectorAll('button').forEach(b => b.onclick = () => {
@@ -2122,7 +2139,7 @@ function sheetStudio(rid, id, aid){
     ${F('date','WUNSCHDATUM',x.date||'','date',`required min="${id ? '' : todayIso()}"`)}
     <div class="grid2">${Sel('time','BEGINN',times,x.time||'14:00')}${Sel('hours','DAUER',[['4','4 Stunden'],['6','6 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}</div>
     ${Sel('room','RAUM',rooms,x.room||'Egal')}
-    <div class="field"><span class="flabel">WER IST NOCH DABEI? (OPTIONAL, MEHRFACH)</span><div class="gchips">${[...artists().filter(p => p.id !== x.artist).map(p => [p.id, p.name]), ...producers().map(p => ['P', p.name]), ['C','Cem'],['TH','Thorben'],['K','Kacper'],['N','Nikolina']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="sguest" value="${esc(v)}" ${studioGuests(x).includes(v) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div></div>
+    <div class="field"><span class="flabel">WER IST NOCH DABEI? (OPTIONAL, MEHRFACH · BEKOMMT EINE EINLADUNG ZUM ZUSAGEN)</span><div class="gchips">${[...artists().filter(p => p.id !== x.artist).map(p => [p.id, p.name]), ...producers().map(p => ['P', p.name]), ['C','Cem'],['TH','Thorben'],['K','Kacper'],['N','Nikolina']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="sguest" value="${esc(v)}" ${studioGuests(x).includes(v) ? 'checked' : ''}><span>${esc(l)}${id && studioGuests(x).includes(v) ? RSVP_MARK[rsvpOf(x, v)] : ''}</span></label>`).join('')}</div></div>
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
     ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
   const extra = id && team ? `${!x.release ? '<button class="btn alt" type="button" id="linkStudio" style="width:100%;margin-top:14px">🎯 Wird ein Release · zuordnen</button>' : ''}${chatBox('studio:' + id, x.release, x.artist)}<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
@@ -2183,23 +2200,33 @@ function sheetStudioView(id){
     <span class="small">STUDIO-ANFRAGE · ${esc(studioLbl(x).toUpperCase())}</span>
     <h2 class="h-sec" style="margin:6px 0 4px">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</h2>
     <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(x.hours)} STUNDEN · <span style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></span>
-    ${studioGuests(x).length ? `<div class="small" style="margin-top:10px">DABEI: ${esc(studioGuests(x).map(guestName).join(', ').toUpperCase())}</div>` : ''}
+    ${studioGuests(x).length ? `<div class="small" style="margin-top:10px">GÄSTE: ${esc(guestList(x).toUpperCase())}</div>` : ''}
+    ${studioGuests(x).includes(myKey()) && x.artist !== myKey() ? `<div class="vrow" style="margin-top:12px;justify-content:space-between;flex-wrap:wrap;gap:8px"><span class="small">DEINE ANTWORT: <b style="color:${rsvpOf(x, myKey()) === 'ja' ? 'var(--album)' : rsvpOf(x, myKey()) === 'nein' ? 'var(--danger)' : 'var(--sun)'}">${rsvpOf(x, myKey()) === 'ja' ? 'ZUGESAGT' : rsvpOf(x, myKey()) === 'nein' ? 'ABGESAGT' : 'OFFEN'}</b></span><span class="row" style="gap:8px"><button class="pill ${rsvpOf(x, myKey()) === 'ja' ? 'on' : 'sun'}" data-rsvp="ja" style="min-height:34px">Zusagen</button><button class="pill" data-rsvp="nein" style="min-height:34px">Absagen</button></span></div>` : ''}
     ${x.note ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(x.note)}</div>` : ''}
     ${chatBox('studio:' + id, x.release, x.artist)}
     <button class="btn alt" type="button" data-close style="width:100%;margin-top:6px">Schließen</button></div></div>`;
   root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  root.querySelectorAll('[data-rsvp]').forEach(b => b.onclick = async () => { if(await studioRsvp(id, b.dataset.rsvp)) sheetStudioView(id); });
   bindChats(root);
+}
+async function studioRsvp(id, ans){
+  if(viewAs){ toast('Team-Sicht: nur ansehen'); return false; }
+  const k = myKey(); if(!k){ toast('Kein Profil zugeordnet'); return false; }
+  const {error} = await sb.rpc('studio_rsvp', {p_id: id, p_key: k, p_ans: ans});
+  if(error){ toast('Nicht gespeichert: ' + error.message); return false; }
+  const x = S.studio?.[id]; if(x) x.rsvp = {...(x.rsvp||{}), [k]: ans};
+  toast(ans === 'ja' ? 'Zugesagt · steht jetzt in deinem Kalender' : 'Abgesagt'); render(); return true;
 }
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); toast('Kopiert · in TimeTree einfügen'); }
   catch(_){ const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); toast('Kopiert · in TimeTree einfügen'); }catch(__){ toast('Kopieren nicht möglich'); } a.remove(); }
 }
 function studioRow(x, withArtist){
-  const r = S.releases[x.release], a = person(x.artist);
+  const r = S.releases[x.release], a = person(x.artist), asGuest = lockedArtist && x.artist !== lockedArtist;
   return `<button class="vrow" data-act="editstudio" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
     <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600">${x.hours}h</span>
     <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</b>
-      <span class="small">${chatOf('studio:' + x.id).length ? '<span style="color:var(--sun)">💬 ' + chatOf('studio:' + x.id).length + '</span> · ' : ''}${withArtist ? esc((a?.name||'').toUpperCase()) + (studioGuests(x).length ? ' + ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) : '') + ' · ' : (studioGuests(x).length ? 'MIT ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) + ' · ' : '')}${esc(studioLbl(x).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
+      <span class="small">${chatOf('studio:' + x.id).length ? '<span style="color:var(--sun)">💬 ' + chatOf('studio:' + x.id).length + '</span> · ' : ''}${asGuest ? 'GAST BEI ' + esc((a?.name||'').toUpperCase()) + ' · ' : withArtist ? esc((a?.name||'').toUpperCase()) + (studioGuests(x).length ? ' + ' + esc(guestList(x).toUpperCase()) : '') + ' · ' : (studioGuests(x).length ? 'MIT ' + esc(guestList(x).toUpperCase()) + ' · ' : '')}${esc(studioLbl(x).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
     <span class="status" style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></button>`;
 }
 
@@ -2671,7 +2698,7 @@ function vPin(c){
       <button data-act="editstudio" data-id="${esc(x.id)}" style="background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer;display:flex;gap:12px;align-items:center">
         <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600;flex:none">${esc(x.hours)}h</span>
         <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(a?.name||'')} · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}${isNew({at:x._at, by:x._by}) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
-          <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(studioLbl(x).toUpperCase())}${studioGuests(x).length ? ' · MIT ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) : ''}${x.by ? ' · VON ' + esc(x.by.toUpperCase()) : ''}</span>
+          <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(studioLbl(x).toUpperCase())}${studioGuests(x).length ? ' · MIT ' + esc(guestList(x).toUpperCase()) : ''}${x.by ? ' · VON ' + esc(x.by.toUpperCase()) : ''}</span>
           ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note)}</span>` : ''}</span>
         <span class="status" style="color:${SSTATUS_COL[x.status]}">● ${esc(x.status.toUpperCase())}</span></button>
       <div class="row" style="gap:8px;flex-wrap:wrap">${x.status === 'Angefragt' ? `<button class="pill sun" data-act="sconfirm" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} Bestätigen</button><button class="pill" data-act="sdecline" data-id="${esc(x.id)}" style="min-height:34px">Ablehnen</button>` : ''}
@@ -2694,6 +2721,7 @@ function vPin(c){
       <button class="tile" data-act="pinjump" data-id="pinWeek" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${week.length}</b><span class="lbl" style="color:var(--ink)">DIESE WOCHE</span></button>
       <button class="tile" data-act="pinjump" data-id="pinTerms" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${termsWk}</b><span class="lbl" style="color:var(--ink)">TERMINE · 7 TAGE</span></button></div>
     <div class="pad small" style="padding-top:8px">${doneWk ? '✓ ' + doneWk + ' IN DEN LETZTEN 7 TAGEN ERLEDIGT · ' : ''}${items.length} OFFEN INSGESAMT</div>` : ''}
+    ${ownView ? inviteBlock(k, !viewAs) : ''}
     ${startBlock(c, k, ownView && account?.role === 'team', apvItems, row)}
     ${pick}
     ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button>${ownView && !myProducer ? '<button class="pill" data-act="reqnew">🛒 Kaufanfrage</button><button class="pill" data-act="tech">🛠 Technik</button>' : ''}</div>` : ''}
@@ -2875,7 +2903,7 @@ function vWeek(){
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
   for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r) + (!lockedArtist && r.shareCal ? ' · 🌐 Label-Kalender' : ''), a:r.artist, c:'#39FF88', go:['release', r.id]});
-  for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && mine(x.artist)) ev.push({date:x.date, time:x.time, t:'Studio · ' + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
+  for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && (mine(x.artist) || guestIn(x, aid))) ev.push({date:x.date, time:x.time, t:'Studio · ' + (aid && x.artist !== aid ? 'Gast bei ' + (person(x.artist)?.name || '') + ' · ' : '') + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t: isPhoto(x) ? 'Fotoshooting · ' + (x.title||'') + (x.purpose ? ' · ' + x.purpose : '') : 'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c: isPhoto(x) ? PHOTO_COL : '#C2407A', go:['video', shootKey(p.id, x.id)]}));
   if(aid && !lockedArtist && isPreview()) for(const r of vals(S.releases)) if(r.shareCal && r.date && r.artist !== aid) ev.push({date:r.date, t:'Release · ' + (person(r.artist)?.name || '') + ' · ' + relTitle(r), a:r.artist, c:'#39FF88', dim:true, go:['release', r.id]}); /* Artist-Sicht: so sieht es der Artist */
@@ -2922,7 +2950,7 @@ function vArtistPin(c){
   const tasks = vals(S.tasks).filter(t => !t.done && S.releases[t.release]?.artist === aid)
     .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => chkHas(c,'A') && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
     .sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
-  const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
+  const studio = [...studioOf(aid), ...vals(S.studio||{}).filter(x => x.artist !== aid && guestIn(x, aid))].filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
   const atodos = todosOf(aid).filter(x => todoArtistIn(x) && !isTermin(x) && !x.done && (todoAMine(x) || checksOf(x).some(c => chkHas(c,'A') && !c.d))).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const aterms = todosOf(aid).filter(x => todoArtistIn(x) && isTermin(x) && (!x.date || x.date >= t0)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
   const ptasks = planTasks().filter(t => t.o === aid);
@@ -2943,11 +2971,12 @@ function vArtistPin(c){
  const shootRow2 = d => `<button class="vrow" data-go="video" data-id="${esc(d.key)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">${d.photo ? `<span class="play" style="background:${PHOTO_COL};color:#0C1B31;font-size:18px">📸</span>` : `<span class="play" style="background:var(--danger);color:#fff">${icon.play}</span>`}
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${d.photo ? 'Shooting' : 'Dreh'} · ${fmt(d.date)}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}</b><span class="small">${esc(d.lbl)}${d.loc ? ' · ' + esc(d.loc.toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
   if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
-  const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !gigsOf(aid).some(g => gigOpen(g) && (!g.date || g.date >= t0)) && !ptasks.length && !atodos.length && !aterms.length;
+  const empty = !myInvites(aid).length && !notes.length && !tasks.length && !studio.length && !shoots.length && !gigsOf(aid).some(g => gigOpen(g) && (!g.date || g.date >= t0)) && !ptasks.length && !atodos.length && !aterms.length;
   return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>${own ? `<span class="row" style="gap:8px"><button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
       <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
     ${own ? pushBanner() : ''}${own && pushOn ? '<div class="row" style="margin:10px 20px 0"><button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button></div>' : ''}
+    ${inviteBlock(aid, own && !viewAs)}
     ${asksArtistBlock(aid)}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Termine', aterms, x => todoRow(x, {fresh, withArtist:false}))}
@@ -3307,6 +3336,7 @@ async function act(a, id){
   if(a === 'cfilter') return tab('content', {f:id});
   if(a === 'addstudio') return sheetStudio(id);
   if(a === 'sconfirm' || a === 'sdecline'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {status: a === 'sconfirm' ? 'Bestätigt' : 'Abgelehnt'}); toast(a === 'sconfirm' ? 'Bestätigt · jetzt in TimeTree eintragen' : 'Abgelehnt'); } return; }
+  if(a === 'rsvp'){ const [sid, ans] = id.split('|'); await studioRsvp(sid, ans); return; }
   if(a === 'scopy'){ const x = S.studio?.[id]; return x ? copyText(studioText(x)) : null; }
   if(a === 'stt'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {tt:true}); toast('Als eingetragen markiert'); } return; }
   if(a === 'pinjump'){ document.getElementById(id)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
@@ -3716,7 +3746,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140330';
+const APP_VERSION = '202611140400';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

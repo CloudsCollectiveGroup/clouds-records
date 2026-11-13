@@ -70,7 +70,7 @@ async function morning() {
     const ev: string[] = [];
     for (const day of [today, tomorrow]) {
       const tag = day === today ? "Heute" : "Morgen";
-      for (const s of studio) if (s.date === day && s.status === "Bestätigt" && (isArtist ? s.artist === key : key === "C")) ev.push(`${tag} Studio ${s.time || ""}`.trim());
+      for (const s of studio) if (s.date === day && s.status === "Bestätigt" && (s.artist === key || ((s.guests || []).includes(key) && (s.rsvp || {})[key] === "ja") || (!isArtist && key === "C"))) ev.push(`${tag} Studio ${s.time || ""}`.trim());
       for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} ${x.type === "photo" ? "Fotoshooting" : "Reel-Dreh"} ${x.time || ""}`.trim());
       for (const r of rels) for (const vd of (r.video?.days || [])) if (vd.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${vd.time || ""}`.trim());
       for (const x of todos) if (x.kind === "Termin" && x.date === day && todoKeys(x).includes(key)) ev.push(`${tag} ${x.title}${x.time ? " " + x.time : ""}`);
@@ -110,7 +110,7 @@ async function weekly() {
     const done = mine.filter(t => t.done && t.at >= since).length, over = mine.filter(t => !t.done && due(t) && due(t) < today).length;
     let terms = 0;
     for (const r of rels) { if (isArtist && r.artist !== key) continue; if (r.date >= today && r.date <= in7) terms++; for (const v of (r.video?.days || [])) if (v.date >= today && v.date <= in7) terms++; }
-    for (const s of studio) if ((!isArtist || s.artist === key) && s.status === "Bestätigt" && s.date >= today && s.date <= in7) terms++;
+    for (const s of studio) if ((!isArtist || s.artist === key || ((s.guests || []).includes(key) && (s.rsvp || {})[key] === "ja")) && s.status === "Bestätigt" && s.date >= today && s.date <= in7) terms++;
     for (const p of people) if (!isArtist || p.id === key) for (const x of (p.shoots || [])) if (x.date >= today && x.date <= in7) terms++;
     for (const x of todos) if (x.kind === "Termin" && x.date >= today && x.date <= in7 && (!isArtist || todoKeys(x).includes(key))) terms++;
     const posts = content.filter((c: any) => (!isArtist || c.artist === key) && c.date >= today && c.date <= in7).length;
@@ -141,8 +141,21 @@ Deno.serve(async (req) => {
     if (op === "INSERT") out.push({ keys: ["C"], title: `Studio-Anfrage · ${a}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.hours || "?"} h · ${d.room || ""}`, tag: "studio" });
     if (op === "UPDATE" && old?.status !== d.status && ["Bestätigt", "Abgelehnt"].includes(d.status))
       out.push({ keys: [d.artist], title: `Studio ${d.status.toLowerCase()}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.room || ""}`, tag: "studio" });
-    if (op === "UPDATE" && old?.status !== d.status && d.status === "Bestätigt" && (d.guests || []).length)
-      out.push({ keys: d.guests, title: `Studio mit ${await personName(d.artist)}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.room || ""} · du bist dabei`, tag: "studio" });
+    // Gäste: Einladung (neu eingetragen), Antwort an den Artist, Bestätigung an alle mit Zusage
+    const when = `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.room || ""}`;
+    const gs: string[] = d.guests || [], rs = d.rsvp || {}, ors = old?.rsvp || {};
+    const added = gs.filter(k => !(old?.guests || []).includes(k));
+    if (d.status !== "Abgelehnt" && added.length && (op === "INSERT" || op === "UPDATE"))
+      out.push({ keys: added, title: `Einladung · Studio mit ${a}`, body: `${when} · bitte in der App zu- oder absagen`, tag: "studio" });
+    if (op === "UPDATE") for (const k of gs) if (rs[k] && rs[k] !== ors[k]) {
+      const gn = TEAM[k] ? ({ C: "Cem", K: "Kacper", N: "Nikolina", TH: "Thorben" } as Record<string, string>)[k] : k === "P" ? "Anvmal" : await personName(k);
+      out.push({ keys: [d.artist], title: `${gn} hat ${rs[k] === "ja" ? "zugesagt" : "abgesagt"}`, body: `Studio ${when}`, tag: "studio" });
+    }
+    const yes = gs.filter(k => rs[k] === "ja"), open = gs.filter(k => !rs[k]);
+    if (op === "UPDATE" && old?.status !== d.status && d.status === "Bestätigt") {
+      if (yes.length) out.push({ keys: yes, title: `Studio mit ${a} bestätigt`, body: `${when} · du bist dabei`, tag: "studio" });
+      if (open.length) out.push({ keys: open, title: `Studio mit ${a} bestätigt`, body: `${when} · bitte noch zu- oder absagen`, tag: "studio" });
+    }
   }
   if (col === "tasks") {
     const who = (k: string) => k === "A" ? d.artist : k;
