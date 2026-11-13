@@ -469,6 +469,7 @@ const studioText = x => { const r = S.releases[x.release], a = person(x.artist);
 const VSTAGES = ['Idee','Planung','Dreh','Schnitt','Fertig'];
 const VLOC_STATUS = ['Idee','Angefragt','Bestätigt','Abgesagt'];
 const VCREW_ROLES = ['Regie','Kamera','Fotograf','Licht','Schnitt','Styling','Make-up','Produktion','Sonstiges'];
+const GUEST_STATUS = ['Angefragt','Bestätigt','Abgelehnt'];
 const GCREW_ROLES = ['DJ','Backup-Vocals','Host','Fotograf','Videograf','Begleitung','Fahrer','Technik','Sonstiges'];
 const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; };
 const eur = n => (Math.round(n*100)/100).toLocaleString('de-DE', {minimumFractionDigits:0, maximumFractionDigits:2}) + ' €';
@@ -1081,7 +1082,7 @@ const PHOTO_COL = '#F59E0B';
 const CREW_STATUS = ['Angefragt','Zugesagt','Abgesagt'];
 /* Offene Planungs-Punkte mit Zuständigkeit (Location anfragen, Crew buchen, Reel vorbereiten) */
 const planOpen = (kind, x) => kind === 'locations' ? !['Bestätigt','Abgesagt'].includes(x.status) : kind === 'crew' ? (x.status || 'Angefragt') === 'Angefragt' : kind === 'reels' ? (x.status || 'Geplant') === 'Geplant' : false;
-const PLAN_VERB = {locations:'Location anfragen', crew:'Crew anfragen', reels:'Reel vorbereiten'};
+const PLAN_VERB = {locations:'Location anfragen', crew:'Crew anfragen', reels:'Reel vorbereiten', guests:'Gast'};
 function planTasks(){
   const out = [];
   const scan = (key, v, artist, label, due) => { for(const kind of ['locations','crew','reels']) (v?.[kind]||[]).forEach((x, i) => { if(x.o && planOpen(kind, x)) out.push({key, kind, i, o: x.o === 'A' ? artist : x.o, title: (kind === 'reels' && isPhoto(v) ? 'Motiv vorbereiten' : PLAN_VERB[kind]) + ': ' + (x.name || x.title || ''), sub: label, due}); }); };
@@ -1297,6 +1298,12 @@ function sheetVItem(k, kind, idx){
     fields = `${F('name','NAME',x.name||'','text','required placeholder="z. B. Hafen Hamburg, Studio 3"')}${F('address','ADRESSE',x.address||'')}
       <div class="grid2">${Sel('status','STATUS',VLOC_STATUS,x.status||'Idee')}${F('cost','KOSTEN (€)',x.cost||'','text','inputmode="decimal"')}</div>
       ${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name),x.o||'')}${area('note','NOTIZ',x.note,'Ansprechpartner, Genehmigung, Strom …')}`; }
+  else if(kind === 'guests'){ title = 'Gast';
+    const forOpts = [['A', P.p?.name || 'Artist'], ...gigCo(P.v).map(p => [p.id, p.name]), ['T','Team / Label']];
+    fields = `${F('name','NAME',x.name||'','text','required placeholder="Vor- und Nachname"')}
+      <div class="grid2">${Sel('plus','BEGLEITUNG',[['0','ohne'],['1','+1'],['2','+2'],['3','+3'],['4','+4']],x.plus||'0')}${Sel('for','AUF DER LISTE VON',forOpts,x.for||'A')}</div>
+      <div class="grid2">${Sel('status','STATUS',GUEST_STATUS,x.status||'Angefragt')}${F('contact','KONTAKT',x.contact||'','text','placeholder="optional"')}</div>
+      ${area('note','NOTIZ',x.note,'Backstage-Pass, VIP, Fotograf, Presse …')}`; }
   else if(kind === 'reels' && P.gig){ title = 'Song';
     const opts = [...new Set([...relsOf(P.artist).map(r => r.title).filter(Boolean), ...vals(S.tracks).filter(t => S.releases[t.release]?.artist === P.artist).map(t => t.title), ...vals(S.recordings||{}).filter(r => r.artist === P.artist).map(r => r.title)].filter(Boolean))];
     fields = `${F('title','SONG',x.title||'','text','required list="gigsongs" placeholder="Titel aus Releases, Tracks oder Recordings"')}<datalist id="gigsongs">${opts.map(o => `<option value="${esc(o)}">`).join('')}</datalist>
@@ -1414,6 +1421,10 @@ function vGig(c){
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${main}</b><span class="small">${sub}</span>${note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(note)}</span>` : ''}</span>${right}</button>`;
   const SCOL = {'Geplant':'var(--mute)','Geprobt':'var(--sun)','Gespielt':'var(--album)'}, CCOL = {'Angefragt':'var(--sun)','Zugesagt':'var(--album)','Abgesagt':'var(--danger)'};
   const rs = v.reels||[], mins = rs.reduce((a, x) => { const m = String(x.dur||'').match(/^(\d+)[:.](\d{1,2})$/); return a + (m ? +m[1] + +m[2]/60 : 0); }, 0);
+  const GCOL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
+  const forName = f => f === 'T' ? 'TEAM' : f === 'A' || !f ? (P.p?.name || '').toUpperCase() : (person(f)?.name || '').toUpperCase();
+  const guestsOk = (v.guests||[]).filter(g => g.status !== 'Abgelehnt'), guestN = guestsOk.reduce((a, g) => a + 1 + (+g.plus||0), 0);
+  const guests = (v.guests||[]).map((x,i) => row('guests', i, `${esc(x.name)}${+x.plus ? ' <span class="small">+' + esc(x.plus) + '</span>' : ''}`, `LISTE VON ${esc(forName(x.for))}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}`, `<span class="status" style="color:${GCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`, x.note)).join('');
   const setlist = rs.map((x,i) => row('reels', i, `${i+1}. ${esc(x.title || 'Song')}`, `${x.dur ? esc(x.dur) : 'LÄNGE OFFEN'}${safeUrl(x.link) ? ' · PLAYBACK DA' : ' · PLAYBACK FEHLT'}${who(x)}`, `<span class="status" style="color:${SCOL[x.status]||'var(--mute)'};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span>`, x.note)).join('');
   const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${x.o ? ` · <span style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
   const checks = field => (v[field]||[]).map((x,i) => canEdit
@@ -1433,7 +1444,7 @@ function vGig(c){
     <div class="tiles">
       <div class="tile"><b style="font-size:24px">${v.date ? fmt(v.date) : '—'}</b><span class="lbl" style="color:var(--ink)">${v.stage ? 'STAGE ' + esc(v.stage) : 'DATUM'}</span></div>
       <div class="tile"><b style="font-size:24px">${rs.length}${mins ? ' · ' + Math.round(mins) + "'" : ''}</b><span class="lbl" style="color:var(--ink)">SONGS IM SET</span></div>
-      <div class="tile"><b style="font-size:24px">${(v.crew||[]).filter(x => (x.status||'Angefragt') !== 'Abgesagt').length}</b><span class="lbl" style="color:var(--ink)">CREW</span></div>
+      <div class="tile"><b style="font-size:24px">${guestN}${v.guestCap ? '/' + esc(v.guestCap) : ''}</b><span class="lbl" style="color:var(--ink)">GÄSTE</span></div>
       ${team ? `<div class="tile"><b style="font-size:24px">${num(fin.fee) ? eur(num(fin.fee)) : '—'}</b><span class="lbl" style="color:var(--ink)">GAGE${fin.paid ? ' · BEZAHLT' : ''}</span></div>` : `<div class="tile"><b style="font-size:24px">${(v.checks||[]).filter(x => x.d).length}/${(v.checks||[]).length}</b><span class="lbl" style="color:var(--ink)">TO-DOS</span></div>`}
     </div>
     ${head('Eckdaten', editBtn('gigbase'))}
@@ -1454,7 +1465,9 @@ function vGig(c){
     ${head('Setlist', canEdit ? `<button class="pill" data-act="vadd" data-id="${K}|reels">${icon.plus} Song</button>` : '')}${list(setlist, 'Songs in Reihenfolge – mit Länge und Playback-Link.')}
     ${head('Crew', canEdit ? `<button class="pill" data-act="vadd" data-id="${K}|crew">${icon.plus} Person</button>` : '')}${list(crew, 'DJ, Backup, Fotograf, Videograf, Begleitung …')}
     ${head('Technik & Rider', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|props">${icon.edit} Liste</button>` : '')}${list(checks('props'), 'Mikros, In-Ear, Playback/USB, DJ-Setup, Bühne – als Checkliste.')}
-    ${head('Hospitality & Gästeliste', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|food">${icon.edit} Liste</button>` : '')}${list(checks('food'), 'Getränke, Backstage, Gästeliste – als Checkliste.')}
+    ${head(`Gästeliste${guestN ? ' · ' + guestN + (v.guestCap ? '/' + esc(v.guestCap) : '') : ''}`, canEdit ? `<button class="pill" data-act="vadd" data-id="${K}|guests">${icon.plus} Gast</button>` : '')}${list(guests, 'Namen mit Begleitung, für wen und Status – Veranstalter bekommt die Liste per Teilen.')}
+    ${(v.guests||[]).length ? `<div class="pad" style="padding-top:8px"><button class="pill" data-act="guestcopy" data-id="${K}">📋 Gästeliste kopieren</button></div>` : ''}
+    ${head('Hospitality', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|food">${icon.edit} Liste</button>` : '')}${list(checks('food'), 'Getränke, Essen, Backstage, Rider-Wünsche – als Checkliste.')}
     ${team ? `${head('Gage & Abrechnung', `<button class="pill" data-act="gigfin" data-id="${esc(gid)}">${icon.edit} Bearbeiten</button>`)}
     <div class="pad stack" style="gap:6px;padding-top:10px">
       <div class="between small"><span>GAGE</span><b>${num(fin.fee) ? eur(num(fin.fee)) : 'OFFEN'}</b></div>
@@ -1468,26 +1481,31 @@ function vGig(c){
 function sheetGigBase(k, pid){
   const isNew = !k, P = k ? planCtx(k) : null, v = P?.v || {}, team = !isPreview() && !lockedArtist;
   const T = ['', ...TIMES].map(t => [t, t || 'offen']);
-  const fields = `${isNew && !pid ? Sel('artist','ARTIST',artists().map(a => [a.id, a.name]), artists()[0]?.id) : ''}${F('title','EVENT / SHOW',v.title||'','text','required placeholder="z. B. Unreleased Vol. 4"')}
+  const mainId = v.artist || pid || '';
+  const who = team ? `<div class="field"><span class="flabel">HAUPT-ARTIST (WESSEN AUFTRITT?)</span><div class="gchips">${artists().map(a => `<label class="gchip"><input type="radio" name="artist" value="${esc(a.id)}" ${a.id === mainId ? 'checked' : ''} required><span>${esc(a.name)}</span></label>`).join('')}</div></div>
+    <div class="field"><span class="flabel">GAST-ARTISTS (FEATURE, BACKUPS – MEHRERE MÖGLICH)</span><div class="gchips">${artists().map(a => `<label class="gchip"><input type="checkbox" name="co" value="${esc(a.id)}" ${(v.co||[]).includes(a.id) ? 'checked' : ''}><span>${esc(a.name)}</span></label>`).join('')}</div></div>
+    ${F('coRole','ROLLE DER GAST-ARTISTS',Object.values(v.coRole||{})[0]||'','text','placeholder="z. B. Feature · Backups"')}` : '';
+  const fields = `${who}${F('title','EVENT / SHOW',v.title||'','text','required placeholder="z. B. Unreleased Vol. 4"')}
     <div class="grid2">${F('organizer','VERANSTALTER',v.organizer||'')}${F('contact','KONTAKT',v.contact||'','text','placeholder="Telefon, Mail oder Instagram"')}</div>
     <div class="grid2">${F('date','DATUM',v.date||'','date', isNew ? 'required' : '')}${F('setlen','SET-LÄNGE (MIN)',v.setlen||'','text','inputmode="numeric" placeholder="z. B. 20"')}</div>
     <div class="grid3">${Sel('getin','GET-IN',T,v.getin||'')}${Sel('soundcheck','SOUNDCHECK',T,v.soundcheck||'')}${Sel('stage','STAGE',[['','offen'], ...[...TIMES, '00:00','00:30','01:00','01:30','02:00','02:30','03:00'].map(t => [t,t])],v.stage||'')}</div>
     <div class="grid2">${F('venue','LOCATION',v.venue||'','text','placeholder="z. B. Mojo Club"')}${F('address','ADRESSE',v.address||'')}</div>
-    ${team ? `<div class="field"><span class="flabel">CO-ARTISTS (FEATURE, BACKUPS – MEHRFACH)</span><div class="gchips">${artists().map(a => `<label class="gchip"><input type="checkbox" name="co" value="${esc(a.id)}" ${(v.co||[]).includes(a.id) ? 'checked' : ''}><span>${esc(a.name)}</span></label>`).join('')}</div></div>
-    ${F('coRole','ROLLE DER CO-ARTISTS',Object.values(v.coRole||{})[0]||'','text','placeholder="z. B. Feature · Backups"')}` : ''}
+    ${F('guestCap','GÄSTELISTE · PLÄTZE (VOM VERANSTALTER)',v.guestCap||'','text','inputmode="numeric" placeholder="z. B. 10"')}
     ${team && !isNew ? Sel('status','STATUS',[...GSTAGES, 'Abgesagt'],v.status||'Zugesagt') : ''}
     <div class="field"><label for="f-concept">INFOS</label><textarea id="f-concept" name="concept" rows="3" placeholder="Line-up, Dresscode, Einlass, Parken, Ansprechpartner vor Ort">${esc(v.concept||'')}</textarea></div>
     <div class="field"><label for="f-refs">LINKS (EIN LINK PRO ZEILE)</label><textarea id="f-refs" name="refs" rows="2" placeholder="Flyer, Tickets, Event-Seite">${esc(v.refs||'')}</textarea></div>
     ${isNew && !team ? '<p class="small" style="margin:-4px 0 12px">Geht als Anfrage ans Team. Du bekommst eine Mitteilung, sobald sie angenommen ist.</p>' : ''}`;
   sheet(isNew ? (team ? 'Neuer Auftritt' : 'Auftritt anfragen') : 'Auftritt bearbeiten', fields, async fd => {
-    const doc = {}; for(const kk of ['title','organizer','contact','date','setlen','getin','soundcheck','stage','venue','address','concept','refs']) doc[kk] = String(fd[kk] ?? '').trim();
+    const doc = {}; for(const kk of ['title','organizer','contact','date','setlen','getin','soundcheck','stage','venue','address','guestCap','concept','refs']) doc[kk] = String(fd[kk] ?? '').trim();
     if(fd.status) doc.status = fd.status;
     if(!doc.title) return false;
-    if(team){ const main = pid || fd.artist || v.artist; const co = [...document.querySelectorAll('#sheetForm input[name=co]:checked')].map(i => i.value).filter(id => id !== main); const role = String(fd.coRole||'').trim();
+    if(team && fd.artist && !isNew) doc.artist = fd.artist;
+    if(team){ const main = fd.artist || pid || v.artist; const co = [...document.querySelectorAll('#sheetForm input[name=co]:checked')].map(i => i.value).filter(id => id !== main); const role = String(fd.coRole||'').trim();
       doc.co = co; doc.coRole = Object.fromEntries(co.map(id => [id, (v.coRole||{})[id] && !role ? v.coRole[id] : role])); }
     if(!isNew) return await planSave(k, doc) ? undefined : false;
     const gid = uid('g');
-    Object.assign(doc, {artist:pid || fd.artist, status: team ? 'Zugesagt' : 'Angefragt', req: team ? 'ok' : 'offen', byId: me || '', by: account?.name || '', reels:[], crew:[], props:[], food:[], checks:[]});
+    if(!(fd.artist || pid)){ toast('Bitte Haupt-Artist wählen'); return false; }
+    Object.assign(doc, {artist:fd.artist || pid, status: team ? 'Zugesagt' : 'Angefragt', req: team ? 'ok' : 'offen', byId: me || '', by: account?.name || '', reels:[], crew:[], props:[], food:[], checks:[], guests:[]});
     if(!await put('gigs', gid, doc, false)) return false;
     toast(team ? 'Auftritt angelegt' : 'Anfrage ans Team geschickt');
     $('#sheetRoot').innerHTML = ''; go('video', {id: gigKey(gid)}); return true;
@@ -2654,6 +2672,9 @@ async function act(a, id){
   if(a === 'gignew' || a === 'gigreq') return sheetGigBase(null, id || null);
   if(a === 'livefilter'){ const [aa, ff] = id.split('|'); return tab('live', {a: aa, f: ff}); }
   if(a === 'gigfin') return sheetGigFin(id);
+  if(a === 'guestcopy'){ const v = planGet(id), P = planCtx(id); const list = (v.guests||[]).filter(g => g.status !== 'Abgelehnt');
+    const txt = `Gästeliste ${gigNames(v)} · ${v.title || ''}${v.date ? ' · ' + fmt(v.date) : ''}\n` + list.map((g, i) => `${i+1}. ${g.name}${+g.plus ? ' +' + g.plus : ''}`).join('\n') + `\n\nGesamt: ${list.reduce((a, g) => a + 1 + (+g.plus||0), 0)} Personen`;
+    try{ await navigator.clipboard.writeText(txt); toast('Gästeliste kopiert – z. B. in WhatsApp einfügen'); }catch(_){ if(navigator.share) navigator.share({text: txt}).catch(() => {}); else toast('Kopieren nicht möglich'); } return; }
   if(a === 'gigaccept'){ if(await put('gigs', id, {req:'ok', status:'Zugesagt'})) toast('Auftritt angenommen'); return; }
   if(a === 'gigdecline'){ const n = prompt('Kurzer Grund für den Artist (optional):') || ''; if(await put('gigs', id, {req:'abgelehnt', reqNote:n.trim()})) toast('Abgelehnt'); return; }
   if(a === 'planset') return planSet(id);
@@ -3030,7 +3051,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131800';
+const APP_VERSION = '202611131820';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
