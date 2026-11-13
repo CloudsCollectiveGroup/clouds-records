@@ -318,6 +318,10 @@ const helpersOf = x => Array.isArray(x?.helpers) ? x.helpers.filter(k => k !== x
 const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || S.people?.[k]?.name || k);
 const withHelpers = x => helpersOf(x).length ? ' + ' + helpersOf(x).map(k => ownerName(k, x)).join(' + ') : '';
 const HelpChips = x => `<div class="field"><span class="flabel">ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)</span><div class="gchips">${HELPER_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${esc(ownerName(k, x))}</span></label>`).join('')}</div></div>`;
+/* Checklisten-Punkt: mehrere Zuständige (os); o = erste/Haupt-Person (Artist immer zuerst, wegen Datenbank-Regeln) */
+const chkOwners = c => Array.isArray(c?.os) && c.os.length ? c.os : (c?.o ? [c.o] : []);
+const chkHas = (c, k) => chkOwners(c).includes(k);
+const chkNames = (c, artistName) => chkOwners(c).map(k => k === 'A' ? (artistName || 'Artist') : ownerName(k)).join(' + ');
 const checksOf = x => Array.isArray(x?.checks) ? x.checks.filter(c => c && c.t) : [];
 const checkTxt = x => { const c = checksOf(x); return c.length ? ` · ☑ ${c.filter(i => i.d).length}/${c.length}` : ''; };
 const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTERPUNKTE)</span><div class="stack" id="chkList" style="gap:6px">${checksOf(x).map((c,i) => chkRow(c, i)).join('')}</div>
@@ -325,14 +329,14 @@ const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTE
 const CHK_OWNERS = () => [['','Wer? (optional)'],['A','Artist'],['P',ownerName('P')],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben']];
 const chkRow = (c, i) => `<div class="chkrow" style="display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>
   <div class="row" style="gap:6px;margin-left:28px;width:calc(100% - 70px)"><input name="chk_l" type="url" value="${esc(c.l||'')}" placeholder="Link (optional), z. B. Dropbox" style="flex:1;min-width:0;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:13px">${safeUrl(c.l) ? `<a href="${esc(c.l)}" target="_blank" rel="noopener" class="small" style="color:var(--sun);font-weight:700;flex:none;text-decoration:none">ÖFFNEN</a>` : ''}</div>
-  <select name="chk_o" aria-label="Zuständig für diesen Punkt" style="margin-left:28px;width:calc(100% - 70px);min-height:34px;padding:4px 30px 4px 10px;font-size:13px;border-radius:10px;${c.o ? 'color:var(--sun);border-color:rgba(255,204,0,.45)' : 'color:var(--mute)'}">${CHK_OWNERS().map(([v,l]) => `<option value="${v}" ${v === (c.o||'') ? 'selected' : ''}>${v ? '→ ' + esc(l) : esc(l)}</option>`).join('')}</select></div>`;
+  <div class="gchips" aria-label="Zuständig für diesen Punkt (mehrere möglich)" style="margin-left:28px;width:calc(100% - 70px)">${CHK_OWNERS().filter(([v]) => v).map(([v,l]) => `<label class="gchip"><input type="checkbox" class="chko" value="${v}" ${chkOwners(c).includes(v) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div></div>`;
 function bindChecks(form){
   const list = form.querySelector('#chkList'); if(!list) return;
   const wire = row => { row.querySelector('.chkdel').onclick = () => { row.remove(); form.dispatchEvent(new Event('input')); }; };
   list.querySelectorAll('.chkrow').forEach(wire);
   form.querySelector('#chkAdd').onclick = () => { list.insertAdjacentHTML('beforeend', chkRow({t:'', d:false})); const r = list.lastElementChild; wire(r); r.querySelector('input[name=chk_t]').focus(); };
 }
-const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => { const o = r.querySelector('select[name=chk_o]')?.value || '', l = safeUrl((r.querySelector('input[name=chk_l]')?.value || '').trim()); return {t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked, ...(o ? {o} : {}), ...(l ? {l} : {})}; }).filter(c => c.t);
+const readChecks = form => [...form.querySelectorAll('.chkrow')].map(r => { let os = [...r.querySelectorAll('input.chko:checked')].map(i => i.value); if(os.includes('A')) os = ['A', ...os.filter(k => k !== 'A')]; const l = safeUrl((r.querySelector('input[name=chk_l]')?.value || '').trim()); return {t:r.querySelector('input[name=chk_t]').value.trim(), d:r.querySelector('input[name=chk_d]').checked, ...(os.length ? {o: os[0]} : {}), ...(os.length > 1 ? {os} : {}), ...(l ? {l} : {})}; }).filter(c => c.t);
 const readHelpers = (form, owner) => [...form.querySelectorAll('input[name=helpers]:checked')].map(i => i.value).filter(k => k !== owner);
 const OWNER_COL = {A:null, P:'#FFCC00', N:'#A1A1AA', T:'#71717A'};
 const KINDS = ['Demo','Vocals','Beat','Mix','Master','Stems'];
@@ -909,7 +913,7 @@ function vRelease(c){
     const ownerTxt = (t.owner ? ` · ${t.owner === 'A' ? esc(p.name.toUpperCase()) : esc((OWNERS[t.owner]||t.owner).toUpperCase())}${esc(withHelpers(t).toUpperCase())}` : '') + checkTxt(t);
     const late = !ok && due && daysTo(due) < 0;
     const cl = checksOf(t);
-    const chkTxt = cl.length ? `<span style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:4px">${cl.map(c => `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;${c.d ? 'text-decoration:line-through;color:var(--mute)' : 'color:var(--ink2)'}">${c.d ? '☑' : '☐'} ${esc(c.t)}${c.o ? ` <span style="color:var(--sun)">→ ${esc(c.o === 'A' ? p.name : ownerName(c.o))}</span>` : ''}${safeUrl(c.l) ? ' <span style="color:var(--sun)">🔗</span>' : ''}</span>`).join('')}</span>` : '';
+    const chkTxt = cl.length ? `<span style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:4px">${cl.map(c => `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;${c.d ? 'text-decoration:line-through;color:var(--mute)' : 'color:var(--ink2)'}">${c.d ? '☑' : '☐'} ${esc(c.t)}${chkOwners(c).length ? ` <span style="color:var(--sun)">→ ${esc(chkNames(c, p.name))}</span>` : ''}${safeUrl(c.l) ? ' <span style="color:var(--sun)">🔗</span>' : ''}</span>`).join('')}</span>` : '';
     const nChat = chatOf('tasks:' + t.id).length;
     const noteTxt = (t.note ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;white-space:pre-line;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:400;text-decoration:none">✎ ${esc(t.note.length > 90 ? t.note.slice(0,90) + ' …' : t.note)}</span>` : '') + chkTxt + (nChat ? `<span class="small" style="display:inline-block;width:100%;margin-top:4px;color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:600">💬 ${nChat} ${nChat === 1 ? 'Nachricht' : 'Nachrichten'}</span>` : '');
     return `<div class="step">
@@ -1011,9 +1015,9 @@ function sheetTaskView(id){
   const t = S.tasks[id]; if(!t) return; const r = S.releases[t.release], p = person(r?.artist);
   const own = t.owner === 'A' ? (p?.name || 'Artist') : ownerName(t.owner), due = taskDue(t);
   const checks = checksOf(t).map((c, i) => `<div class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
-      ${c.o === 'A' && lockedArtist ? `<button class="dot ${c.d ? 'ok' : ''}" data-chkview="${esc(t.id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
+      ${chkHas(c,'A') && lockedArtist ? `<button class="dot ${c.d ? 'ok' : ''}" data-chkview="${esc(t.id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
       <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(c.t)}</span>
-      <span class="small">${c.o ? '→ ' + esc((c.o === 'A' ? p?.name : ownerName(c.o)) || '').toUpperCase() : ''}</span></span>
+      <span class="small">${chkOwners(c).length ? '→ ' + esc(chkNames(c, p?.name)).toUpperCase() : ''}</span></span>
       ${safeUrl(c.l) ? `<a class="pill" href="${esc(c.l)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗 Öffnen</a>` : ''}</div>`).join('');
   const root = $('#sheetRoot');
   root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(t.title)}"><div class="sheet"><div class="grab"></div>
@@ -1693,7 +1697,7 @@ function sheetRecording(aid, id){
 }
 /* ---------- Aufgaben & Termine ohne Release (col „todos“) – für Team und Artists ---------- */
 const isTermin = x => x?.kind === 'Termin';
-const todoArtistIn = x => !!x?.artist && (x.owner === 'A' || helpersOf(x).includes('A') || checksOf(x).some(c => c.o === 'A'));
+const todoArtistIn = x => !!x?.artist && (x.owner === 'A' || helpersOf(x).includes('A') || checksOf(x).some(c => chkHas(c,'A')));
 const todoAMine = x => x.owner === 'A' || helpersOf(x).includes('A');
 const todoWho = x => [x.owner, ...helpersOf(x)].filter(Boolean).map(k => k === 'A' ? (person(x.artist)?.name || 'Artist') : ownerName(k)).join(' + ');
 const todosOf = aid => vals(S.todos||{}).filter(x => !aid || x.artist === aid);
@@ -1730,7 +1734,7 @@ function sheetTodo(id, pre = {}){
   const extra = id ? `${chatBox('todos:' + id, '', todoArtistIn(x) ? x.artist : '')}<button class="btn danger" type="button" id="delTodo" style="width:100%;margin-top:10px">Löschen</button>` : '';
   const form = sheet(id ? (term ? 'Termin bearbeiten' : 'Aufgabe bearbeiten') : (term ? 'Neuer Termin' : 'Neue Aufgabe'), fields, async (fd, f) => {
     const helpers = readHelpers(f, fd.owner), checks = readChecks(f);
-    const usesA = fd.owner === 'A' || helpers.includes('A') || checks.some(c => c.o === 'A');
+    const usesA = fd.owner === 'A' || helpers.includes('A') || checks.some(c => chkHas(c,'A'));
     if(usesA && !fd.artist){ toast('Bitte oben einen Artist auswählen'); return false; }
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     if(fd.kind === 'Termin' && !fd.date){ toast('Bitte ein Datum eintragen'); return false; }
@@ -1752,8 +1756,8 @@ function sheetTodo(id, pre = {}){
 function sheetTodoView(id){
   const x = S.todos?.[id]; if(!x) return; const a = person(x.artist);
   const checks = checksOf(x).map((c, i) => `<div class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
-      ${c.o === 'A' ? `<button class="dot ${c.d ? 'ok' : ''}" data-todochk="${esc(id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
-      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(c.t)}</span><span class="small">${c.o ? '→ ' + esc((c.o === 'A' ? a?.name : ownerName(c.o)) || '').toUpperCase() : ''}</span></span>
+      ${chkHas(c,'A') ? `<button class="dot ${c.d ? 'ok' : ''}" data-todochk="${esc(id)}|${i}" style="flex:none">${c.d ? icon.check : ''}</button>` : `<span style="flex:none;width:22px">${c.d ? '☑' : '☐'}</span>`}
+      <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(c.t)}</span><span class="small">${chkOwners(c).length ? '→ ' + esc(chkNames(c, a?.name)).toUpperCase() : ''}</span></span>
       ${safeUrl(c.l) ? `<a class="pill" href="${esc(c.l)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗 Öffnen</a>` : ''}</div>`).join('');
   const root = $('#sheetRoot');
   root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="${esc(x.title)}"><div class="sheet"><div class="grab"></div>
@@ -1779,14 +1783,14 @@ const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort
 function pinItems(k){
   const out = [];
   for(const t of vals(S.tasks)) if(!t.done && assigned(t, k)){ const r = S.releases[t.release]; if(!r) continue; out.push({tick:['toggle', t.id], src:'tasks', id:t.id, title:t.title, sub:(person(r.artist)?.name||'') + ' · ' + relName(r) + checkTxt(t), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by, note:t.note}); }
-  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)) checksOf(t).forEach((c, ci) => { if(c.o === k && !c.d){ const r = S.releases[t.release]; if(r) out.push({tick:['chktoggle', t.id + '|' + ci], src:'tasks', id:t.id, title:c.t, sub:'Punkt aus „' + t.title + '“ · ' + (person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by}); } });
-  for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(c.o === k && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
+  for(const t of vals(S.tasks)) if(!t.done && !assigned(t, k)) checksOf(t).forEach((c, ci) => { if(chkHas(c,k) && !c.d){ const r = S.releases[t.release]; if(r) out.push({tick:['chktoggle', t.id + '|' + ci], src:'tasks', id:t.id, title:c.t, sub:'Punkt aus „' + t.title + '“ · ' + (person(r.artist)?.name||'') + ' · ' + relName(r), due:taskDue(t), go:['release', r.id], at:t._at, by:t._by}); } });
+  for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(chkHas(c,k) && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({tick:['ptoggle', x.id], src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
     if(assigned(x, k)) out.push({tick:['tododone', x.id], src:'todos', id:x.id, title:x.title, sub:'Aufgabe' + (a ? ' · ' + a : '') + checkTxt(x), due:x.due, go:null, at:x._at, by:x._by, note:x.note});
-    else checksOf(x).forEach((c, ci) => { if(c.o === k && !c.d) out.push({tick:['todochk', x.id + '|' + ci], src:'todos', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“' + (a ? ' · ' + a : ''), due:x.due, go:null, at:x._at, by:x._by}); }); }
+    else checksOf(x).forEach((c, ci) => { if(chkHas(c,k) && !c.d) out.push({tick:['todochk', x.id + '|' + ci], src:'todos', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“' + (a ? ' · ' + a : ''), due:x.due, go:null, at:x._at, by:x._by}); }); }
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
 }
@@ -2050,10 +2054,10 @@ function vArtistPin(c){
   const sent = vals(S.notes||{}).filter(n => n.fromArtist === aid && (n.to||[]).some(t => !(n.doneBy||[]).includes(t))).sort((a,b) => (b.at||'').localeCompare(a.at||''));
   const mineT = t => t.owner === 'A' || helpersOf(t).includes('A');
   const tasks = vals(S.tasks).filter(t => !t.done && S.releases[t.release]?.artist === aid)
-    .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => c.o === 'A' && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
+    .flatMap(t => mineT(t) ? [{t, due: taskDue(t)}] : checksOf(t).map((c, ci) => chkHas(c,'A') && !c.d ? {t, due: taskDue(t), ci, c} : null).filter(Boolean))
     .sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const studio = studioOf(aid).filter(x => x.status !== 'Abgelehnt' && (!x.date || x.date >= t0));
-  const atodos = todosOf(aid).filter(x => todoArtistIn(x) && !isTermin(x) && !x.done && (todoAMine(x) || checksOf(x).some(c => c.o === 'A' && !c.d))).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
+  const atodos = todosOf(aid).filter(x => todoArtistIn(x) && !isTermin(x) && !x.done && (todoAMine(x) || checksOf(x).some(c => chkHas(c,'A') && !c.d))).sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
   const aterms = todosOf(aid).filter(x => todoArtistIn(x) && isTermin(x) && (!x.date || x.date >= t0)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
   const ptasks = planTasks().filter(t => t.o === aid);
   const shoots = [...relsOf(aid).flatMap(r => (r.video?.days||[]).filter(d => d.date && d.date >= t0).map(d => ({...d, r, key:r.id, lbl:relName(r).toUpperCase()}))),
@@ -2790,7 +2794,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131620';
+const APP_VERSION = '202611131630';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

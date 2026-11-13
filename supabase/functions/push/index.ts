@@ -4,6 +4,9 @@
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+/* Checklisten-Punkt: mehrere Zuständige (os), sonst o */
+const owners = (x: any): string[] => Array.isArray(x?.os) && x.os.length ? x.os : (x?.o ? [x.o] : []);
+
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const TEAM: Record<string, string> = { C: "cem", K: "kasper", N: "nikolina", TH: "torben" };
 const fmt = (iso?: string) => iso ? iso.split("-").reverse().join(".") : "";
@@ -142,9 +145,9 @@ Deno.serve(async (req) => {
     const who = (k: string) => k === "A" ? d.artist : k;
     if (d.owner && !d.done && (op === "INSERT" || old?.owner !== d.owner) && (TEAM[d.owner] || d.owner === "A" || d.owner === "P"))
       out.push({ keys: [who(d.owner)], title: "Neue Aufgabe für dich", body: d.title || "", tag: "task" });
-    const before = new Set(((old?.checks) || []).map((x: any) => `${x.t}|${x.o || ""}`));
-    for (const x of (d.checks || [])) if (x.o && !x.d && !before.has(`${x.t}|${x.o}`))
-      out.push({ keys: [who(x.o)], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
+    const before = new Set(((old?.checks) || []).flatMap((x: any) => owners(x).map((o: string) => `${x.t}|${o}`)));
+    for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!before.has(`${x.t}|${o}`))
+      out.push({ keys: [who(o)], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
   }
   if (col === "todos") {
     const term = d.kind === "Termin";
@@ -155,9 +158,9 @@ Deno.serve(async (req) => {
     if (term && op === "UPDATE" && (old?.date !== d.date || old?.time !== d.time || old?.place !== d.place)) {
       const rest = now.filter((k: string) => before.includes(k)); if (rest.length) out.push({ keys: rest, title: `Termin geändert: ${d.title}`, body: when, tag: "task" });
     }
-    const bc = new Set(((old?.checks) || []).map((x: any) => `${x.t}|${x.o || ""}`));
-    for (const x of (d.checks || [])) if (x.o && !x.d && !bc.has(`${x.t}|${x.o}`) && (x.o !== "A" || d.artist))
-      out.push({ keys: [x.o === "A" ? d.artist : x.o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
+    const bc = new Set(((old?.checks) || []).flatMap((x: any) => owners(x).map((o: string) => `${x.t}|${o}`)));
+    for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!bc.has(`${x.t}|${o}`) && (o !== "A" || d.artist))
+      out.push({ keys: [o === "A" ? d.artist : o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
   }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
@@ -168,7 +171,7 @@ Deno.serve(async (req) => {
       const { data: card } = await sb.from("docs").select("data").eq("col", kind).eq("id", rid).maybeSingle();
       const c: any = card?.data || {};
       title = c.title || c.kind || title;
-      for (const k of [c.owner, ...(c.helpers || []), ...((c.checks || []).map((x: any) => x.o))]) if (k) keys.add(k === "A" ? (c.artist || d.artist) : k);
+      for (const k of [c.owner, ...(c.helpers || []), ...((c.checks || []).flatMap((x: any) => owners(x)))]) if (k) keys.add(k === "A" ? (c.artist || d.artist) : k);
       if (kind === "content") { keys.add("C"); keys.add("N"); if (c.fromArtist) keys.add(c.artist || d.artist); }
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
