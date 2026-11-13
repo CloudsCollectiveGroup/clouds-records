@@ -2,8 +2,8 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
-  let d = {}; try{ d = e.data ? e.data.json() : {}; }catch(_){ d = {title:'Clouds Records', body: e.data && e.data.text()}; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Clouds Records', {body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || undefined, data: {url: d.url || './'}}));
+  let d = {}; try{ d = e.data ? e.data.json() : {}; }catch(_){ d = {title:'CloudsRecords', body: e.data && e.data.text()}; }
+  e.waitUntil(self.registration.showNotification(d.title || 'CloudsRecords', {body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || undefined, data: {url: d.url || './'}}));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();

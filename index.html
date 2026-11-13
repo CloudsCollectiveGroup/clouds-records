@@ -1,11 +1,11 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Clouds Records</title>
+<title>CloudsRecords</title>
 <meta name="theme-color" content="#0C1B31">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Clouds Records">
+<meta name="apple-mobile-web-app-title" content="CloudsRecords">
 <meta name="robots" content="noindex,nofollow">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -340,12 +340,14 @@ const TEMPLATE = [
   ['T-12','Song geschrieben','A'],
   ['T-12','Demo im System','A'],
   ['T-12','Recording bei CloudStudios','A'],
+  ['T-10','Fotoshooting-Tag (Cover & Pressefotos)','N'],
   ['T-8','Mix & Master final','P'],
   ['T-8','Cover fertig','N'],
+  ['T-6','Videodreh-Tag & Reels','TH'],
   ['T-6','Distributor-Upload, ISRC','K'],
   ['T-4','Spotify-Pitch & Promo-Plan','K'],
   ['T-2','Pre-Save-Link & Content-Snippets','N'],
-  ['T-0','Release-Tag','T']
+  ['T-0','Release-Tag','TH']
 ];
 /* EP/Album: Fahrplan fürs Gesamtprojekt – die Songs haben ihren eigenen */
 const TEMPLATE_PROJECT = [
@@ -357,7 +359,7 @@ const TEMPLATE_PROJECT = [
   ['T-6','Distributor-Upload, UPC, ISRCs','K'],
   ['T-4','Spotify-Pitch & Promo-Plan','K'],
   ['T-2','Pre-Save-Link & Content','N'],
-  ['T-0','Release-Tag (mit letzter Single)','T']
+  ['T-0','Release-Tag (mit letzter Single)','TH']
 ];
 /* Song nur auf der EP/dem Album: Produktion bis fertig, Release läuft über das Projekt */
 const TEMPLATE_SONG = [
@@ -368,6 +370,8 @@ const TEMPLATE_SONG = [
   ['T-6','Credits & Splits, ISRC','K']
 ];
 const templateFor = r => (r.type === 'EP' || r.type === 'Album') ? TEMPLATE_PROJECT : r.type === 'Song' ? TEMPLATE_SONG : TEMPLATE;
+const CONTRACT_ST = ['Unterschrieben','Nicht unterschrieben','Vertrag in Abstimmung'];
+const contractOf = p => p?.contractStatus || (p?.role === 'Produzent' ? 'Vertrag in Abstimmung' : 'Unterschrieben');
 const COLORS = [
   ['Blau','#2F5BD3','#5C80E0'],['Graphit','#52525B','#71717A'],['Violett','#7A4FBF','#9670D1'],
   ['Orange','#D98A1E','#E7A64B'],['Petrol','#1F7A8C','#4596A6'],['Rot','#C8431E','#DA6B4B'],
@@ -834,6 +838,7 @@ function vArtist(c){
         ${isPreview() ? '' : `<div class="row" style="gap:8px"><button class="chip" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button></div>`}
       </div>
       <div class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:18px;position:relative">ARTIST · ${startTxt} · ${yearLabel(p)}</div>
+      ${!isPreview() && contractOf(p) !== 'Unterschrieben' ? `<span class="sticker" style="position:relative;display:inline-block;margin-top:8px;background:var(--danger);color:#fff">⚠ ${esc(contractOf(p).toUpperCase())}</span>` : ''}
       <h1 class="h-giant" style="position:relative;margin-top:6px;font-size:68px">${esc(p.name)}</h1>
       <div class="counters" style="position:relative">
         <div class="counter"><b>${done('Single')}/${p.singles}</b><span>SINGLES</span></div>
@@ -946,7 +951,7 @@ function vRelease(c){
     ${proj ? songsSection(r, kids) : ''}
     <div class="pad between" style="padding-top:18px"><h2 class="h-sec">${proj ? 'Fahrplan ' + esc(relName(r)) : 'Fahrplan'}</h2>${ts.length && !isPreview() ? `<button class="pill" data-act="addtask" data-id="${esc(r.id)}">${icon.plus} Schritt</button>` : ''}</div>
     ${ts.length ? `<div class="steps">${steps}</div>` :
-      `<div class="empty"><b>Noch kein Fahrplan</b><span class="small">${proj ? `Projekt-Fahrplan: ${TEMPLATE_PROJECT.length} Schritte fürs Gesamtprojekt (Tracklist, Cover, Upload, Release-Tag). Jeder Song hat seinen eigenen Plan.` : songOnly ? `Song-Fahrplan: ${TEMPLATE_SONG.length} Schritte bis der Song fertig ist. Veröffentlicht wird mit ${esc(relName(par))}.` : 'Standard: 9 Schritte von T-12 bis zum Release-Tag.'} Fälligkeiten rechnen sich aus dem Release-Datum.</span>${isPreview()?'':`<button class="pill sun" data-act="template" data-id="${esc(r.id)}">Fahrplan anlegen</button>`}</div>`}
+      `<div class="empty"><b>Noch kein Fahrplan</b><span class="small">${proj ? `Projekt-Fahrplan: ${TEMPLATE_PROJECT.length} Schritte fürs Gesamtprojekt (Tracklist, Cover, Upload, Release-Tag). Jeder Song hat seinen eigenen Plan.` : songOnly ? `Song-Fahrplan: ${TEMPLATE_SONG.length} Schritte bis der Song fertig ist. Veröffentlicht wird mit ${esc(relName(par))}.` : `Standard: ${TEMPLATE.length} Schritte von T-12 bis zum Release-Tag, inkl. Fotoshooting- und Videodreh-Tag.`} Fälligkeiten rechnen sich aus dem Release-Datum.</span>${isPreview()?'':`<button class="pill sun" data-act="template" data-id="${esc(r.id)}">Fahrplan anlegen</button>`}</div>`}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Tracks & Audio</h2><button class="pill" data-act="addtrack" data-id="${esc(r.id)}">${icon.plus} Track</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">
       ${trackList || '<span class="small">Noch kein Track angelegt.</span>'}
@@ -2499,7 +2504,7 @@ function sheetPerson(id){
     <div class="grid3">${F('singles','SINGLES',p.singles??0,'number','min="0"')}${F('eps','EPS',p.eps??0,'number','min="0"')}${F('albums','ALBEN',p.albums??0,'number','min="0"')}</div>
     ${F('mail','MANAGEMENT-MAIL',p.mail||'','email','placeholder="name@cloudstudioshh.de"')}
     ${F('dropbox','DROPBOX-ORDNER (LINK)',p.dropbox||'','url','placeholder="https://www.dropbox.com/…"')}
-    ${p.role==='Produzent' ? F('contractStatus','VERTRAGSSTATUS',p.contractStatus||'Vertrag in Abstimmung') : ''}
+    ${Sel('contractStatus','VERTRAGSSTATUS',CONTRACT_ST, contractOf(p))}
     <div class="field"><label for="f-notes">NOTIZEN</label><textarea id="f-notes" name="notes" rows="3">${esc(p.notes||'')}</textarea></div>
     ${isNew ? '<p class="small" style="margin:0 0 8px">Bei Artists werden die Pflicht-Releases nach dem Verteilungsvorschlag direkt angelegt. Keine Doppelzählung: Vorab-Singles zählen zur EP bzw. zum Album.</p>' : relCount ? '<p class="small" style="margin:0 0 8px">Geänderte Release-Zahlen passen bestehende Releases nicht automatisch an.</p>' : ''}`;
   sheet(isNew ? 'Neu im Roster' : `${p.name} · Vertrag`, fields, async fd => {
@@ -2783,7 +2788,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131545';
+const APP_VERSION = '202611131600';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

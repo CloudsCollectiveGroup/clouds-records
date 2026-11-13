@@ -78,7 +78,7 @@ async function morning() {
     if (!parts.length || !(await allowed(m.user_id, "morning"))) continue;
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
     for (const s of subs || []) {
-      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: "Guten Morgen · Clouds Records", body: parts.join(" · "), tag: "morning" })); sent++; }
+      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: "Guten Morgen · CloudsRecords", body: parts.join(" · "), tag: "morning" })); sent++; }
       catch (e: any) { if ([404, 410].includes(e?.statusCode)) await sb.from("push_subs").delete().eq("endpoint", s.endpoint); }
     }
   }
@@ -113,7 +113,7 @@ async function weekly() {
     const body = [`${done} erledigt`, over ? `${over} überfällig` : "", terms ? `${terms} Termine nächste Woche` : "", posts ? `${posts} Posts geplant` : ""].filter(Boolean).join(" · ");
     const { data: subs } = await sb.from("push_subs").select("endpoint,sub").eq("user_id", m.user_id);
     for (const s of subs || []) {
-      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: isArtist ? "Deine Woche · Clouds Records" : "Wochenbericht · Clouds Records", body, tag: "weekly" })); sent++; }
+      try { await webpush.sendNotification(s.sub, JSON.stringify({ title: isArtist ? "Deine Woche · CloudsRecords" : "Wochenbericht · CloudsRecords", body, tag: "weekly" })); sent++; }
       catch (e: any) { if ([404, 410].includes(e?.statusCode)) await sb.from("push_subs").delete().eq("endpoint", s.endpoint); }
     }
   }
