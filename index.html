@@ -385,7 +385,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin','mwfin','contacts'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -1006,6 +1006,7 @@ function vRelease(c){
     ${songOnly ? '' : releaseCheck(r)}
     ${songOnly ? '' : contentSection(r)}
     ${songOnly ? '' : videoSection(r)}
+    ${contribSection(r)}
     ${songOnly ? '' : campaignSection(r)}
     ${songOnly ? '' : coopSection(r)}
     ${(() => { const ss = vals(S.studio||{}).filter(x => x.release === r.id && x.status !== 'Abgelehnt').sort((a,b) => (a.date||'').localeCompare(b.date||'')); return ss.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio-Sessions</h2><span class="small">${ss.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${ss.map(x => studioRow(x, false)).join('')}</div>` : ''; })()}
@@ -1196,6 +1197,157 @@ const campKpi = x => { const sp = num(x.spent) || num(x.budget); const parts = [
   if(num(x.clicks) && sp) parts.push((sp / num(x.clicks)).toFixed(2).replace('.', ',') + ' €/KLICK');
   if(num(x.follower) && sp) parts.push((sp / num(x.follower)).toFixed(2).replace('.', ',') + ' €/FOLLOWER');
   return parts.join(' · '); };
+/* Mitwirkende pro Release (Arbeit & Kosten) – Kosten: Team + betroffener Artist (col 'mwfin'), Dienstleister: col 'contacts' (nur Team) */
+const MW_ROLES = ['Produktion/Beat','Recording','Mix','Mastering','Songwriting','Feature','Arrangement','Cover/Artwork','Foto','Video','Schnitt','Content/Social','Styling','Promo/PR','Komplettpaket','Sonstiges'];
+const DL_KIND = ['Person','Firma'];
+/* Verzeichnis: intern (Team + Produzent, Kategorien in contacts 'int-<key>') und extern (contacts) */
+const DL_DEFAULT = {N:['Cover/Artwork','Foto','Content/Social'], TH:['Video'], K:['Promo/PR']};
+const ctCats = c => Array.isArray(c?.cats) && c.cats.length ? c.cats : (c?.role ? [c.role] : []);
+function dlInternal(){
+  const team = MW_TEAM.map(([k,l]) => ({key:'t:' + k, cid:'int-' + k, name:l, sub:'Team', def: DL_DEFAULT[k] || []}));
+  const prod = producers().map(p => ({key:'p:' + p.id, cid:'int-' + p.id, name:p.name, sub:'Produzent', def:['Produktion/Beat','Mix','Mastering']}));
+  return [...team, ...prod].map(x => { const c = S.contacts?.[x.cid]; return {...x, cats: c ? ctCats(c) : x.def, c}; });
+}
+const dlExternal = () => vals(S.contacts||{}).filter(c => !c.id.startsWith('int-')).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+const MW_ST = ['Gesucht','Angefragt','Zugesagt','Geliefert'];
+const MW_COL = {Gesucht:'var(--sun)', Angefragt:'var(--sun)', Zugesagt:'var(--album)', Geliefert:'#39ff88'};
+const MW_TEAM = [['C','Cem'],['TH','Thorben'],['K','Kasper'],['N','Nikolina']];
+const mwOf = r => Array.isArray(r?.mw) ? r.mw : [];
+const mwFin = (rid, eid) => S.mwfin?.[rid]?.items?.[eid] || null;
+function mwName(e){
+  const w = e.who || '', k = w.slice(2);
+  if(!w) return 'Noch offen';
+  if(w.startsWith('t:')) return OWNERS[k] || e.name || k;
+  if(w.startsWith('p:') || w.startsWith('a:')) return person(k)?.name || e.name || k;
+  if(w.startsWith('x:')) return S.contacts?.[k]?.name || e.name || 'Extern';
+  return e.name || w;
+}
+const mwCostLine = f => !f ? '' : [num(f.amt) ? eur(num(f.amt)) : '', f.inv ? 'RECHNUNG ✓' : (num(f.amt) ? 'RECHNUNG OFFEN' : ''), num(f.amt) ? (f.paid ? 'BEZAHLT ✓' : 'NICHT BEZAHLT') : '', f.beleg ? esc(f.beleg.toUpperCase()) : ''].filter(Boolean).join(' · ');
+function mwRow(r, e, i, team, prefix){
+  const f = mwFin(r.id, e.id), cl = mwCostLine(f);
+  return `<button class="vrow" ${team ? `data-act="mwedit" data-id="${esc(r.id)}|${i}"` : 'data-act="noop"'} style="cursor:${team ? 'pointer' : 'default'};width:100%;text-align:left;font:inherit;align-items:flex-start">
+    <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${prefix ? esc(prefix) + ' · ' : ''}${esc(mwName(e))}</b>
+      <span class="small">${esc((e.roles||[]).join(' · ').toUpperCase() || 'ROLLE OFFEN')}</span>
+      ${e.what ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(e.what)}</span>` : ''}
+      ${cl ? `<span class="small" style="color:${f && num(f.amt) && !f.paid ? 'var(--sun)' : 'var(--album)'}">${cl}</span>` : ''}</span>
+    <span class="status" style="color:${MW_COL[e.st||'Zugesagt']};flex:none">● ${esc((e.st||'Zugesagt').toUpperCase())}</span></button>`;
+}
+function contribSection(r){
+  const team = !isPreview() && !lockedArtist, list = mwOf(r);
+  const kids = isProject(r) ? childrenOf(r).filter(k => mwOf(k).length) : [];
+  if(!list.length && !kids.length && !team) return '';
+  const all = [...list.map(e => [r, e]), ...kids.flatMap(k => mwOf(k).map(e => [k, e]))];
+  const sum = all.reduce((a, [rr, e]) => a + num(mwFin(rr.id, e.id)?.amt), 0);
+  const open = all.reduce((a, [rr, e]) => { const f = mwFin(rr.id, e.id); return a + (f && !f.paid ? num(f.amt) : 0); }, 0);
+  const tr = isProject(r) ? [] : tracksOf(r.id);
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Mitwirkende</h2>${team ? `<button class="pill" data-act="mwnew" data-id="${esc(r.id)}">${icon.plus} Mitwirkende</button>` : ''}</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${list.map((e, i) => mwRow(r, e, i, team)).join('') || (kids.length ? '' : '<span class="small">Wer hat an diesem Song gearbeitet? Produktion, Recording, Mix, Mastering, Feature, Cover – intern und extern, mit Kosten und Rechnung.</span>')}
+    ${kids.length ? `<span class="flabel" style="margin-top:6px">AUS DEN SONGS</span>${kids.flatMap(k => mwOf(k).map((e, i) => mwRow(k, e, i, team, relTitle(k)))).join('')}` : ''}
+    ${sum ? `<div class="between small" style="padding:4px 2px"><span>KOSTEN GESAMT</span><b>${eur(sum)}${open ? ' · OFFEN ' + eur(open) : ''}</b></div>` : ''}
+    ${team && list.length && tr.length ? `<button class="pill" data-act="mwcredits" data-id="${esc(r.id)}" style="align-self:flex-start">In Credits &amp; Splits übernehmen</button>` : ''}</div>`;
+}
+function sheetMw(rid, idx){
+  const r = S.releases[rid]; if(!r) return; const arr = [...mwOf(r)], isNew = idx == null, e = isNew ? {st:'Zugesagt', roles:[]} : arr[idx] || {};
+  const f0 = (!isNew && mwFin(rid, e.id)) || {};
+  const opts = [['','Noch offen · wird gesucht'], ...dlInternal().map(x => [x.key, 'Intern · ' + x.name + (x.cats.length ? ' (' + x.cats.join(', ') + ')' : '')]), ...artists().map(p => ['a:' + p.id, 'Artist · ' + p.name]), ...dlExternal().map(c => ['x:' + c.id, 'Extern · ' + c.name + (ctCats(c).length ? ' (' + ctCats(c).join(', ') + ')' : '')]), ['new','+ Neuer externer Dienstleister']];
+  const fields = `${Sel('who','WER?',opts,e.who||'')}
+    <div id="newWrap" style="display:none"><div class="grid2">${F('nname','NAME','','text','placeholder="z. B. XAMMER"')}${Sel('nrole','HAUPTROLLE',MW_ROLES,'Mastering')}</div>${F('ncontact','KONTAKT (MAIL / INSTAGRAM)','','text')}</div>
+    <div class="field"><span class="flabel">WAS HAT ER/SIE GEMACHT? (MEHRFACH)</span><div class="gchips">${MW_ROLES.map(x => `<label class="gchip"><input type="checkbox" name="mwrole" value="${esc(x)}" ${(e.roles||[]).includes(x) ? 'checked' : ''}><span>${esc(x)}</span></label>`).join('')}</div></div>
+    <div class="field"><label for="f-what">WAS GENAU</label><textarea id="f-what" name="what" rows="2" placeholder="z. B. Mastering V2 nach Feedback, Stems geliefert">${esc(e.what||'')}</textarea></div>
+    ${Sel('st','STATUS',MW_ST,e.st||'Zugesagt')}
+    <span class="flabel" style="display:block;margin:4px 0 6px">KOSTEN · SIEHT TEAM UND ${esc((person(r.artist)?.name || 'DER ARTIST').toUpperCase())}</span>
+    <div class="grid2">${F('amt','BETRAG (€)',f0.amt||'','text','inputmode="decimal" placeholder="leer = ohne Kosten"')}${F('beleg','BELEG / RECHNUNGS-NR.',f0.beleg||'','text','placeholder="z. B. BE-CR-004"')}</div>
+    <div class="grid2">${Sel('inv','RECHNUNG ERHALTEN',[['','Nein'],['1','Ja']],f0.inv ? '1' : '')}${Sel('paid','BEZAHLT',[['','Nein'],['1','Ja']],f0.paid ? '1' : '')}</div>`;
+  const extra = isNew ? '' : `<button class="btn danger" type="button" id="delMw" style="width:100%;margin-top:10px">Eintrag löschen</button>`;
+  const form = sheet((isNew ? 'Mitwirkende · ' : 'Mitwirkende bearbeiten · ') + relTitle(r), fields, async (fd, f) => {
+    let who = fd.who || '';
+    const roles = [...f.querySelectorAll('input[name=mwrole]:checked')].map(i => i.value);
+    if(who === 'new'){
+      const nm = (fd.nname||'').trim(); if(!nm){ toast('Name des Dienstleisters fehlt'); return false; }
+      const cid = uid('ct'); if(!await put('contacts', cid, {name:nm, kind:'Person', cats:[fd.nrole], contact:(fd.ncontact||'').trim(), at:new Date().toISOString()}, false)) return false;
+      S.contacts = S.contacts || {}; S.contacts[cid] = {id:cid, name:nm, cats:[fd.nrole]};
+      who = 'x:' + cid; if(!roles.length) roles.push(fd.nrole);
+    }
+    const doc = {id: e.id || uid('mw'), who, roles, what:(fd.what||'').trim(), st:fd.st};
+    doc.name = mwName(doc);
+    if(isNew) arr.push(doc); else arr[idx] = doc;
+    if(!await put('releases', rid, {mw: arr})) return false;
+    const fin = {amt:String(fd.amt||'').trim(), beleg:String(fd.beleg||'').trim(), inv: fd.inv === '1', paid: fd.paid === '1'};
+    const has = fin.amt || fin.beleg || fin.inv || fin.paid, cur = S.mwfin?.[rid];
+    if(has || cur?.items?.[doc.id]){
+      const items = {...(cur?.items || {})}; if(has) items[doc.id] = fin; else delete items[doc.id];
+      if(!await put('mwfin', rid, {artist:r.artist, release:rid, items}, false)) return false;
+    }
+  }, extra);
+  const w = form.querySelector('[name=who]'), nw = form.querySelector('#newWrap');
+  const sync = () => { nw.style.display = w.value === 'new' ? '' : 'none'; };
+  w.onchange = () => { sync(); const v = w.value, cats = v.startsWith('x:') ? ctCats(S.contacts?.[v.slice(2)]) : (dlInternal().find(x => x.key === v)?.cats || []);
+    if(cats.length === 1 && !form.querySelectorAll('input[name=mwrole]:checked').length){ const cb = form.querySelector(`input[name=mwrole][value="${cats[0]}"]`); if(cb) cb.checked = true; } };
+  sync();
+  const d = form.querySelector('#delMw'); if(d) d.onclick = async () => { if(d.dataset.sure){ arr.splice(idx, 1); await put('releases', rid, {mw: arr}); const cur = S.mwfin?.[rid]; if(cur?.items?.[e.id]){ const items = {...cur.items}; delete items[e.id]; await put('mwfin', rid, {artist:r.artist, release:rid, items}, false); } $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+async function mwToCredits(rid){
+  const r = S.releases[rid]; if(!r) return; let n = 0;
+  for(const t of tracksOf(rid)){
+    const cr = [...(t.credits||[])];
+    for(const e of mwOf(r)){ if(!e.who) continue; const nm = mwName(e), role = (e.roles||[]).join(', ');
+      const ex = cr.find(c => (c.n||'').toLowerCase() === nm.toLowerCase());
+      if(ex){ if(!ex.r && role) ex.r = role; } else { cr.push({n:nm, r:role, m:0, p:0}); n++; } }
+    await put('tracks', t.id, {credits: cr});
+  }
+  toast(n ? n + ' Beteiligte übernommen · Anteile im Track eintragen' : 'Alle Mitwirkenden stehen schon in den Credits');
+}
+/* Dienstleister-Verzeichnis (Label-Reiter) */
+const contactUse = key => vals(S.releases).flatMap(r => mwOf(r).filter(e => e.who === key).map(e => ({r, e})));
+let dlCat = '';
+const dlChip = (lbl, act, on) => `<button class="pill" ${act} style="${on ? 'background:var(--sun);color:var(--on-sun);border-color:var(--sun)' : ''}">${lbl}</button>`;
+function dlRow(name, sub, cats, key, act, aid){
+  const u = contactUse(key), sum = u.reduce((a, {r, e}) => a + num(mwFin(r.id, e.id)?.amt), 0), open = u.reduce((a, {r, e}) => { const f = mwFin(r.id, e.id); return a + (f && !f.paid ? num(f.amt) : 0); }, 0);
+  return `<button class="vrow" data-act="${act}" data-id="${esc(aid)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(name)}</b><span class="small">${esc(sub.toUpperCase())}${cats.length ? ' · ' + esc(cats.join(' · ').toUpperCase()) : ' · KATEGORIEN EINTRAGEN'}</span><span class="small">${u.length} ${u.length === 1 ? 'SONG' : 'SONGS'}${sum ? ' · ' + eur(sum) : ''}${open ? ' · <span style="color:var(--sun)">OFFEN ' + eur(open) + '</span>' : ''}</span></span>${icon.chev}</button>`;
+}
+function contactsOverview(){
+  const ext = dlExternal(), open = vals(S.releases).flatMap(r => mwOf(r).filter(e => !e.who && e.st === 'Gesucht').map(e => ({r, e})));
+  const cats = MW_ROLES.filter(c => [...dlInternal().flatMap(x => x.cats), ...ext.flatMap(ctCats)].includes(c));
+  const hit = cs => !dlCat || cs.includes(dlCat);
+  const intern = dlInternal().filter(x => hit(x.cats)), extern = ext.filter(c => hit(ctCats(c)));
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Dienstleister</h2><button class="pill" data-act="ctnew">${icon.plus} Extern</button></div>
+    ${cats.length ? `<div class="pad row" style="gap:6px;flex-wrap:wrap;padding-top:12px">${dlChip('Alle', 'data-act="dlcat" data-id=""', !dlCat)}${cats.map(c => dlChip(esc(c), `data-act="dlcat" data-id="${esc(c)}"`, dlCat === c)).join('')}</div>` : ''}
+    ${open.length ? `<div class="pad stack" style="gap:8px;padding-top:12px"><span class="flabel" style="color:var(--sun)">GESUCHT</span>${open.map(({r, e}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;border-color:rgba(255,204,0,.35)"><span class="stack" style="flex:1;gap:2px"><b>${esc((e.roles||[]).join(', ') || 'Mitwirkende')}</b><span class="small">${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}${e.what ? ' · ' + esc(e.what) : ''}</span></span>${icon.chev}</button>`).join('')}</div>` : ''}
+    <div class="pad stack" style="gap:8px;padding-top:12px"><span class="flabel">INTERN</span>${intern.map(x => dlRow(x.name, x.sub, x.cats, x.key, 'ctint', x.key)).join('') || '<span class="small">Niemand intern in dieser Kategorie.</span>'}
+    <span class="flabel" style="margin-top:8px">EXTERN</span>${extern.map(c => dlRow(c.name, c.kind || 'Person', ctCats(c), 'x:' + c.id, 'ctedit', c.id)).join('') || '<span class="small">' + (dlCat ? 'Noch niemand extern für ' + esc(dlCat) + '.' : 'Fotografen, Videografen, Cutter, Mix-/Mastering-Engineers, Agenturen mit Komplettpaket. Einmal anlegen, dann bei jedem Song auswählbar.') + '</span>'}</div>`;
+}
+function useList(key){
+  const u = contactUse(key);
+  return u.length ? `<span class="flabel" style="display:block;margin:4px 0 6px">MITGEWIRKT AN</span><div class="stack" style="gap:6px;margin-bottom:12px">${u.map(({r, e}) => { const f = mwFin(r.id, e.id); return `<div class="small" style="text-transform:none;letter-spacing:0">${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))} · ${esc((e.roles||[]).join(', '))}${f?.amt ? ' · ' + eur(num(f.amt)) + (f.paid ? ' ✓' : ' offen') : ''}</div>`; }).join('')}</div>` : '';
+}
+const catChips = sel => `<div class="field"><span class="flabel">KATEGORIEN (MEHRFACH)</span><div class="gchips">${MW_ROLES.map(x => `<label class="gchip"><input type="checkbox" name="dlcat" value="${esc(x)}" ${sel.includes(x) ? 'checked' : ''}><span>${esc(x)}</span></label>`).join('')}</div></div>`;
+function sheetContact(id){
+  const c = id ? S.contacts?.[id] : {kind:'Person', cats:[]}; if(!c) return;
+  const fields = `${F('name','NAME',c.name||'','text','required placeholder="z. B. XAMMER oder Firmenname"')}
+    ${Sel('kind','ART',DL_KIND,c.kind||'Person')}
+    ${catChips(ctCats(c))}
+    <div class="grid2">${F('contact','MAIL / TELEFON',c.contact||'','text')}${F('link','INSTAGRAM / WEBSITE',c.link||'','text','placeholder="https://"')}</div>
+    ${F('rate','PREIS / KONDITIONEN',c.rate||'','text','placeholder="z. B. 80 € pro Song, 2 Korrekturen"')}
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="Qualität, Zuverlässigkeit, Ansprechpartner">${esc(c.note||'')}</textarea></div>
+    ${id ? useList('x:' + id) : ''}`;
+  const extra = id && !contactUse('x:' + id).length ? `<button class="btn danger" type="button" id="delCt" style="width:100%;margin-top:10px">Dienstleister löschen</button>` : '';
+  const form = sheet(id ? c.name : 'Neuer Dienstleister', fields, async (fd, f) => {
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const cats = [...f.querySelectorAll('input[name=dlcat]:checked')].map(i => i.value);
+    const doc = {name:(fd.name||'').trim(), kind:fd.kind, cats, contact:(fd.contact||'').trim(), link:(fd.link||'').trim(), rate:(fd.rate||'').trim(), note:(fd.note||'').trim()};
+    return await put('contacts', id || uid('ct'), id ? doc : {...doc, at:new Date().toISOString()}, !!id) ? undefined : false;
+  }, extra);
+  const d = form.querySelector('#delCt'); if(d) d.onclick = async () => { if(d.dataset.sure){ await del('contacts', id); $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+function sheetContactInt(key){
+  const x = dlInternal().find(i => i.key === key); if(!x) return;
+  const fields = `<span class="small" style="display:block;margin-bottom:12px">${esc(x.sub.toUpperCase())} · INTERN</span>${catChips(x.cats)}
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="z. B. Cover und Reels, Mix nur nach Absprache">${esc(x.c?.note||'')}</textarea></div>${useList(key)}`;
+  sheet(x.name, fields, async (fd, f) => {
+    const cats = [...f.querySelectorAll('input[name=dlcat]:checked')].map(i => i.value);
+    return await put('contacts', x.cid, {name:x.name, kind:'Intern', int:key, cats, note:(fd.note||'').trim()}, false) ? undefined : false;
+  });
+}
 function campaignSection(r){
   if(r.type === 'Song') return '';
   const team = !isPreview() && !lockedArtist, cs = campsOf(r);
@@ -1877,7 +2029,8 @@ function vCockpit(){
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Verträge</h2><span class="small">VERÖFFENTLICHT / LÄUFT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
     ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}
-    ${campaignOverview()}`;
+    ${campaignOverview()}
+    ${contactsOverview()}`;
 }
 
 /* Produzent */
@@ -2794,6 +2947,13 @@ async function act(a, id){
   if(a === 'gignew') return sheetGigBase(null, null, id || null);
   if(a === 'livefilter'){ const [aa, ff] = id.split('|'); const c0 = cur(); return tab('live', {a: aa, f: ff, ...(c0.inArtist ? {inArtist:true} : {}), ...(c0.preview ? {preview:c0.preview} : {})}); }
   if(a === 'gigfin') return sheetGigFin(id);
+  if(a === 'mwnew') return sheetMw(id);
+  if(a === 'mwedit'){ const [rid, i] = id.split('|'); return sheetMw(rid, +i); }
+  if(a === 'mwcredits') return mwToCredits(id);
+  if(a === 'ctnew') return sheetContact(null);
+  if(a === 'ctedit') return sheetContact(id);
+  if(a === 'ctint') return sheetContactInt(id);
+  if(a === 'dlcat'){ dlCat = id; return render(); }
   if(a === 'campnew') return sheetCamp(id);
   if(a === 'campedit'){ const [rid, i] = id.split('|'); return sheetCamp(rid, +i); }
   if(a === 'relshare'){ const r = S.releases[id]; if(!r) return; if(!r.shareCal && !r.date){ toast('Erst ein Release-Datum eintragen'); return; } if(await put('releases', id, {shareCal: !r.shareCal})) toast(r.shareCal ? 'Aus dem Label-Kalender genommen' : 'Für alle Artists im Kalender sichtbar'); return; }
@@ -3177,7 +3337,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132030';
+const APP_VERSION = '202611132100';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
