@@ -312,7 +312,7 @@ const TYPE = {
 const STAGES = ['Idee','Geplant','Writing','Recording','Mix','Master','Distribution','Promo','Released'];
 const PHASES = ['T-12','T-10','T-8','T-6','T-4','T-2','T-0','Nach Release'];
 const PHASE_WEEKS = {'T-12':12,'T-10':10,'T-8':8,'T-6':6,'T-4':4,'T-2':2,'T-0':0,'Nach Release':-2};
-const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', K:'Kasper', C:'Cem', TH:'Thorben', T:'Team'};
+const OWNERS = {A:'Artist', P:'Produzent', N:'Nikolina', K:'Kacper', C:'Cem', TH:'Thorben', T:'Team'};
 const HELPER_KEYS = ['C','K','N','TH','P'];
 const helpersOf = x => Array.isArray(x?.helpers) ? x.helpers.filter(k => k !== x.owner && OWNERS[k]) : [];
 const ownerName = (k, x) => k === 'P' ? (producers()[0]?.name || OWNERS.P) : (OWNERS[k] || S.people?.[k]?.name || k);
@@ -327,7 +327,7 @@ const checkTxt = x => { const c = checksOf(x); return c.length ? ` · ☑ ${c.fi
 const CheckList = x => `<div class="field"><span class="flabel">CHECKLISTE (UNTERPUNKTE)</span><div class="stack" id="chkList" style="gap:6px">${checksOf(x).map((c,i) => chkRow(c, i)).join('')}</div>
   <button class="pill" type="button" id="chkAdd" style="margin-top:8px;min-height:34px">${icon.plus} Punkt</button></div>`;
 let CHK_CTX = null; /* {artist:'Name', extra:[[id, name]]} – bei Auftritten: Co-Artists auswählbar */
-const CHK_OWNERS = () => [['','Wer? (optional)'],['A', CHK_CTX?.artist || 'Artist'], ...(CHK_CTX?.extra || []),['P',ownerName('P')],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben']];
+const CHK_OWNERS = () => [['','Wer? (optional)'],['A', CHK_CTX?.artist || 'Artist'], ...(CHK_CTX?.extra || []),['P',ownerName('P')],['C','Cem'],['K','Kacper'],['N','Nikolina'],['TH','Thorben']];
 const chkRow = (c, i) => `<div class="chkrow" style="display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><input type="checkbox" name="chk_d" ${c.d ? 'checked' : ''} style="width:20px;height:20px;flex:none"><input name="chk_t" value="${esc(c.t||'')}" placeholder="z. B. Location anfragen" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px;${c.d ? 'text-decoration:line-through;color:var(--mute)' : ''}"><button type="button" class="iconbtn ghost chkdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>
   <div class="row" style="gap:6px;margin-left:28px;width:calc(100% - 70px)"><input name="chk_l" type="url" value="${esc(c.l||'')}" placeholder="Link (optional), z. B. Dropbox" style="flex:1;min-width:0;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:13px">${safeUrl(c.l) ? `<a href="${esc(c.l)}" target="_blank" rel="noopener" class="small" style="color:var(--sun);font-weight:700;flex:none;text-decoration:none">ÖFFNEN</a>` : ''}</div>
   <div class="gchips" aria-label="Zuständig für diesen Punkt (mehrere möglich)" style="margin-left:28px;width:calc(100% - 70px)">${CHK_OWNERS().filter(([v]) => v).map(([v,l]) => `<label class="gchip"><input type="checkbox" class="chko" value="${v}" ${chkOwners(c).includes(v) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div></div>`;
@@ -1111,7 +1111,7 @@ async function planSet(id){
   if(error){ toast('Nicht gespeichert: ' + error.message); return; }
   toast(st); await db.refresh(); render();
 }
-const ownerOpts = (artistName, extra = []) => [['','Niemand zugewiesen'],['A', artistName || 'Artist'], ...extra,['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben'],['P',ownerName('P')]];
+const ownerOpts = (artistName, extra = []) => [['','Niemand zugewiesen'],['A', artistName || 'Artist'], ...extra,['C','Cem'],['K','Kacper'],['N','Nikolina'],['TH','Thorben'],['P',ownerName('P')]];
 const REEL_COL = {'Geplant':'var(--mute)','Gedreht':'var(--single)','Geschnitten':'var(--sun)','Gepostet':'var(--album)'};
 const isShoot = k => String(k||'').startsWith('S~');
 /* Live: Auftritte & Shows – Planung wie Drehtage, Schlüssel G~<id>, Daten in col 'gigs', Gage in 'gigfin' (nur Team) */
@@ -1124,7 +1124,7 @@ const gigOpen = g => g && g.req !== 'abgelehnt' && g.status !== 'Abgesagt';
 const gigIn = (g, pid) => !!pid && (g.artist === pid || (g.co||[]).includes(pid));
 const gigCo = g => (g.co||[]).map(id => person(id)).filter(Boolean);
 const gigNames = g => [person(g.artist)?.name, ...gigCo(g).map(p => p.name)].filter(Boolean).join(' + ');
-const crewMembers = v => [['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben'], ...producers().map(p => ['P', p.name + ' (Produzent)'])];  /* Artists laufen über „Gast-Artists“ – die sehen den Auftritt dann auch selbst */
+const crewMembers = v => [['C','Cem'],['K','Kacper'],['N','Nikolina'],['TH','Thorben'], ...producers().map(p => ['P', p.name + ' (Produzent)'])];  /* Artists laufen über „Gast-Artists“ – die sehen den Auftritt dann auch selbst */
 const gigsOf = pid => vals(S.gigs||{}).filter(g => gigIn(g, pid)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
 const gigFin = gid => (S.gigfin||{})[gid] || {};
 const shootKey = (pid, sid) => `S~${pid}~${sid}`;
@@ -1218,7 +1218,7 @@ function dlInternal(){
 const dlExternal = () => vals(S.contacts||{}).filter(c => !c.id.startsWith('int-')).sort((a,b) => (a.name||'').localeCompare(b.name||''));
 const MW_ST = ['Gesucht','Angefragt','Zugesagt','Geliefert'];
 const MW_COL = {Gesucht:'var(--sun)', Angefragt:'var(--sun)', Zugesagt:'var(--album)', Geliefert:'#39ff88'};
-const MW_TEAM = [['C','Cem'],['TH','Thorben'],['K','Kasper'],['N','Nikolina']];
+const MW_TEAM = [['C','Cem'],['TH','Thorben'],['K','Kacper'],['N','Nikolina']];
 const mwOf = r => Array.isArray(r?.mw) ? r.mw : [];
 const mwFin = (rid, eid) => S.mwfin?.[rid]?.items?.[eid] || null;
 function mwName(e){
@@ -1495,7 +1495,7 @@ function campaignSection(r){
 function sheetCamp(rid, idx){
   const r = S.releases[rid]; if(!r) return; const arr = [...campsOf(r)], isNew = idx == null, x = isNew ? {status:'Geplant', os:['K'], o:'K'} : arr[idx] || {};
   const cont = [['','—'], ...contentOf(rid).map(c => [c.id, (c.kind || 'Post') + ' · ' + (c.title || '') + (c.date ? ' · ' + fmt(c.date) : '')])];
-  const ownerChips = `<div class="field"><span class="flabel">ZUSTÄNDIG (MEHRFACH)</span><div class="gchips">${[['K','Kasper'],['N','Nikolina'],['C','Cem'],['TH','Thorben']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="cown" value="${v}" ${chkOwners(x).includes(v) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>`;
+  const ownerChips = `<div class="field"><span class="flabel">ZUSTÄNDIG (MEHRFACH)</span><div class="gchips">${[['K','Kacper'],['N','Nikolina'],['C','Cem'],['TH','Thorben']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="cown" value="${v}" ${chkOwners(x).includes(v) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>`;
   const fields = `<div class="grid2">${Sel('platform','PLATTFORM',CAMP_PLAT,x.platform||'TikTok')}${Sel('goal','ZIEL',CAMP_GOAL,x.goal||'Streams')}</div>
     <div class="grid2">${F('from','START',x.from||'','date')}${F('to','ENDE',x.to||'','date')}</div>
     <div class="grid2">${Sel('status','STATUS',CAMP_ST,x.status||'Geplant')}${Sel('charge','MIT ARTIST VERRECHNEN',[['','Nein'],['1','Ja']],x.charge ? '1' : '')}</div>
@@ -3468,7 +3468,7 @@ async function logout(){
 }
 function accountFrom(u){
   const uname = (u.email||'').split('@')[0];
-  return {id: u.id, name: u.user_metadata?.name || (uname.charAt(0).toUpperCase() + uname.slice(1)), username: uname};
+  return {id: u.id, name: u.user_metadata?.name || ({kasper:'Kacper'}[uname]) || (uname.charAt(0).toUpperCase() + uname.slice(1)), username: uname};
 }
 async function boot(session){
   account = accountFrom(session.user);
@@ -3508,7 +3508,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140000';
+const APP_VERSION = '202611140010';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
