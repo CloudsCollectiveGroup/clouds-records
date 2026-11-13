@@ -6,3 +6,5 @@ select username, role from public.members where username in ('kasper','kacper');
 -- 3) Später, wenn Kacper sich mit dem neuen Login angemeldet hat: alten Login „kasper“ in
 --    Authentication → Users löschen (Mitglied-Eintrag fällt mit weg) und team_allow bereinigen:
 --    delete from public.team_allow where username = 'kasper';
+
+-- Erledigt 13.11.2026, 19:14: alter Login kasper gelöscht (Cem), team_allow bereinigt.

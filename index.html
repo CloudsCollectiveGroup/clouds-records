@@ -2435,7 +2435,7 @@ function sheetTodoView(id){
   bindChats(root);
 }
 /* ---------- Pinnwand: alles, was bei mir liegt + Nachrichten ---------- */
-const USER_KEY = {cem:'C', kasper:'K', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
+const USER_KEY = {cem:'C', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
 const myKey = () => account?.role === 'producer' ? 'P' : account?.role === 'artist' ? lockedArtist : (USER_KEY[account?.username] || null);
 const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) && x.helpers.includes(k)));
 const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
@@ -3468,7 +3468,7 @@ async function logout(){
 }
 function accountFrom(u){
   const uname = (u.email||'').split('@')[0];
-  return {id: u.id, name: u.user_metadata?.name || ({kasper:'Kacper'}[uname]) || (uname.charAt(0).toUpperCase() + uname.slice(1)), username: uname};
+  return {id: u.id, name: u.user_metadata?.name || (uname.charAt(0).toUpperCase() + uname.slice(1)), username: uname};
 }
 async function boot(session){
   account = accountFrom(session.user);
@@ -3508,7 +3508,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140010';
+const APP_VERSION = '202611140020';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
