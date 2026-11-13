@@ -415,7 +415,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin','mwfin','contacts','expenses'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin','mwfin','contacts','expenses','asks'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -1038,6 +1038,7 @@ function vRelease(c){
     ${songOnly ? '' : releaseCheck(r)}
     ${songOnly ? '' : contentSection(r)}
     ${songOnly ? '' : videoSection(r)}
+    ${asksSection(r)}
     ${contribSection(r)}
     ${songOnly ? '' : campaignSection(r)}
     ${songOnly ? '' : coopSection(r)}
@@ -1271,6 +1272,109 @@ function mwRow(r, e, i, team, prefix){
       ${e.what ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(e.what)}</span>` : ''}
       ${cl ? `<span class="small" style="color:${f && num(f.amt) && !f.paid ? 'var(--sun)' : 'var(--album)'}">${cl}</span>` : ''}</span>
     <span class="status" style="color:${MW_COL[e.st||'Zugesagt']};flex:none">● ${esc((e.st||'Zugesagt').toUpperCase())}</span></button>`;
+}
+/* Anfragen von Artists (Kostenvoranschlag, Wunsch, Investition): Kategorie → zuständig → „Bereit zur Freigabe“ → Cem/Thorben (bis 100 € einer, darüber beide) */
+const ASK_CAT = {
+  promo:{l:'Promo & Kampagne', d:'z. B. TikTok-Streams, Playlist-Promo, Ads', o:'K'},
+  visual:{l:'Musikvideo, Content & Styling', d:'z. B. Musikvideo, Reels, Fotos, Outfit', o:'N'},
+  general:{l:'Allgemein', d:'alles andere – direkt an Cem und Thorben', o:'CT'}};
+const ASK_ST = {angefragt:['Angefragt','var(--sun)'], freigabe:['Zur Freigabe','var(--sun)'], genehmigt:['Genehmigt','#39ff88'], abgelehnt:['Abgelehnt','var(--danger)'], umgesetzt:['Umgesetzt','var(--album)']};
+const askOwnerKeys = x => x.owner === 'CT' ? ['C','TH'] : [x.owner];
+const askOwnerName = x => x.owner === 'CT' ? 'Cem & Thorben' : ownerName(x.owner);
+const askAmt = x => num(x.offer?.amt);
+const askApvOf = (x, k) => { const a = x.apv?.[k]; return a && String(a.amt ?? '') === String(x.offer?.amt ?? '') ? a : null; };
+function askDecide(x){ /* null = offen, 'ok' | 'no' */
+  const recs = ['C','TH'].map(k => askApvOf(x, k)); if(recs.some(a => a?.v === 'no')) return 'no';
+  const n = recs.filter(a => a?.v === 'ok').length; return n >= (askAmt(x) > REQ_LIMIT ? 2 : 1) ? 'ok' : null;
+}
+const askCanApprove = x => x.status === 'freigabe' || (x.owner === 'CT' && x.status === 'angefragt');
+const asksOf = (aid, rid) => vals(S.asks||{}).filter(x => (!aid || x.artist === aid) && (rid === undefined || (x.release||'') === rid)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+function askRow(x){
+  const st = ASK_ST[x.status] || ASK_ST.angefragt, r = S.releases[x.release];
+  return `<button class="vrow" data-act="askedit" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;align-items:flex-start${x.status === 'angefragt' || x.status === 'freigabe' ? ';border-color:rgba(255,204,0,.35)' : ''}">
+    <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.title || 'Anfrage')}</b>
+      <span class="small">${esc((person(x.artist)?.name || '').toUpperCase())} · ${esc(ASK_CAT[x.cat]?.l.toUpperCase() || '')}${r ? ' · ' + esc(relTitle(r).toUpperCase()) : ''} · BEI ${esc(askOwnerName(x).toUpperCase())}</span>
+      ${askAmt(x) ? `<span class="small">KOSTENVORANSCHLAG ${eur(askAmt(x))}</span>` : ''}${chatOf('ask:' + x.id).length ? `<span class="small" style="color:var(--sun)">💬 ${chatOf('ask:' + x.id).length}</span>` : ''}</span>
+    <span class="status" style="color:${st[1]};flex:none">● ${esc(st[0].toUpperCase())}</span></button>`;
+}
+function asksSection(r){
+  if(r.type === 'Song') return '';
+  const list = asksOf(r.artist, r.id), artistView = !!lockedArtist || isPreview();
+  if(!list.length && !artistView && !vals(S.asks||{}).length) return '';
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Anfragen</h2><button class="pill" data-act="asknew" data-id="${esc(r.artist)}|${esc(r.id)}|">${icon.plus} Anfrage</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${list.map(askRow).join('') || '<span class="small">Etwas für dieses Release gewünscht – Promo, Musikvideo, Outfit, Content? Hier anfragen, das Team schickt einen Kostenvoranschlag.</span>'}
+    ${artistView ? `<div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(ASK_CAT).map(([k,c]) => `<button class="pill" data-act="asknew" data-id="${esc(r.artist)}|${esc(r.id)}|${k}" style="min-height:34px">${esc(c.l)}</button>`).join('')}</div>` : ''}</div>`;
+}
+function asksTeamSection(){
+  const open = vals(S.asks||{}).filter(x => !['umgesetzt','abgelehnt'].includes(x.status)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Anfragen von Artists</h2><span class="small">${open.length} OFFEN</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${open.map(askRow).join('') || '<span class="small">Artists fragen Promo, Musikvideo, Styling oder Sonstiges an. Promo → Kacper, Video/Content/Styling → Nikolina, Allgemein → Cem & Thorben. Freigabe: bis ' + REQ_LIMIT + ' € einer, darüber beide.</span>'}</div>`;
+}
+function asksArtistBlock(aid){
+  if(!aid) return ''; const list = asksOf(aid), open = list.filter(x => !['umgesetzt','abgelehnt'].includes(x.status));
+  return `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Deine Anfragen</h2><button class="pill sun" data-act="asknew" data-id="${esc(aid)}||">${icon.plus} Anfrage</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${open.map(askRow).join('') || '<span class="small">Du willst in etwas investieren oder brauchst etwas – Promo-Paket, Musikvideo, Outfit, Studio-Extra? Stell eine Anfrage, du bekommst einen Kostenvoranschlag.</span>'}
+    ${list.length > open.length ? `<span class="small">${list.length - open.length} ABGESCHLOSSEN</span>` : ''}</div>`;
+}
+function sheetAskNew(aid, rid, cat){
+  const p = person(aid); if(!p) return;
+  const rels = [['','Allgemein · kein bestimmtes Release'], ...relsOf(aid).filter(r => r.type !== 'Song').map(r => [r.id, relName(r) + (r.title ? ' · ' + r.title : '')])];
+  const fields = `<p class="small" style="margin:0 0 12px;text-transform:none;letter-spacing:0">Die Anfrage geht an die zuständige Person. Sie schickt dir einen Kostenvoranschlag, Cem und Thorben geben frei – du bekommst bei jedem Schritt eine Mitteilung.</p>
+    <div class="field"><span class="flabel">WORUM GEHT ES?</span><div class="stack" style="gap:6px">${Object.entries(ASK_CAT).map(([k,c]) => `<label class="check" style="cursor:pointer"><input type="radio" name="cat" value="${k}" ${k === (cat || 'promo') ? 'checked' : ''} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="stack" style="gap:1px"><b style="font-weight:600">${esc(c.l)}</b><span class="small" style="text-transform:none;letter-spacing:0">${esc(c.d)} · geht an ${esc(c.o === 'CT' ? 'Cem & Thorben' : ownerName(c.o))}</span></span></label>`).join('')}</div></div>
+    ${F('title','WAS MÖCHTEST DU?','','text','required placeholder="z. B. TikTok-Streams-Paket für BIT"')}
+    ${Sel('release','FÜR WELCHES PROJEKT?',rels,rid||'')}
+    <div class="field"><label for="f-text">DETAILS</label><textarea id="f-text" name="text" rows="3" placeholder="Was genau, bis wann, Ideen, Links …"></textarea></div>
+    <div class="grid2">${F('wish','BUDGET-VORSTELLUNG (€, OPTIONAL)','','text','inputmode="decimal"')}${F('need','BIS WANN? (OPTIONAL)','','date')}</div>
+    ${F('link','LINK (OPTIONAL)','','url','placeholder="https://…"')}`;
+  sheet('Neue Anfrage' + (lockedArtist ? '' : ' · ' + p.name), fields, async fd => {
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const c = ASK_CAT[fd.cat] || ASK_CAT.general;
+    const doc = {artist:aid, release:fd.release||'', cat:fd.cat||'general', owner:c.o, title:(fd.title||'').trim(), text:(fd.text||'').trim(), wish:String(fd.wish||'').trim(), need:fd.need||'', link:safeUrl(fd.link), status:'angefragt', by:account?.name || '', byId: me || '', apv:{}, at:new Date().toISOString()};
+    const ok = await put('asks', uid('ask'), doc, false);
+    if(ok) toast('Angefragt · ' + (c.o === 'CT' ? 'Cem & Thorben' : ownerName(c.o)) + ' meldet sich');
+    return ok ? undefined : false;
+  });
+}
+function sheetAsk(id){
+  const x = S.asks?.[id]; if(!x) return;
+  const team = !lockedArtist && !isPreview(), mk = myKey(), st = ASK_ST[x.status] || ASK_ST.angefragt, r = S.releases[x.release];
+  const isOwner = team && askOwnerKeys(x).includes(mk), canApv = team && ['C','TH'].includes(mk) && askCanApprove(x), dec = askDecide(x);
+  const root = $('#sheetRoot');
+  const info = `<span class="small">${esc((person(x.artist)?.name || '').toUpperCase())} · ${esc(ASK_CAT[x.cat]?.l.toUpperCase() || '')}${r ? ' · ' + esc(relTitle(r).toUpperCase()) : ' · ALLGEMEIN'}</span>
+    <h2 class="h-sec" style="margin:6px 0 4px">${esc(x.title || 'Anfrage')}</h2>
+    <span class="small"><span style="color:${st[1]}">● ${esc(st[0].toUpperCase())}</span> · ZUSTÄNDIG ${esc(askOwnerName(x).toUpperCase())}${x.need ? ' · BIS ' + fmt(x.need) : ''}</span>
+    ${x.text ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(x.text)}</div>` : ''}
+    ${x.wish ? `<div class="small" style="margin-top:8px">BUDGET-VORSTELLUNG ARTIST: ${eur(num(x.wish))}</div>` : ''}${safeUrl(x.link) ? `<a class="small" href="${esc(x.link)}" target="_blank" rel="noopener" style="color:var(--sun);display:block;margin-top:6px">LINK ÖFFNEN →</a>` : ''}`;
+  const offer = x.offer ? `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:12px"><span class="flabel">KOSTENVORANSCHLAG</span><b style="font-size:20px">${askAmt(x) ? eur(askAmt(x)) : 'Ohne Kosten'}</b>${x.offer.note ? `<span style="white-space:pre-line;line-height:1.45">${esc(x.offer.note)}</span>` : ''}${safeUrl(x.offer.link) ? `<a class="small" href="${esc(x.offer.link)}" target="_blank" rel="noopener" style="color:var(--sun)">ANGEBOT ÖFFNEN →</a>` : ''}${x.offer.charge ? '<span class="small">WIRD MIT DEM ARTIST VERRECHNET</span>' : ''}</div>` : '';
+  const apvBox = (x.status === 'freigabe' || x.owner === 'CT' || x.apv && Object.keys(x.apv).length) && team ? `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:12px;border-color:${dec === 'ok' ? '#39ff88' : dec === 'no' ? 'var(--danger)' : 'var(--sun)'}">
+      <span class="flabel">FREIGABE · ${askAmt(x) > REQ_LIMIT ? 'ÜBER ' + REQ_LIMIT + ' € – BEIDE' : 'BIS ' + REQ_LIMIT + ' € – EINER REICHT'}</span>
+      ${['C','TH'].map(k => { const a = askApvOf(x, k); return `<div class="between small"><span>${esc(ownerName(k).toUpperCase())}</span><span style="color:${a ? (a.v === 'ok' ? '#39ff88' : 'var(--danger)') : 'var(--sun)'}">${a ? (a.v === 'ok' ? '✓ GENEHMIGT' : '✗ ABGELEHNT') + (a.note ? ' · ' + esc(a.note) : '') : 'OFFEN'}</span></div>`; }).join('')}
+      ${canApv && !dec ? `<input id="askNote" placeholder="Kommentar (optional)" style="min-height:40px"><div class="row" style="gap:8px"><button type="button" class="pill sun" data-askapv="ok" style="flex:1;justify-content:center">✓ Genehmigen</button><button type="button" class="pill" data-askapv="no" style="flex:1;justify-content:center">✗ Ablehnen</button></div>` : ''}</div>` : '';
+  const ownerForm = isOwner && x.status === 'angefragt' && x.owner !== 'CT' ? `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:12px">
+      <span class="flabel">KOSTENVORANSCHLAG ERSTELLEN</span>
+      <input id="askAmt" inputmode="decimal" placeholder="Betrag in € (leer = ohne Kosten)" value="${esc(x.offer?.amt || '')}" style="min-height:42px">
+      <textarea id="askOfferNote" rows="3" placeholder="Was genau, Anbieter, Laufzeit, Leistung …" style="min-height:70px">${esc(x.offer?.note || '')}</textarea>
+      <input id="askOfferLink" placeholder="Link zum Angebot (optional)" value="${esc(x.offer?.link || '')}" style="min-height:42px">
+      <label class="check"><input type="checkbox" id="askCharge" ${x.offer?.charge ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--sun)"><span class="tt">Mit dem Artist verrechnen</span></label>
+      <button type="button" class="pill sun" id="askReady" style="justify-content:center">Bereit zur Freigabe → Cem & Thorben</button></div>` : '';
+  const ctOffer = canApv && x.owner === 'CT' && x.status === 'angefragt' && !x.offer ? `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:12px"><span class="flabel">BETRAG (OPTIONAL, VOR DER FREIGABE)</span><input id="askAmt" inputmode="decimal" placeholder="Betrag in €" style="min-height:42px"><button type="button" class="pill" id="askSetAmt" style="justify-content:center">Betrag speichern</button></div>` : '';
+  const doneBtn = isOwner && x.status === 'genehmigt' ? `<button type="button" class="pill sun" id="askDone" style="width:100%;justify-content:center;margin-top:12px">✓ Umgesetzt</button>` : '';
+  const delBtn = (team && ['C','TH'].includes(mk)) || (lockedArtist && x.status === 'angefragt' && x.byId === me) ? `<button class="btn danger" type="button" id="askDel" style="width:100%;margin-top:10px">${lockedArtist ? 'Anfrage zurückziehen' : 'Anfrage löschen'}</button>` : '';
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="Anfrage"><div class="sheet"><div class="grab"></div>${info}${offer}${apvBox}${ownerForm}${ctOffer}${doneBtn}${chatBox('ask:' + id, x.release, x.artist)}${delBtn}
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:10px">Schließen</button></div></div>`;
+  root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  bindChats(root);
+  const save = async (upd, msg) => { if(await put('asks', id, upd)){ if(msg) toast(msg); S.asks[id] = {...S.asks[id], ...upd}; sheetAsk(id); } };
+  const rd = root.querySelector('#askReady'); if(rd) rd.onclick = () => save({status:'freigabe', offer:{amt:String(root.querySelector('#askAmt').value||'').trim(), note:root.querySelector('#askOfferNote').value.trim(), link:safeUrl(root.querySelector('#askOfferLink').value.trim()), charge:root.querySelector('#askCharge').checked, by:account?.name || '', at:new Date().toISOString()}}, 'An Cem & Thorben zur Freigabe');
+  const sa = root.querySelector('#askSetAmt'); if(sa) sa.onclick = () => save({offer:{amt:String(root.querySelector('#askAmt').value||'').trim(), by:account?.name || '', at:new Date().toISOString()}}, 'Betrag gespeichert');
+  root.querySelectorAll('[data-askapv]').forEach(b => b.onclick = async () => {
+    const note = (root.querySelector('#askNote')?.value || '').trim(), cur0 = S.asks[id];
+    const apv = {...(cur0.apv || {}), [mk]: {v:b.dataset.askapv, by:account?.name || '', at:new Date().toISOString(), amt:cur0.offer?.amt ?? '', ...(note ? {note} : {})}};
+    const d = askDecide({...cur0, apv});
+    await save({apv, ...(d === 'ok' ? {status:'genehmigt'} : d === 'no' ? {status:'abgelehnt'} : {status: cur0.status === 'angefragt' ? 'freigabe' : cur0.status})}, b.dataset.askapv === 'ok' ? (d === 'ok' ? 'Genehmigt' : 'Genehmigt · wartet auf die zweite Freigabe') : 'Abgelehnt');
+  });
+  const dn = root.querySelector('#askDone'); if(dn) dn.onclick = () => save({status:'umgesetzt', doneAt:new Date().toISOString()}, 'Als umgesetzt markiert');
+  const dl = root.querySelector('#askDel'); if(dl) dl.onclick = async () => { if(dl.dataset.sure){ await del('asks', id); root.innerHTML = ''; } else { dl.dataset.sure = 1; dl.textContent = 'Wirklich? Erneut tippen'; } };
 }
 function contribSection(r){
   const team = !isPreview() && !lockedArtist, list = mwOf(r);
@@ -2205,6 +2309,7 @@ function vCockpit(){
     <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
     ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}
     ${campaignOverview()}
+    ${asksTeamSection()}
     ${reqSection()}
     ${expensesOverview()}
     ${contactsOverview()}`;
@@ -2494,6 +2599,10 @@ function pinItems(k){
   for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + ' · ' + (x.status||'Geplant') + (x.from ? ' ab ' + fmt(x.from) : ''), due:x.to || x.from || '', go:['release', r.id]}); });
   if(CAMP_APPROVERS.some(([kk]) => kk === k)) for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && !campApvOf(x, k) && !chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne freigeben · ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + (num(x.budget) ? ' · Budget ' + eur(num(x.budget)) : '') + ' · ' + campApvState(x).l, due:x.from || '', go:['release', r.id]}); });
   for(const x of reqsOpen()){ const st = reqState(x); if(st.k === 'open' && reqNeed(x).includes(k) && !reqApvOf(x, k)) out.push({src:'req', id:x.id, title:'Kaufanfrage freigeben · ' + x.title, sub:(x.by||'') + ' · ' + eur(num(x.amt)) + ' · ' + st.l, due:x.need || '', go:['cockpit', '']}); else if(x.byKey === k && st.k !== 'open') out.push({src:'req', id:x.id, title:(st.k === 'ok' ? 'Genehmigt – kaufen: ' : 'Kaufanfrage abgelehnt: ') + x.title, sub:eur(num(x.amt)) + ' · ' + st.l, due:x.need || '', go:['cockpit', '']}); }
+  for(const x of vals(S.asks||{})){ const nm = person(x.artist)?.name || '';
+    if(x.status === 'angefragt' && x.owner !== 'CT' && x.owner === k) out.push({src:'ask', id:x.id, title:'Anfrage prüfen · ' + x.title, sub:nm + ' · ' + (ASK_CAT[x.cat]?.l || '') + ' · Kostenvoranschlag erstellen', due:x.need || '', go:['cockpit','']});
+    else if(['C','TH'].includes(k) && askCanApprove(x) && !askApvOf(x, k) && !askDecide(x)) out.push({src:'ask', id:x.id, title:'Anfrage freigeben · ' + x.title, sub:nm + (askAmt(x) ? ' · ' + eur(askAmt(x)) : '') + ' · über ' + askOwnerName(x), due:x.need || '', go:['cockpit','']});
+    else if(x.status === 'genehmigt' && askOwnerKeys(x).includes(k)) out.push({src:'ask', id:x.id, title:'Genehmigt – umsetzen: ' + x.title, sub:nm + (askAmt(x) ? ' · ' + eur(askAmt(x)) : ''), due:x.need || '', go:['cockpit','']}); }
   for(const r of vals(S.releases)) if(r.status !== 'Released' && r.rc?.meta) rcState(r).forEach(x => { if(!x.ok && chkHas(x, k)) out.push({tick:['rctoggle', r.id + '|' + x.k], src:'rc', id:r.id, title:x.l, sub:(person(r.artist)?.name||'') + ' · Release-Check ' + relName(r) + (x.note ? ' · ' + x.note : ''), due:r.date || '', go:['release', r.id]}); });
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
@@ -2527,7 +2636,7 @@ function vPin(c){
   const k = c.k || myKey();
   const since = SEEN.__pin || '';
   const isNew = x => x.at && x.by && x.by !== me && x.at > since;
-  const all0 = k ? pinItems(k) : [], isApv = x => /^(Kampagne|Kaufanfrage) freigeben/.test(x.title || '');
+  const all0 = k ? pinItems(k) : [], isApv = x => /^(Kampagne|Kaufanfrage|Anfrage) freigeben/.test(x.title || '');
   const apvItems = all0.filter(isApv), items = all0.filter(x => !isApv(x));
   const t0 = todayIso(), wk = isoAdd(t0, 7);
   const terms = k ? vals(S.todos||{}).filter(x => isTermin(x) && (!x.date || x.date >= t0) && assigned(x, k)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9')) : [];
@@ -2568,7 +2677,7 @@ function vPin(c){
       <button class="tile ${sAsk ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sAsk}</b><span class="lbl" style="color:var(--ink)">STUDIO-ANFRAGEN</span></button>
       <button class="tile ${sTT ? 'hot' : ''}" data-act="pinjump" data-id="pinStudio" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${sTT}</b><span class="lbl" style="color:var(--ink)">FÜR TIMETREE</span></button></div>
     ${sReq.length ? `<div class="pad between" id="pinStudio" style="padding-top:22px"><h2 class="h-sec">Studio-Anfragen</h2><span class="small">→ TIMETREE</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sReq.map(studioCard).join('')}</div>` : ''}` : '';
-  const cPend = (k === 'C' || k === 'N') ? pendingContent() : [];
+  const cPend = (k === 'C' || k === 'N' || k === 'TH') ? pendingContent() : [];
   const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
@@ -2834,6 +2943,7 @@ function vArtistPin(c){
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
       <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
     ${own ? pushBanner() : ''}${own && pushOn ? '<div class="row" style="margin:10px 20px 0"><button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button></div>' : ''}
+    ${asksArtistBlock(aid)}
     ${sec('Nachrichten', notes, noteCard)}
     ${sec('Termine', aterms, x => todoRow(x, {fresh, withArtist:false}))}
     ${sec('Aufgaben vom Team', atodos, x => todoRow(x, {fresh, withArtist:false}))}
@@ -3169,6 +3279,7 @@ async function act(a, id){
   if(a === 'pingo'){ const {g, src, id:xid} = JSON.parse(id);
     if(src === 'todos'){ sheetTodo(xid); return; }
     if(src === 'req' && S.expenses?.[xid]) return sheetReq(xid);
+    if(src === 'ask' && S.asks?.[xid]) return sheetAsk(xid);
     if(src === 'camp'){ const [crid, ci] = String(xid).split('|'); if(ci !== undefined && S.releases[crid]) return sheetCamp(crid, +ci); }
     if(g[0] === 'pmonth') go('pmonth', {id:g[1], m:g[2]}); else go(g[0], {id:g[1]});
     setTimeout(() => {
@@ -3211,6 +3322,8 @@ async function act(a, id){
   if(a === 'ctint') return sheetContactInt(id);
   if(a === 'expnew') return sheetExpense(null);
   if(a === 'reqnew') return sheetReq(null);
+  if(a === 'asknew'){ const [aid, rid, cat] = (id||'').split('|'); return sheetAskNew(aid || lockedArtist || cur().preview, rid || '', cat || ''); }
+  if(a === 'askedit') return sheetAsk(id);
   if(a === 'reqedit') return sheetReq(id);
   if(a === 'expedit') return sheetExpense(id);
   if(a === 'dlcat'){ dlCat = id; return render(); }
@@ -3598,7 +3711,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140230';
+const APP_VERSION = '202611140300';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

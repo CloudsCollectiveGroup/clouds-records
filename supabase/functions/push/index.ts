@@ -219,6 +219,19 @@ Deno.serve(async (req) => {
       if (String(old?.amt ?? "") !== String(d.amt ?? "") && d.status !== "gekauft" && need.some(k => old?.apv?.[k])) out.push({ keys: need, title: "Betrag geändert · neu freigeben", body: label, tag: "camp" });
     }
   }
+  // Anfragen von Artists: Kategorie → zuständig → Freigabe Cem/Thorben (bis 100 € einer, darüber beide)
+  if (col === "asks") {
+    const a = await personName(d.artist), own = d.owner === "CT" ? ["C", "TH"] : [d.owner];
+    const label = `${a} · ${d.title || "Anfrage"}${d.offer?.amt ? " · " + d.offer.amt + " €" : ""}`;
+    if (op === "INSERT") out.push({ keys: own, title: `Neue Anfrage von ${a}`, body: d.title || "", tag: "camp" });
+    if (op === "UPDATE" && old?.status !== d.status) {
+      if (d.status === "freigabe") { out.push({ keys: ["C", "TH"], title: "Anfrage zur Freigabe", body: label, tag: "camp" }); out.push({ keys: [d.artist], title: "Kostenvoranschlag ist da", body: label, tag: "camp" }); }
+      if (d.status === "genehmigt") out.push({ keys: [d.artist, ...own], title: "Anfrage genehmigt ✓", body: label, tag: "camp" });
+      if (d.status === "abgelehnt") out.push({ keys: [d.artist, ...own], title: "Anfrage abgelehnt", body: label, tag: "camp" });
+      if (d.status === "umgesetzt") out.push({ keys: [d.artist], title: "Anfrage umgesetzt", body: label, tag: "camp" });
+    }
+    if (op === "UPDATE" && d.status === "freigabe") for (const k of ["C", "TH"]) { const n = d.apv?.[k], p = old?.apv?.[k]; if (n && n.at !== p?.at) out.push({ keys: ["C", "TH"].filter(x => x !== k), title: `Anfrage ${n.v === "ok" ? "genehmigt" : "abgelehnt"} von ${k === "C" ? "Cem" : "Thorben"}`, body: label, tag: "camp" }); }
+  }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
   if (col === "chat" && op === "INSERT") {
@@ -229,8 +242,15 @@ Deno.serve(async (req) => {
       const c: any = card?.data || {};
       title = c.title || c.kind || title;
       for (const k of [c.owner, ...(c.helpers || []), ...((c.checks || []).flatMap((x: any) => owners(x)))]) if (k) keys.add(k === "A" ? (c.artist || d.artist) : k);
-      if (kind === "content") { keys.add("C"); keys.add("N"); if (c.fromArtist) keys.add(c.artist || d.artist); }
+      if (kind === "content") { keys.add("C"); keys.add("N"); keys.add("TH"); if (c.fromArtist) keys.add(c.artist || d.artist); }
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
+    else if (kind === "ask") {
+      const { data: ad } = await sb.from("docs").select("data").eq("col", "asks").eq("id", rid).maybeSingle();
+      const x: any = ad?.data || {};
+      title = "Anfrage · " + (x.title || ""); if (x.artist) keys.add(x.artist);
+      for (const k of (x.owner === "CT" ? ["C", "TH"] : [x.owner])) if (k) keys.add(k);
+      if (["freigabe", "genehmigt", "abgelehnt"].includes(x.status)) { keys.add("C"); keys.add("TH"); }
+    }
     else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     else if (kind === "gig") {
       const { data: gd } = await sb.from("docs").select("data").eq("col", "gigs").eq("id", rid).maybeSingle();
