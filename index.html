@@ -1746,8 +1746,8 @@ function vVideo(c){
       `<span class="stack" style="gap:4px;align-items:flex-end;flex:none"><span class="status" style="color:${(P.photo ? PCOL : REEL_COL)[x.status]||'var(--mute)'}">● ${esc((x.status||'Geplant').toUpperCase())}</span>${safeUrl(x.link) ? '<span class="small" style="color:var(--sun)">🔗</span>' : ''}</span>`, x.note)).join('');
   const refs = (v.refs||'').split('\n').map(x => x.trim()).filter(Boolean);
   const checks = field => (v[field]||[]).map((x,i) => team
-    ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${K}|${i}|${field}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></button>`
-    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></div>`).join('');
+    ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${K}|${i}|${field}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></button>`
+    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></div>`).join('');
   const budget = num(v.budget), over = budget && s.cost > budget;
   const head = (t, extra='') => `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">${t}</h2>${extra}</div>`;
   const list = (html, emptyTxt) => `<div class="pad stack" style="gap:8px;padding-top:10px">${html || `<span class="small">${team ? emptyTxt : 'Noch nichts eingetragen.'}</span>`}</div>`;
@@ -1958,7 +1958,7 @@ function vGig(c){
   const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name) + (x.member ? ' <span class="small" style="color:var(--sun)">TEAM</span>' : ''), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${involved && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${x.o ? ` · <span style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
   const checks = field => (v[field]||[]).map((x,i) => canEdit
     ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${K}|${i}|${field}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></button>`
-    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></div>`).join('');
+    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></div>`).join('');
   const editBtn = (act, label='Bearbeiten') => canEdit ? `<button class="pill" data-act="${act}" data-id="${K}">${icon.edit} ${label}</button>` : '';
   const plan = [['GET-IN', v.getin], ['SOUNDCHECK', v.soundcheck], ['STAGE', v.stage], ['SET', v.setlen ? v.setlen + ' MIN' : '']].filter(([,x]) => x);
   const maps = v.address ? 'https://maps.apple.com/?q=' + encodeURIComponent(v.address) : '';
@@ -3764,7 +3764,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140440';
+const APP_VERSION = '202611140500';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
