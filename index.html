@@ -305,6 +305,7 @@ body.hasmini .toast{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
 const TYPE = {
   'Single':      {c:'#4F7FE6', key:'single', short:'Single'},
   'Vorab-Single':{c:'#4F7FE6', key:'single', short:'Vorab-Single'},
+  'Song':        {c:'#B8735A', key:'song',   short:'Song'},
   'EP':          {c:'#D9673A', key:'ep',     short:'EP'},
   'Album':       {c:'#2E9C70', key:'album',  short:'Album'}
 };
@@ -346,6 +347,27 @@ const TEMPLATE = [
   ['T-2','Pre-Save-Link & Content-Snippets','N'],
   ['T-0','Release-Tag','T']
 ];
+/* EP/Album: Fahrplan fürs Gesamtprojekt – die Songs haben ihren eigenen */
+const TEMPLATE_PROJECT = [
+  ['T-12','Tracklist & Reihenfolge festlegen','A'],
+  ['T-12','Singles & Termine der Auskopplungen festlegen','TH'],
+  ['T-8','Alle Songs gemischt & gemastert','P'],
+  ['T-8','Projekt-Cover fertig','N'],
+  ['T-6','Credits & Splits aller Songs vollständig','K'],
+  ['T-6','Distributor-Upload, UPC, ISRCs','K'],
+  ['T-4','Spotify-Pitch & Promo-Plan','K'],
+  ['T-2','Pre-Save-Link & Content','N'],
+  ['T-0','Release-Tag (mit letzter Single)','T']
+];
+/* Song nur auf der EP/dem Album: Produktion bis fertig, Release läuft über das Projekt */
+const TEMPLATE_SONG = [
+  ['T-12','Song geschrieben','A'],
+  ['T-12','Demo im System','A'],
+  ['T-12','Recording bei CloudStudios','A'],
+  ['T-8','Mix & Master final','P'],
+  ['T-6','Credits & Splits, ISRC','K']
+];
+const templateFor = r => (r.type === 'EP' || r.type === 'Album') ? TEMPLATE_PROJECT : r.type === 'Song' ? TEMPLATE_SONG : TEMPLATE;
 const COLORS = [
   ['Blau','#2F5BD3','#5C80E0'],['Graphit','#52525B','#71717A'],['Violett','#7A4FBF','#9670D1'],
   ['Orange','#D98A1E','#E7A64B'],['Petrol','#1F7A8C','#4596A6'],['Rot','#C8431E','#DA6B4B'],
@@ -384,10 +406,15 @@ const tasksOf = rid => vals(S.tasks).filter(t => t.release === rid).sort((x,y) =
 const tracksOf = rid => vals(S.tracks).filter(t => t.release === rid).sort((a,b) => (a.title||'').localeCompare(b.title||''));
 const versionsOf = tid => vals(S.versions).filter(v => v.track === tid).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 const commentsOf = tid => vals(S.comments).filter(c => c.track === tid).sort((a,b) => (a.at||'').localeCompare(b.at||''));
-const taskDue = t => t.due || (S.releases[t.release]?.date ? addWeeks(S.releases[t.release].date, PHASE_WEEKS[t.phase] ?? 0) : null);
+const isProject = r => !!r && (r.type === 'EP' || r.type === 'Album');
+const parentOf = r => { if(!r) return null; if(r.parent) return S.releases[r.parent] || null;
+  if(r.type === 'Vorab-Single' && r.countsTo) return vals(S.releases).find(x => x.artist === r.artist && isProject(x) && relName(x) === r.countsTo) || null; return null; };
+const childrenOf = par => vals(S.releases).filter(x => x.artist === par.artist && x.id !== par.id && parentOf(x)?.id === par.id).sort((a,b) => ((a.pos||99)-(b.pos||99)) || (a.order-b.order));
+const relDate = r => r ? (r.date || (r.type === 'Song' ? parentOf(r)?.date || '' : '')) : '';
+const taskDue = t => t.due || (relDate(S.releases[t.release]) ? addWeeks(relDate(S.releases[t.release]), PHASE_WEEKS[t.phase] ?? 0) : null);
 const artists = () => vals(S.people).filter(p => p.role === 'Artist').sort((a,b) => (a.order||0)-(b.order||0));
 const producers = () => vals(S.people).filter(p => p.role === 'Produzent');
-const relName = r => r ? (r.type === 'Album' ? 'Album' : r.type === 'Vorab-Single' ? 'Vorab-Single' : `${TYPE[r.type].short} ${r.code.replace(/\D/g,'').padStart(2,'0')}`) : '';
+const relName = r => r ? (r.type === 'Album' ? 'Album' : r.type === 'Vorab-Single' ? 'Vorab-Single' : r.type === 'Song' ? 'Song' : `${TYPE[r.type].short} ${r.code.replace(/\D/g,'').padStart(2,'0')}`) : '';
 const relTitle = r => r.title ? r.title : relName(r);
 const uid = p => p + '-' + Math.random().toString(36).slice(2,9);
 const isoAdd = (iso, days) => { const d = parse(iso); if(!d) return ''; d.setDate(d.getDate() + days); return d.toISOString().slice(0,10); };
@@ -564,11 +591,11 @@ function countLine(p){
   return `${pl(p.singles||0,'SINGLE','SINGLES')} · ${pl(p.eps||0,'EP','EPS')} · ${pl(p.albums||0,'ALBUM','ALBEN')}`;
 }
 function currentRelease(a){
-  const rs = relsOf(a);
+  const rs = relsOf(a).filter(r => r.type !== 'Song');
   return rs.find(isActive) || null;
 }
 function nextPlanned(a){
-  return relsOf(a).find(r => r.status !== 'Released') || null;
+  return relsOf(a).find(r => r.type !== 'Song' && r.status !== 'Released') || null;
 }
 /* Verteilungs-Vorschlag: Jahr 1 Singles, EPs in den mittleren Jahren, Album im letzten Jahr */
 function planReleases(p){
@@ -792,7 +819,7 @@ function openFor(owner){ return vals(S.tasks).filter(t => t.owner === owner && !
 function vArtist(c){
   const p = person(c.id);
   if(!p) throw new Error('missing');
-  const rs = relsOf(p.id), yr = contractYear(p);
+  const rs = relsOf(p.id).filter(r => r.type !== 'Song'), yr = contractYear(p);
   const cs = counts(p);
   const done = t => cs.find(x => x.type===t).list.filter(r => r.status==='Released').length;
   const curR = currentRelease(p.id);
@@ -825,10 +852,32 @@ function vArtist(c){
       ${isPreview() ? '' : `<div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="pill dash" data-act="addvorab" data-id="${esc(p.id)}">${icon.plus} Vorab-Single</button>${dropboxFolder(p, `${icon.folder} Dropbox-Ordner`, 'pill dash', '')}</div>`}
     </div>`;
 }
+function projSummary(r){
+  const k = childrenOf(r), sg = k.filter(x => x.type === 'Vorab-Single');
+  const fertig = k.filter(x => x.status === 'Released' || ['Master','Distribution','Promo','Released'].includes(x.status)).length;
+  return `${k.length} Songs · ${fertig}/${k.length} fertig${sg.length ? ` · Singles ${sg.filter(x => x.status === 'Released').length}/${sg.length} draußen` : ''}`;
+}
+function songsSection(r, kids){
+  const lbl = r.type === 'Album' ? 'Songs des Albums' : 'Songs der EP';
+  const rows = kids.map((k, i) => {
+    const ts = tasksOf(k.id), dn = ts.filter(t => t.done).length, single = k.type === 'Vorab-Single';
+    const sub = `${single ? 'SINGLE' : 'NUR AUF ' + esc(relName(r).toUpperCase())} · ${esc(k.status.toUpperCase())}${ts.length ? ` · ${dn}/${ts.length}` : ' · KEIN FAHRPLAN'}`;
+    const when = k.date ? fmt(k.date) : single ? 'DATUM<br>OFFEN' : '';
+    return `<button class="rrow ${k.status==='Released'?'done':''}" data-go="release" data-id="${esc(k.id)}">
+      <span class="cover" style="background:${TYPE[k.type].c}">${coverUrl(k) ? coverTag(k) : ''}<span style="position:relative">${k.pos || i + 1}</span></span>
+      <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(k.title || '[Titel offen]')}</span><span class="small" style="font-weight:700;color:${single ? TYPE['Vorab-Single'].c : 'var(--mute)'}">${sub}</span></span>
+      <span class="small" style="text-align:right">${when}</span></button>`;
+  }).join('');
+  return `<div class="pad between" style="padding-top:18px"><h2 class="h-sec">${lbl}</h2>${isPreview() ? '' : `<button class="pill" data-act="addsong" data-id="${esc(r.id)}">${icon.plus} Song</button>`}</div>
+    <div class="pad" style="padding-top:10px">${kids.length ? `<span class="small" style="display:block;margin-bottom:8px">${esc(projSummary(r).toUpperCase())} · SONG ANTIPPEN = EIGENER RELEASE-PLAN</span>${rows}`
+      : `<div class="empty" style="margin:0"><b>Noch keine Songs</b><span class="small">Jeden Song einzeln anlegen – als Single-Auskopplung (eigenes Cover, Datum, Content, Video) oder nur auf ${esc(relName(r))}. Jeder Song bekommt seinen eigenen Fahrplan.</span>${isPreview() ? '' : `<button class="pill sun" data-act="addsong" data-id="${esc(r.id)}">${icon.plus} Ersten Song anlegen</button>`}</div>`}</div>`;
+}
 function relRow(r, now){
   const T = TYPE[r.type], ts = tasksOf(r.id), dn = ts.filter(t=>t.done).length;
   const statusTxt = r.status.toUpperCase() + (ts.length && isActive(r) ? ` · ${dn}/${ts.length}` : '');
-  const parent = r.countsTo && r.type === 'Vorab-Single' ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">ZÄHLT ZU ${esc(r.countsTo.toUpperCase())}</span>` : '';
+  const par = parentOf(r), kids = isProject(r) ? childrenOf(r) : [];
+  const parent = par ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">${r.pos ? 'SONG ' + r.pos + ' · ' : ''}${esc(relName(par).toUpperCase())}${par.title ? ' · ' + esc(par.title.toUpperCase()) : ''}</span>`
+    : kids.length ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">${projSummary(r).toUpperCase()}</span>` : '';
   return `<button class="rrow ${now?'now':''} ${r.status==='Released'?'done':''}" data-go="release" data-id="${esc(r.id)}">
     <span class="cover" style="background:${T.c}">${coverUrl(r) ? coverTag(r) : miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
     <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(relTitle(r))}${now?'<span class="sticker tilt3" style="padding:3px 6px;font-size:10px">JETZT</span>':''}</span>
@@ -844,6 +893,7 @@ function vRelease(c){
   const d = daysTo(r.date);
   const countdown = d == null ? '' : d > 0 ? `NOCH ${d} TAGE` : d === 0 ? 'HEUTE' : `SEIT ${-d} TAGEN DRAUSSEN`;
   const prod = producers()[0];
+  const par = parentOf(r), proj = isProject(r), kids = proj ? childrenOf(r) : [], songOnly = r.type === 'Song';
   const steps = ts.map((t,i) => {
     const ok = t.done, isCur = t === curT, last = i === ts.length - 1;
     const isRel = t.phase === 'T-0';
@@ -873,7 +923,7 @@ function vRelease(c){
       <span class="stack" style="flex:1;gap:2px;min-width:0"><span style="font-weight:700;font-size:16px">${esc(t.title)}</span><span class="small">${esc((t.stage||'').toUpperCase())}${v?' · '+esc(v.label.toUpperCase()):' · NOCH KEINE VERSION'}</span></span>${icon.chev}</button>`;
   }).join('');
   return `${banner()}${previewBanner()}
-    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(p.name)}</button><span class="small">${r.pflicht ? 'ZÄHLT ALS ' + esc((r.countsTo||'').toUpperCase()) : 'VORAB · ZÄHLT ZU ' + esc((r.countsTo||'').toUpperCase())}</span></div>
+    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(p.name)}</button>${par ? `<button class="chip" data-go="release" data-id="${esc(par.id)}">TEIL VON ${esc(relName(par).toUpperCase())}${par.title ? ' · ' + esc(par.title.toUpperCase()) : ''} →</button>` : `<span class="small">${r.pflicht ? 'ZÄHLT ALS ' + esc((r.countsTo||'').toUpperCase()) : 'VORAB · ZÄHLT ZU ' + esc((r.countsTo||'').toUpperCase())}</span>`}</div>
     <div class="rhero" style="background:${T.c}">${coverUrl(r) ? `<img class="rimg" src="${esc(coverUrl(r))}" alt=""><div class="rshade"></div>` : `
       <svg class="vinyl" width="320" height="320" viewBox="0 0 320 320" aria-hidden="true"><circle cx="160" cy="160" r="158" fill="#141414"/><circle cx="160" cy="160" r="130" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="110" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="90" fill="none" stroke="#2A2A2A" stroke-width="2"/><circle cx="160" cy="160" r="52" fill="#F2C94C"/><circle cx="160" cy="160" r="6" fill="#F3EFE6"/><text x="160" y="166" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#141414" dy="-14">${esc(r.code)}</text></svg>`}
       <div class="between" style="position:absolute;left:20px;right:16px;top:14px"><span class="mono" style="font-size:12px;font-weight:700;letter-spacing:.12em">${esc(relName(r).toUpperCase())}</span>
@@ -881,7 +931,7 @@ function vRelease(c){
       <div style="position:absolute;left:20px;bottom:20px;right:20px;display:flex;flex-direction:column;gap:10px">
         <div style="font-weight:700;font-size:36px;line-height:1.02;position:relative;letter-spacing:-.03em;text-wrap:balance">${esc(r.title || '[Titel offen]')}</div>
         <div class="row" style="flex-wrap:wrap;gap:8px">
-          <span class="chip">${r.date ? 'RELEASE ' + fmt(r.date) : 'RELEASE-DATUM OFFEN'}</span>
+          <span class="chip">${r.date ? 'RELEASE ' + fmt(r.date) : songOnly && relDate(r) ? 'MIT ' + esc(relName(par).toUpperCase()) + ' · ' + fmt(relDate(r)) : 'RELEASE-DATUM OFFEN'}</span>
           <span class="chip" style="background:var(--raise);color:var(--ink)">${esc(r.status.toUpperCase())}</span>
           ${countdown ? `<span class="sticker tilt3">${countdown}</span>` : ''}
           ${r.coop?.partner ? `<span class="chip" style="background:rgba(20,20,20,.45);color:#fff">KOOP · ${esc(r.coop.partner.toUpperCase())}</span>` : ''}
@@ -893,19 +943,20 @@ function vRelease(c){
         ${[...new Set(ts.map(t => t.owner))].filter(o => o && !['A','P','T'].includes(o) && OWNERS[o]).map(o => `<span title="${esc(OWNERS[o])}" style="background:var(--raise);color:var(--ink)">${esc(OWNERS[o][0])}</span>`).join('')}
       </div>
       <span class="small">${dn} / ${ts.length} SCHRITTE</span></div>
-    <div class="pad between" style="padding-top:18px"><h2 class="h-sec">Fahrplan</h2>${ts.length && !isPreview() ? `<button class="pill" data-act="addtask" data-id="${esc(r.id)}">${icon.plus} Schritt</button>` : ''}</div>
+    ${proj ? songsSection(r, kids) : ''}
+    <div class="pad between" style="padding-top:18px"><h2 class="h-sec">${proj ? 'Fahrplan ' + esc(relName(r)) : 'Fahrplan'}</h2>${ts.length && !isPreview() ? `<button class="pill" data-act="addtask" data-id="${esc(r.id)}">${icon.plus} Schritt</button>` : ''}</div>
     ${ts.length ? `<div class="steps">${steps}</div>` :
-      `<div class="empty"><b>Noch kein Fahrplan</b><span class="small">Standard: 9 Schritte von T-12 bis zum Release-Tag. Fälligkeiten rechnen sich aus dem Release-Datum.</span>${isPreview()?'':`<button class="pill sun" data-act="template" data-id="${esc(r.id)}">Standard-Fahrplan anlegen</button>`}</div>`}
+      `<div class="empty"><b>Noch kein Fahrplan</b><span class="small">${proj ? `Projekt-Fahrplan: ${TEMPLATE_PROJECT.length} Schritte fürs Gesamtprojekt (Tracklist, Cover, Upload, Release-Tag). Jeder Song hat seinen eigenen Plan.` : songOnly ? `Song-Fahrplan: ${TEMPLATE_SONG.length} Schritte bis der Song fertig ist. Veröffentlicht wird mit ${esc(relName(par))}.` : 'Standard: 9 Schritte von T-12 bis zum Release-Tag.'} Fälligkeiten rechnen sich aus dem Release-Datum.</span>${isPreview()?'':`<button class="pill sun" data-act="template" data-id="${esc(r.id)}">Fahrplan anlegen</button>`}</div>`}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Tracks & Audio</h2><button class="pill" data-act="addtrack" data-id="${esc(r.id)}">${icon.plus} Track</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">
       ${trackList || '<span class="small">Noch kein Track angelegt.</span>'}
       <span class="small">${trackList ? 'Track öffnen → „Version“ → Dropbox-Link eintragen.' : 'Erst einen Track anlegen, dann darin die Versionen als Dropbox-Link eintragen.'}</span>
       ${dropboxFolder(p, `DROPBOX-ORDNER ${esc(p.name.toUpperCase())} →`)}
     </div>
-    ${releaseCheck(r)}
-    ${contentSection(r)}
-    ${videoSection(r)}
-    ${coopSection(r)}
+    ${songOnly ? '' : releaseCheck(r)}
+    ${songOnly ? '' : contentSection(r)}
+    ${songOnly ? '' : videoSection(r)}
+    ${songOnly ? '' : coopSection(r)}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
 
@@ -2382,16 +2433,18 @@ async function act(a, id){
   if(a === 'addstudioartist'){ const r = currentRelease(id) || nextPlanned(id) || relsOf(id)[0]; return r ? sheetStudio(r.id) : toast('Noch kein Release angelegt'); }
   if(a === 'editstudio') return (lockedArtist || isPreview()) ? sheetStudioView(id) : sheetStudio(null, id);
   if(a === 'addvorab') return sheetVorab(id);
+  if(a === 'addsong') return sheetSong(id);
   if(a === 'template') return applyTemplate(id);
   if(a === 'genrels') return genReleases(id);
 }
 async function applyTemplate(rid){
   if(!db) return toast('Datenbank nicht verbunden');
-  for(let i=0;i<TEMPLATE.length;i++){
-    const [phase,title,owner] = TEMPLATE[i];
+  const tpl = templateFor(S.releases[rid]);
+  for(let i=0;i<tpl.length;i++){
+    const [phase,title,owner] = tpl[i];
     await put('tasks', uid('t'), {release:rid, artist:S.releases[rid].artist, phase, title, owner, done:false, order:i, due:''}, false);
   }
-  toast('Standard-Fahrplan angelegt');
+  toast('Fahrplan angelegt');
 }
 async function genReleases(pid){
   const p = person(pid); if(!p || !db) return;
@@ -2469,9 +2522,12 @@ function sheetRelease(id){
     <span class="small" style="display:block;margin:-4px 0 12px">Steht ein Release-Datum, rechnet die App das Vertragsjahr selbst aus dem Datum.</span>
     <div class="upl"><label for="f-cover" class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em">COVER ${r.cover ? '(VORHANDEN, NEUES ERSETZT ES)' : '(JPG/PNG)'}</label>
       <input id="f-cover" type="file" accept="image/jpeg,image/png,image/webp,image/heic"></div>`;
-  const extra = r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">Vorab-Single entfernen</button>`;
-  const form = sheet(`${relName(r)} bearbeiten`, fields, async (fd, f) => {
+  const kid = !!parentOf(r);
+  const kidFields = kid ? `<div class="grid2">${Sel('mode','VERÖFFENTLICHUNG',[['single','Single-Auskopplung'],['song','Nur auf ' + relName(parentOf(r))]], r.type === 'Song' ? 'song' : 'single')}${F('pos','POSITION',r.pos||'','number','min="1"')}</div>` : '';
+  const extra = (r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">${r.type === 'Song' ? 'Song entfernen' : 'Vorab-Single entfernen'}</button>`);
+  const form = sheet(`${relName(r)} bearbeiten`, kidFields + fields, async (fd, f) => {
     const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year: yearOfDate(person(r.artist), fd.date) || +fd.year || r.year, countsTo:fd.countsTo};
+    if(kid){ upd.type = fd.mode === 'song' ? 'Song' : 'Vorab-Single'; upd.pos = +fd.pos || r.pos || null; if(!r.parent) upd.parent = parentOf(r).id; }
     const img = f.querySelector('#f-cover').files[0];
     if(img){
       const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Lädt hoch …';
@@ -2487,13 +2543,33 @@ function sheetRelease(id){
   const d = form.querySelector('#delRel');
   if(d) d.onclick = async () => { if(d.dataset.sure){ await del('releases', id); $('#sheetRoot').innerHTML=''; back(); } else { d.dataset.sure = 1; d.textContent = 'Wirklich entfernen? Erneut tippen'; } };
 }
+function sheetSong(parId){
+  const par = S.releases[parId]; if(!par) return;
+  const pid = par.artist, kids = childrenOf(par);
+  const fields = `${F('title','SONGTITEL','','text','placeholder="Titel offen"')}
+    ${Sel('mode','VERÖFFENTLICHUNG',[['single','Als Single auskoppeln – eigenes Cover, Datum, Content, Video'],['song','Nur auf ' + relName(par) + ' – erscheint mit dem Projekt']],'single')}
+    ${F('pos','POSITION IN DER TRACKLIST',kids.length + 1,'number','min="1"')}
+    <p class="small" style="margin:-4px 0 12px">Der Song bekommt direkt seinen eigenen Fahrplan. Keine Doppelzählung: Er zählt zu ${esc(relName(par))}, nicht als eigene Pflicht-Single.</p>`;
+  sheet('Song zu ' + relName(par), fields, async fd => {
+    const single = fd.mode === 'single';
+    const n = vals(S.releases).filter(x => x.artist === pid && (single ? x.type === 'Vorab-Single' : x.type === 'Song')).length + 1;
+    const code = single ? 'V' + n : par.code + '-' + String(n).padStart(2,'0');
+    let rid = `${pid}-${code}`; if(S.releases[rid]) rid = uid(pid + '-' + code);
+    const doc = {artist:pid, code, type: single ? 'Vorab-Single' : 'Song', year:par.year, order: single ? par.order - 0.5 : par.order + 0.01 * n, pflicht:false, countsTo:relName(par), parent:par.id, pos: +fd.pos || kids.length + 1, status:'Geplant', date:'', title:fd.title.trim()};
+    if(!await put('releases', rid, doc, false)) return false;
+    S.releases[rid] = {id:rid, ...doc};
+    await applyTemplate(rid);
+    if(doc.title) await put('tracks', uid('tr'), {release:rid, title:doc.title, producer: producers()[0]?.name || '', stage:'Writing'}, false);
+    toast((single ? 'Single' : 'Song') + ' angelegt · eigener Fahrplan steht');
+  });
+}
 function sheetVorab(pid){
   const p = person(pid), parents = relsOf(pid).filter(r => r.type === 'EP' || r.type === 'Album');
   const n = relsOf(pid).filter(r => r.type === 'Vorab-Single').length + 1;
   const fields = `${F('title','ARBEITSTITEL','','text','placeholder="Titel offen"')}${Sel('parent','ZÄHLT ZU',parents.map(r=>[r.id,relName(r)]),parents[0]?.id)}`;
   sheet('Vorab-Single', fields, async fd => {
     const par = S.releases[fd.parent]; if(!par) return false;
-    await put('releases', `${pid}-V${n}`, {artist:pid, code:'V'+n, type:'Vorab-Single', year:par.year, order:par.order-0.5, pflicht:false, countsTo:relName(par), status:'Geplant', date:'', title:fd.title.trim()}, false);
+    await put('releases', `${pid}-V${n}`, {artist:pid, code:'V'+n, type:'Vorab-Single', year:par.year, order:par.order-0.5, pflicht:false, countsTo:relName(par), parent:par.id, pos:childrenOf(par).length + 1, status:'Geplant', date:'', title:fd.title.trim()}, false);
     toast('Vorab-Single angelegt · zählt zu ' + relName(par));
   });
 }
@@ -2705,7 +2781,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611130015';
+const APP_VERSION = '202611131530';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
