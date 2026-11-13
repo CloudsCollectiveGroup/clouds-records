@@ -239,6 +239,8 @@ h1,h2{margin:0;text-wrap:balance}
 .calday{aspect-ratio:1/1.05;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0}
 .calday.today{border-color:var(--sun);color:var(--sun);font-weight:700}
 .calday.sel{background:var(--sun);color:var(--on-sun);border-color:var(--sun)}
+.foldchev{display:inline-flex;vertical-align:middle;margin-left:8px;color:var(--mute);transition:transform .18s ease}
+h2.folded .foldchev{transform:rotate(-90deg)}
 /* ---------- Team-Design: Neon-Hintergrund + „Liquid Glass“ (nur interne Konten, 13.11.2026) ---------- */
 body.teamui{background:transparent}
 body.teamui::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
@@ -3083,8 +3085,25 @@ async function toggleInterest(bid){
 }
 
 /* ---------- Interaktion ---------- */
+/* Abschnitte auf Start/Pinnwand ein- und ausklappen (für alle, Zustand pro Gerät gemerkt) */
+let FOLD = new Set(); try{ FOLD = new Set(JSON.parse(localStorage.getItem('cr_fold') || '[]')); }catch(_){}
+function foldSections(v){
+  const r = cur().r; if(!['pin','apin','artiststart'].includes(r)) return;
+  v.querySelectorAll('.between').forEach(hd => {
+    const h = hd.querySelector(':scope > h2.h-sec'); if(!h) return;
+    const body = hd.nextElementSibling; if(!body || body.querySelector(':scope > h2.h-sec') || body.matches('.between')) return;
+    const key = r + ':' + (h.textContent || '').replace(/[0-9]+/g, '').trim(); if(!key.split(':')[1]) return;
+    h.style.cursor = 'pointer'; h.setAttribute('role', 'button'); h.setAttribute('tabindex', '0');
+    h.insertAdjacentHTML('beforeend', '<span class="foldchev" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>');
+    const apply = () => { const c = FOLD.has(key); body.style.display = c ? 'none' : ''; h.classList.toggle('folded', c); h.setAttribute('aria-expanded', String(!c)); };
+    const toggle = () => { FOLD.has(key) ? FOLD.delete(key) : FOLD.add(key); try{ localStorage.setItem('cr_fold', JSON.stringify([...FOLD])); }catch(_){} apply(); };
+    h.addEventListener('click', toggle); h.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); } });
+    apply();
+  });
+}
 function bind(){
   const v = $('#view');
+  foldSections(v);
   v.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const c = cur(); go(el.dataset.go, {id:el.dataset.id, preview:c.preview}); }));
   v.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); act(el.dataset.act, el.dataset.id); }));
   bindChats(v);
@@ -3579,7 +3598,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140200';
+const APP_VERSION = '202611140230';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
