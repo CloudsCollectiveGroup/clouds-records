@@ -141,6 +141,8 @@ Deno.serve(async (req) => {
     if (op === "INSERT") out.push({ keys: ["C"], title: `Studio-Anfrage · ${a}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.hours || "?"} h · ${d.room || ""}`, tag: "studio" });
     if (op === "UPDATE" && old?.status !== d.status && ["Bestätigt", "Abgelehnt"].includes(d.status))
       out.push({ keys: [d.artist], title: `Studio ${d.status.toLowerCase()}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.room || ""}`, tag: "studio" });
+    if (op === "UPDATE" && old?.status !== d.status && d.status === "Bestätigt" && (d.guests || []).length)
+      out.push({ keys: d.guests, title: `Studio mit ${await personName(d.artist)}`, body: `${fmt(d.date)}${d.time ? " · " + d.time : ""} · ${d.room || ""} · du bist dabei`, tag: "studio" });
   }
   if (col === "tasks") {
     const who = (k: string) => k === "A" ? d.artist : k;

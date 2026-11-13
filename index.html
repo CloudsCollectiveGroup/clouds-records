@@ -494,8 +494,10 @@ const ROOMS = ['Studio 1 · Vocals','Studio 3 · Basement Studios','Studio 4 · 
 const SSTATUS_COL = {'Angefragt':'var(--sun)','Bestätigt':'var(--album)','Abgelehnt':'var(--danger)'};
 const TIMES = (() => { const o = []; for(let h = 8; h <= 23; h++) for(const m of ['00','30']) o.push(String(h).padStart(2,'0') + ':' + m); return o; })();
 const endTime = (t, h) => { if(!t) return ''; const [a,b] = t.split(':').map(Number); const m = (a*60 + b + (+h||0)*60) % 1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); };
+const studioGuests = x => Array.isArray(x.guests) ? x.guests : [];
+const guestName = k => person(k)?.name || ownerName(k);
 const studioLbl = x => { const r = S.releases[x.release]; return r ? relName(r) + (r.title ? ' · ' + r.title : '') : 'Freie Session' + (x.song ? ' · ' + x.song : ''); };
-const studioText = x => { const a = person(x.artist); return `CloudStudios · ${x.room||'Raum offen'} · ${a?.name||''} (${studioLbl(x)}) · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' ' + x.time + '–' + endTime(x.time, x.hours) : ''}${x.note ? ' · ' + x.note : ''}`; };
+const studioText = x => { const a = person(x.artist); return `CloudStudios · ${x.room||'Raum offen'} · ${a?.name||''}${studioGuests(x).length ? ' + ' + studioGuests(x).map(guestName).join(', ') : ''} (${studioLbl(x)}) · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' ' + x.time + '–' + endTime(x.time, x.hours) : ''}${x.note ? ' · ' + x.note : ''}`; };
 /* Musikvideo (liegt am Release unter „video“) */
 const VSTAGES = ['Idee','Planung','Dreh','Schnitt','Fertig'];
 const VLOC_STATUS = ['Idee','Angefragt','Bestätigt','Abgesagt'];
@@ -2118,13 +2120,15 @@ function sheetStudio(rid, id, aid){
   const fields = `${Sel('release','WOFÜR?',rels,x.release||'')}
     <div class="field" id="songWrap" style="${x.release ? 'display:none' : ''}"><label for="f-song">SONG / ARBEITSTITEL (OPTIONAL)</label><input id="f-song" name="song" value="${esc(x.song||'')}" placeholder="Neuer Song, Idee, einfach recorden"></div>
     ${F('date','WUNSCHDATUM',x.date||'','date',`required min="${id ? '' : todayIso()}"`)}
-    <div class="grid2">${Sel('time','BEGINN',times,x.time||'14:00')}${Sel('hours','DAUER',[['4','4 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}</div>
+    <div class="grid2">${Sel('time','BEGINN',times,x.time||'14:00')}${Sel('hours','DAUER',[['4','4 Stunden'],['6','6 Stunden'],['8','8 Stunden'],['12','12 Stunden']],x.hours)}</div>
     ${Sel('room','RAUM',rooms,x.room||'Egal')}
+    <div class="field"><span class="flabel">WER IST NOCH DABEI? (OPTIONAL, MEHRFACH)</span><div class="gchips">${[...artists().filter(p => p.id !== x.artist).map(p => [p.id, p.name]), ...producers().map(p => ['P', p.name]), ['C','Cem'],['TH','Thorben'],['K','Kacper'],['N','Nikolina']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="sguest" value="${esc(v)}" ${studioGuests(x).includes(v) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div></div>
     <div class="field"><label for="f-note">WAS STEHT AN?</label><textarea id="f-note" name="note" rows="2" placeholder="Vocals für Single 02, Hook und Adlibs">${esc(x.note||'')}</textarea></div>
     ${id && team ? `<div class="grid2">${Sel('status','STATUS',['Angefragt','Bestätigt','Abgelehnt'],x.status)}${Sel('tt','TIMETREE',[['','Noch nicht eingetragen'],['1','Eingetragen']],x.tt ? '1' : '')}</div>` : ''}`;
   const extra = id && team ? `${!x.release ? '<button class="btn alt" type="button" id="linkStudio" style="width:100%;margin-top:14px">🎯 Wird ein Release · zuordnen</button>' : ''}${chatBox('studio:' + id, x.release, x.artist)}<button class="btn alt" type="button" id="copyStudio" style="width:100%;margin-top:10px">Text für TimeTree kopieren</button><button class="btn danger" type="button" id="delStudio" style="width:100%;margin-top:10px">Anfrage löschen</button>` : '';
-  sheet(id ? 'Studio-Anfrage' : 'Studio-Slot anfragen', fields, async fd => {
-    const doc = {release:fd.release||'', song: fd.release ? '' : (fd.song||'').trim(), date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room || 'Egal', note:(fd.note||'').trim()};
+  sheet(id ? 'Studio-Anfrage' : 'Studio-Slot anfragen', fields, async (fd, f) => {
+    const guests = [...f.querySelectorAll('input[name=sguest]:checked')].map(i => i.value);
+    const doc = {guests, release:fd.release||'', song: fd.release ? '' : (fd.song||'').trim(), date:fd.date, time:fd.time||'', hours:fd.hours, room:fd.room || 'Egal', note:(fd.note||'').trim()};
     if(id) return await put('studio', id, team ? {...doc, status:fd.status, tt: fd.tt === '1'} : doc) ? undefined : false;
     const ok = await put('studio', uid('s'), {...doc, artist:x.artist, status:'Angefragt', by: account?.name || '', at: new Date().toISOString()}, false);
     if(ok) toast('Anfrage gesendet · das Team bestätigt den Slot');
@@ -2179,6 +2183,7 @@ function sheetStudioView(id){
     <span class="small">STUDIO-ANFRAGE · ${esc(studioLbl(x).toUpperCase())}</span>
     <h2 class="h-sec" style="margin:6px 0 4px">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</h2>
     <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(x.hours)} STUNDEN · <span style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></span>
+    ${studioGuests(x).length ? `<div class="small" style="margin-top:10px">DABEI: ${esc(studioGuests(x).map(guestName).join(', ').toUpperCase())}</div>` : ''}
     ${x.note ? `<div class="vrow" style="margin-top:12px;white-space:pre-line;line-height:1.45">${esc(x.note)}</div>` : ''}
     ${chatBox('studio:' + id, x.release, x.artist)}
     <button class="btn alt" type="button" data-close style="width:100%;margin-top:6px">Schließen</button></div></div>`;
@@ -2194,7 +2199,7 @@ function studioRow(x, withArtist){
   return `<button class="vrow" data-act="editstudio" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit">
     <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600">${x.hours}h</span>
     <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}</b>
-      <span class="small">${chatOf('studio:' + x.id).length ? '<span style="color:var(--sun)">💬 ' + chatOf('studio:' + x.id).length + '</span> · ' : ''}${withArtist ? esc((a?.name||'').toUpperCase()) + ' · ' : ''}${esc(studioLbl(x).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
+      <span class="small">${chatOf('studio:' + x.id).length ? '<span style="color:var(--sun)">💬 ' + chatOf('studio:' + x.id).length + '</span> · ' : ''}${withArtist ? esc((a?.name||'').toUpperCase()) + (studioGuests(x).length ? ' + ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) : '') + ' · ' : (studioGuests(x).length ? 'MIT ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) + ' · ' : '')}${esc(studioLbl(x).toUpperCase())} · ${esc((x.room||'').toUpperCase())}${withArtist && x.status === 'Bestätigt' ? (x.tt ? ' · <span style="color:var(--album)">IN TIMETREE ✓</span>' : ' · <span style="color:var(--sun)">TIMETREE OFFEN</span>') : ''}</span></span>
     <span class="status" style="color:${SSTATUS_COL[x.status]||'var(--mute)'}">● ${esc((x.status||'').toUpperCase())}</span></button>`;
 }
 
@@ -2666,7 +2671,7 @@ function vPin(c){
       <button data-act="editstudio" data-id="${esc(x.id)}" style="background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer;display:flex;gap:12px;align-items:center">
         <span class="play" style="font-family:var(--mono);font-size:11px;font-weight:600;flex:none">${esc(x.hours)}h</span>
         <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(a?.name||'')} · ${x.date ? fmt(x.date) : 'Datum offen'}${x.time ? ' · ' + esc(x.time) + '–' + esc(endTime(x.time, x.hours)) : ''}${isNew({at:x._at, by:x._by}) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
-          <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(studioLbl(x).toUpperCase())}${x.by ? ' · VON ' + esc(x.by.toUpperCase()) : ''}</span>
+          <span class="small">${esc((x.room||'').toUpperCase())} · ${esc(studioLbl(x).toUpperCase())}${studioGuests(x).length ? ' · MIT ' + esc(studioGuests(x).map(guestName).join(', ').toUpperCase()) : ''}${x.by ? ' · VON ' + esc(x.by.toUpperCase()) : ''}</span>
           ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note)}</span>` : ''}</span>
         <span class="status" style="color:${SSTATUS_COL[x.status]}">● ${esc(x.status.toUpperCase())}</span></button>
       <div class="row" style="gap:8px;flex-wrap:wrap">${x.status === 'Angefragt' ? `<button class="pill sun" data-act="sconfirm" data-id="${esc(x.id)}" style="min-height:34px">${icon.check} Bestätigen</button><button class="pill" data-act="sdecline" data-id="${esc(x.id)}" style="min-height:34px">Ablehnen</button>` : ''}
@@ -3711,7 +3716,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140300';
+const APP_VERSION = '202611140330';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
