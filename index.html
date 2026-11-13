@@ -2900,17 +2900,23 @@ function vWeek(){
     <div class="pad" style="padding-top:24px"><h2 class="h-sec">Nächste 7 Tage</h2></div><div class="pad stack" style="gap:8px;padding-top:10px">${next.map(ev).join('') || '<span class="small">Keine Termine.</span>'}</div>`;
 }
 /* ---------- Kalender ---------- */
+const CAL_CATS = [['release','#39FF88','Release'],['studio','#FFCC00','Studio'],['video','#F26D6D','Musikvideo'],['reel','#C2407A','Reel-Dreh'],['foto',PHOTO_COL,'Foto'],['content','#5B8DEF','Content'],['termin','#22D3EE','Termin'],['live',GIG_COL,'Live'],['session','#A78BFA','Session']];
+let CALF = {off:[], mine:false}; try{ CALF = {off:[], mine:false, ...JSON.parse(localStorage.getItem('cr_calf') || '{}')}; }catch(_){}
+const saveCalf = () => { try{ localStorage.setItem('cr_calf', JSON.stringify(CALF)); }catch(_){} };
+const calCat = e => (CAL_CATS.find(c => c[1] === e.c) || ['termin'])[0];
+const calOwn = (e, aid) => aid ? (e.own === true || e.a === aid) && !(e.dim && e.a !== aid) : !!e.own;
+const calPass = aid => e => !CALF.off.includes(calCat(e)) && (!CALF.mine || calOwn(e, aid));
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
   for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r) + (!lockedArtist && r.shareCal ? ' · 🌐 Label-Kalender' : ''), a:r.artist, c:'#39FF88', go:['release', r.id]});
-  for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && (mine(x.artist) || guestIn(x, aid))) ev.push({date:x.date, time:x.time, t:'Studio · ' + (aid && x.artist !== aid ? 'Gast bei ' + (person(x.artist)?.name || '') + ' · ' : '') + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
+  for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && (mine(x.artist) || guestIn(x, aid))) ev.push({date:x.date, time:x.time, t:'Studio · ' + (aid && x.artist !== aid ? 'Gast bei ' + (person(x.artist)?.name || '') + ' · ' : '') + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id], own: aid ? true : (guestIn(x, myKey()) || x.artist === myKey())});
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t: isPhoto(x) ? 'Fotoshooting · ' + (x.title||'') + (x.purpose ? ' · ' + x.purpose : '') : 'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c: isPhoto(x) ? PHOTO_COL : '#C2407A', go:['video', shootKey(p.id, x.id)]}));
   if(aid && !lockedArtist && isPreview()) for(const r of vals(S.releases)) if(r.shareCal && r.date && r.artist !== aid) ev.push({date:r.date, t:'Release · ' + (person(r.artist)?.name || '') + ' · ' + relTitle(r), a:r.artist, c:'#39FF88', dim:true, go:['release', r.id]}); /* Artist-Sicht: so sieht es der Artist */
   if(aid && lockedArtist) for(const x of (S.labelRels||[])) if(x.date && x.artist !== aid) ev.push({date:x.date, t:'Release · ' + (x.name || '') + (x.title ? ' · ' + x.title : ''), a:x.artist, c:'#39FF88', dim:true});
-  for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt'});
-  for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
-  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id]});
+  for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt', own: aid ? true : false});
+  for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live', own: aid ? true : assigned(x, myKey())});
+  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id], own: aid ? true : assigned(x, myKey())});
   if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
   return ev.sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
 }
@@ -2918,7 +2924,7 @@ function vCal(c){
   const aid = lockedArtist || c.a || null, t0 = todayIso();
   const ym = c.m || t0.slice(0,7), [Y, M] = ym.split('-').map(Number);
   const first = new Date(Y, M-1, 1), days = new Date(Y, M, 0).getDate(), lead = (first.getDay() + 6) % 7;
-  const ev = calEvents(aid).filter(e => e.date.startsWith(ym)), byDay = {};
+  const all = calEvents(aid).filter(e => e.date.startsWith(ym)), ev = all.filter(calPass(aid)), byDay = {};
   ev.forEach(e => (byDay[e.date] ||= []).push(e));
   const iso = d => `${ym}-${String(d).padStart(2,'0')}`, sel = c.d && c.d.startsWith(ym) ? c.d : null;
   const shift = n => { const d = new Date(Y, M-1+n, 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
@@ -2928,13 +2934,16 @@ function vCal(c){
   const groups = {}; list.forEach(e => (groups[e.date] ||= []).push(e));
   const row = e => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${e.dim ? 'opacity:.55' : ''}"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span>
     <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${e.time ? esc(e.time) + ' · ' : ''}${!aid && e.a ? esc((person(e.a)?.name||'').toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
-  const legend = [['#39FF88','Release'],['#FFCC00','Studio'],['#F26D6D','Musikvideo'],['#C2407A','Reel-Dreh'],['#5B8DEF','Content'],['#F59E0B','Foto'],['#22D3EE','Termin']].map(([col,l]) => `<span><i class="sw" style="background:${col}"></i>${l.toUpperCase()}</span>`).join('');
+  const cats = CAL_CATS.filter(([k]) => (k !== 'session' || !aid));
+  const legend = `<div class="row" style="gap:6px;flex-wrap:wrap;width:100%"><button class="pill ${!CALF.mine ? 'on' : ''}" data-act="calmine" data-id="0" style="min-height:32px">Alle</button><button class="pill ${CALF.mine ? 'on' : ''}" data-act="calmine" data-id="1" style="min-height:32px">Nur meine</button>${CALF.off.length ? '<button class="pill" data-act="calcat" data-id="*" style="min-height:32px">Alle Arten zeigen</button>' : ''}</div>
+    <div class="row" style="gap:6px;flex-wrap:nowrap;overflow-x:auto;width:100%;margin-top:8px;padding-bottom:4px;scrollbar-width:none">${cats.map(([k, col, l]) => { const off = CALF.off.includes(k), n = all.filter(e => calCat(e) === k && (!CALF.mine || calOwn(e, aid))).length;
+      return `<button class="pill" data-act="calcat" data-id="${k}" aria-pressed="${!off}" style="min-height:30px;font-size:12px;gap:6px;flex:none;${off ? 'opacity:.4;text-decoration:line-through' : ''}"><i class="sw" style="background:${col};width:9px;height:9px;border-radius:50%;display:inline-block"></i>${l}${n ? ' · ' + n : ''}</button>`; }).join('')}</div>`;
   return `${cloudSvg}${previewBanner()}<div class="topbar">${lockedArtist || c.a ? `<button class="back" data-act="back">${icon.back}Zurück</button>` : '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>'}<span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'ALLE ARTISTS'}</span></div>${banner()}
     <div class="pad between" style="padding-top:14px;align-items:center"><button class="iconbtn" data-act="calnav" data-id="${shift(-1)}|${aid||''}" aria-label="Vorheriger Monat">${icon.back}</button>
       <h1 class="h-big" style="font-size:30px;text-align:center">${first.toLocaleDateString('de-DE',{month:'long', year:'numeric'})}</h1>
       <button class="iconbtn" data-act="calnav" data-id="${shift(1)}|${aid||''}" aria-label="Nächster Monat">${icon.chev}</button></div>
+    <div class="pad" style="padding-top:4px;padding-bottom:12px">${legend}</div>
     <div class="pad"><div class="calgrid">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => `<span class="calhd">${d}</span>`).join('')}${cells}</div></div>
-    <div class="pad legend" style="padding-top:10px;flex-wrap:wrap;row-gap:6px">${legend}</div>
     <div class="pad between" style="padding-top:18px"><h2 class="h-sec">${sel ? fmt(sel) : 'Alle Termine'}</h2>${sel ? `<button class="pill" data-act="calday" data-id="">Ganzer Monat</button>` : `<span class="small">${ev.length}</span>`}</div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${Object.keys(groups).length ? Object.entries(groups).map(([d, es]) => `${sel ? '' : `<div class="yearhead" style="margin:10px 0 2px"><span class="lbl">${parse(d).toLocaleDateString('de-DE',{weekday:'short', day:'2-digit', month:'2-digit'}).toUpperCase()}</span><i></i></div>`}${es.map(row).join('')}`).join('') : '<span class="small">Keine Termine.</span>'}</div>`;
 }
@@ -3336,6 +3345,8 @@ async function act(a, id){
   if(a === 'cfilter') return tab('content', {f:id});
   if(a === 'addstudio') return sheetStudio(id);
   if(a === 'sconfirm' || a === 'sdecline'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {status: a === 'sconfirm' ? 'Bestätigt' : 'Abgelehnt'}); toast(a === 'sconfirm' ? 'Bestätigt · jetzt in TimeTree eintragen' : 'Abgelehnt'); } return; }
+  if(a === 'calcat'){ CALF.off = id === '*' ? [] : CALF.off.includes(id) ? CALF.off.filter(x => x !== id) : [...CALF.off, id]; saveCalf(); render(); return; }
+  if(a === 'calmine'){ CALF.mine = id === '1'; saveCalf(); render(); return; }
   if(a === 'rsvp'){ const [sid, ans] = id.split('|'); await studioRsvp(sid, ans); return; }
   if(a === 'scopy'){ const x = S.studio?.[id]; return x ? copyText(studioText(x)) : null; }
   if(a === 'stt'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {tt:true}); toast('Als eingetragen markiert'); } return; }
@@ -3746,7 +3757,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140400';
+const APP_VERSION = '202611140415';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
