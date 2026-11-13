@@ -400,7 +400,7 @@ const vals = o => Object.values(o);
 const person = id => S.people[id];
 /* Vertragsjahr eines Releases: steht ein Release-Datum fest, zählt das Datum (relativ zum Vertragsbeginn), sonst das geplante Jahr */
 const yearOfDate = (p, iso) => { const s = parse(p?.start), d = parse(iso); if(!s || !d) return null; const y = Math.floor((d - s) / (365.25*864e5)) + 1; return Math.max(1, Math.min(y, p.years || y)); };
-const relYear = r => yearOfDate(S.people[r.artist], r.date) || r.year || 1;
+const relYear = r => r.yearManual ? (r.year || 1) : (yearOfDate(S.people[r.artist], r.date) || (r.type === 'Song' && !r.date && r.parent && S.releases[r.parent] ? relYear(S.releases[r.parent]) : 0) || r.year || 1);
 const relsOf = a => vals(S.releases).filter(r => r.artist === a).sort((x,y) => (relYear(x)-relYear(y)) || (x.date && y.date ? x.date.localeCompare(y.date) : x.date ? -1 : y.date ? 1 : 0) || (x.order-y.order));
 const tasksOf = rid => vals(S.tasks).filter(t => t.release === rid).sort((x,y) => (PHASES.indexOf(x.phase)-PHASES.indexOf(y.phase)) || ((x.order||0)-(y.order||0)));
 const tracksOf = rid => vals(S.tracks).filter(t => t.release === rid).sort((a,b) => (a.title||'').localeCompare(b.title||''));
@@ -2518,15 +2518,17 @@ function sheetRelease(id){
   const r = S.releases[id];
   const fields = `${F('title','ARBEITSTITEL',r.title||'','text','placeholder="Titel offen"')}
     <div class="grid2">${Sel('status','STATUS',STAGES,r.status)}${F('date','RELEASE-DATUM',r.date||'','date')}</div>
-    <div class="grid2">${F('year','VERTRAGSJAHR',relYear(r),'number','min="1"')}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>
-    <span class="small" style="display:block;margin:-4px 0 12px">Steht ein Release-Datum, rechnet die App das Vertragsjahr selbst aus dem Datum.</span>
+    <div class="grid2">${Sel('year','VERTRAGSJAHR',[['auto','Automatisch' + (yearOfDate(person(r.artist), r.date) ? ' (aus Datum: Jahr ' + yearOfDate(person(r.artist), r.date) + ')' : '')], ...Array.from({length: Math.max(person(r.artist)?.years || 1, relYear(r))}, (_, i) => [String(i+1), 'Jahr ' + (i+1)])], r.yearManual ? String(r.year) : (r.date ? 'auto' : String(relYear(r))))}${F('countsTo','ZÄHLT ZU',r.countsTo||'')}</div>
+    <span class="small" style="display:block;margin:-4px 0 12px">Ein gewähltes Jahr hat immer Vorrang. „Automatisch“ rechnet das Jahr aus dem Release-Datum.</span>
     <div class="upl"><label for="f-cover" class="mono" style="font-size:11px;font-weight:700;letter-spacing:.1em">COVER ${r.cover ? '(VORHANDEN, NEUES ERSETZT ES)' : '(JPG/PNG)'}</label>
       <input id="f-cover" type="file" accept="image/jpeg,image/png,image/webp,image/heic"></div>`;
   const kid = !!parentOf(r);
   const kidFields = kid ? `<div class="grid2">${Sel('mode','VERÖFFENTLICHUNG',[['single','Single-Auskopplung'],['song','Nur auf ' + relName(parentOf(r))]], r.type === 'Song' ? 'song' : 'single')}${F('pos','POSITION',r.pos||'','number','min="1"')}</div>` : '';
   const extra = (r.pflicht ? '' : `<button class="btn danger" type="button" id="delRel" style="width:100%;margin-top:10px">${r.type === 'Song' ? 'Song entfernen' : 'Vorab-Single entfernen'}</button>`);
   const form = sheet(`${relName(r)} bearbeiten`, kidFields + fields, async (fd, f) => {
-    const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year: yearOfDate(person(r.artist), fd.date) || +fd.year || r.year, countsTo:fd.countsTo};
+    const autoY = yearOfDate(person(r.artist), fd.date);
+    const manual = fd.year !== 'auto' && !(autoY && +fd.year === autoY);
+    const upd = {title:fd.title.trim(), status:fd.status, date:fd.date||'', year: manual ? +fd.year : (autoY || +fd.year || r.year), yearManual: manual, countsTo:fd.countsTo};
     if(kid){ upd.type = fd.mode === 'song' ? 'Song' : 'Vorab-Single'; upd.pos = +fd.pos || r.pos || null; if(!r.parent) upd.parent = parentOf(r).id; }
     const img = f.querySelector('#f-cover').files[0];
     if(img){
@@ -2555,7 +2557,7 @@ function sheetSong(parId){
     const n = vals(S.releases).filter(x => x.artist === pid && (single ? x.type === 'Vorab-Single' : x.type === 'Song')).length + 1;
     const code = single ? 'V' + n : par.code + '-' + String(n).padStart(2,'0');
     let rid = `${pid}-${code}`; if(S.releases[rid]) rid = uid(pid + '-' + code);
-    const doc = {artist:pid, code, type: single ? 'Vorab-Single' : 'Song', year:par.year, order: single ? par.order - 0.5 : par.order + 0.01 * n, pflicht:false, countsTo:relName(par), parent:par.id, pos: +fd.pos || kids.length + 1, status:'Geplant', date:'', title:fd.title.trim()};
+    const doc = {artist:pid, code, type: single ? 'Vorab-Single' : 'Song', year:relYear(par), order: single ? par.order - 0.5 : par.order + 0.01 * n, pflicht:false, countsTo:relName(par), parent:par.id, pos: +fd.pos || kids.length + 1, status:'Geplant', date:'', title:fd.title.trim()};
     if(!await put('releases', rid, doc, false)) return false;
     S.releases[rid] = {id:rid, ...doc};
     await applyTemplate(rid);
@@ -2781,7 +2783,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131530';
+const APP_VERSION = '202611131545';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
