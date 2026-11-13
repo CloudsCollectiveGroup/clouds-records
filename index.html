@@ -2748,15 +2748,16 @@ function vPin(c){
     <div class="pad small" style="padding-top:8px">${doneWk ? '✓ ' + doneWk + ' IN DEN LETZTEN 7 TAGEN ERLEDIGT · ' : ''}${items.length} OFFEN INSGESAMT</div>` : ''}
     ${ownView ? inviteBlock(k, !viewAs) : ''}
     ${startBlock(c, k, ownView && account?.role === 'team', apvItems, row)}
+    ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
+    ${k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-big" style="font-size:30px">${ownView ? 'Meine Aufgaben' : 'Aufgaben'}</h2><span class="small">${items.length} OFFEN</span></div>${items.length ? '' : `<div class="pad small" style="padding-top:8px">${ownView ? 'Gerade ist dir nichts zugeordnet.' : 'Nichts zugeordnet.'}</div>`}` : ''}
+    <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
     ${pick}
     ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button>${ownView && !myProducer ? '<button class="pill" data-act="reqnew">🛒 Kaufanfrage</button><button class="pill" data-act="tech">🛠 Technik</button>' : ''}</div>` : ''}
     ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${isAdmin() && !viewAs ? '<button class="pill" data-act="viewas">👁 Team-Sicht</button>' : ''}${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
     ${apvSec}
-    ${notes.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Nachrichten</h2><span class="small">${notes.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${notes.map(noteCard).join('')}</div>` : ''}
     ${terms.length ? `<div class="pad between" id="pinTerms" style="padding-top:22px"><h2 class="h-sec">Termine</h2><span class="small">${terms.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${terms.map(x => todoRow(x)).join('')}</div>` : ''}
-    <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
     ${!notes.length && !items.length && !sReq.length && !cPend.length && !terms.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${ownView && account?.role === 'team' ? artistStrip() : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
@@ -3794,7 +3795,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140700';
+const APP_VERSION = '202611140720';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
