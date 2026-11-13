@@ -1190,6 +1190,14 @@ function videoSection(r){
 const CAMP_PLAT = ['TikTok','Instagram/Facebook (Meta)','YouTube','Spotify (Marquee/Showcase)','Playlist-Promo','Sonstiges'];
 const CAMP_GOAL = ['Streams','Follower','Pre-Saves','Video-Views','Reichweite'];
 const CAMP_ST = ['Geplant','Läuft','Beendet'];
+const CAMP_APPROVERS = [['C','Cem'],['TH','Thorben']];
+const campApvOf = (x, k) => { const a = x.apv?.[k]; return a && String(a.amt ?? '') === String(x.budget ?? '') ? a : null; }; /* Budget geändert → neu freigeben */
+function campApvState(x){
+  const recs = CAMP_APPROVERS.map(([k]) => campApvOf(x, k));
+  if(recs.some(a => a?.v === 'no')) return {k:'no', l:'ABGELEHNT', c:'var(--danger)'};
+  const n = recs.filter(a => a?.v === 'ok').length;
+  return n === CAMP_APPROVERS.length ? {k:'ok', l:'GENEHMIGT ✓', c:'#39ff88'} : {k:'open', l:'FREIGABE ' + n + '/' + CAMP_APPROVERS.length, c:'var(--sun)'};
+}
 const CAMP_COL = {'Geplant':'var(--mute)','Läuft':'var(--sun)','Beendet':'var(--album)'};
 const campsOf = r => Array.isArray(r?.camps) ? r.camps : [];
 const campKpi = x => { const sp = num(x.spent) || num(x.budget); const parts = [];
@@ -1412,6 +1420,7 @@ function campaignSection(r){
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.platform || 'Kampagne')}${x.goal ? ' · ' + esc(x.goal) : ''}</b>
         <span class="small">${x.from ? fmt(x.from) : 'START OFFEN'}${x.to ? '–' + fmt(x.to) : ''} · BUDGET ${num(x.budget) ? eur(num(x.budget)) : 'OFFEN'}${num(x.spent) ? ' · AUSGEGEBEN ' + eur(num(x.spent)) : ''}${x.charge ? ' · MIT ARTIST VERRECHNEN' : ''}</span>
         ${num(x.views) || num(x.clicks) || num(x.follower) || num(x.streams) ? `<span class="small" style="color:var(--album)">${[num(x.views) ? num(x.views).toLocaleString('de-DE') + ' VIEWS' : '', num(x.clicks) ? num(x.clicks).toLocaleString('de-DE') + ' KLICKS' : '', num(x.follower) ? '+' + num(x.follower).toLocaleString('de-DE') + ' FOLLOWER' : '', num(x.streams) ? '+' + num(x.streams).toLocaleString('de-DE') + ' STREAMS' : ''].filter(Boolean).join(' · ')}${campKpi(x) ? ' · ' + campKpi(x) : ''}</span>` : ''}
+        <span class="small" style="color:${campApvState(x).c}">${campApvState(x).l}${CAMP_APPROVERS.map(([k,l]) => { const a = campApvOf(x, k); return ' · ' + l.toUpperCase() + (a ? (a.v === 'ok' ? ' ✓' : ' ✗') : ' OFFEN'); }).join('')}</span>
         ${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, person(r.artist)?.name).toUpperCase())}</span>` : ''}
         ${x.note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(x.note)}</span>` : ''}</span>
       <span class="status" style="color:${CAMP_COL[x.status||'Geplant']};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span></button>`).join('');
@@ -1436,14 +1445,25 @@ function sheetCamp(rid, idx){
     <div class="grid2">${F('follower','NEUE FOLLOWER',x.follower||'','text','inputmode="numeric"')}${F('streams','STREAM-ZUWACHS',x.streams||'','text','inputmode="numeric"')}</div>
     <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="Learnings, was lief gut/schlecht">${esc(x.note||'')}</textarea></div>`;
   const extra = isNew ? '' : `<button class="btn danger" type="button" id="delCamp" style="width:100%;margin-top:10px">Kampagne löschen</button>`;
-  sheet((isNew ? 'Neue Kampagne · ' : 'Kampagne · ') + relTitle(r), fields, async (fd, f) => {
+  const mk = myKey(), st = campApvState(x);
+  const apvBox = isNew ? '<p class="small" style="margin:-6px 0 14px">Nach dem Speichern geben Cem und Thorben die Kampagne frei.</p>' : `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:8px;margin-bottom:16px;border-color:${st.c}">
+      <div class="between"><span class="flabel">FREIGABE${num(x.budget) ? ' · BUDGET ' + eur(num(x.budget)) : ''}</span><b class="small" style="color:${st.c}">${st.l}</b></div>
+      ${CAMP_APPROVERS.map(([k,l]) => { const a = campApvOf(x, k), old = x.apv?.[k] && !a; return `<div class="between small"><span>${esc(l.toUpperCase())}</span><span style="color:${a ? (a.v === 'ok' ? '#39ff88' : 'var(--danger)') : 'var(--sun)'}">${a ? (a.v === 'ok' ? '✓ GENEHMIGT' : '✗ ABGELEHNT') + (a.at ? ' · ' + new Date(a.at).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) : '') : old ? 'BUDGET GEÄNDERT · NEU FREIGEBEN' : 'OFFEN'}</span></div>`; }).join('')}
+      ${CAMP_APPROVERS.some(([k]) => k === mk) ? `<div class="row" style="gap:8px"><button type="button" class="pill sun" data-campapv="ok" style="flex:1;justify-content:center">✓ Genehmigen</button><button type="button" class="pill" data-campapv="no" style="flex:1;justify-content:center">✗ Ablehnen</button></div>` : ''}</div>`;
+  sheet((isNew ? 'Neue Kampagne · ' : 'Kampagne · ') + relTitle(r), apvBox + fields, async (fd, f) => {
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     const os = [...f.querySelectorAll('input[name=cown]:checked')].map(i => i.value);
-    const doc = {id: x.id || uid('cp')}; for(const k of ['platform','goal','from','to','status','budget','spent','creative','audience','link','views','clicks','follower','streams','note']) doc[k] = String(fd[k] ?? '').trim();
+    const doc = {id: x.id || uid('cp'), ...(x.apv ? {apv: x.apv} : {})}; for(const k of ['platform','goal','from','to','status','budget','spent','creative','audience','link','views','clicks','follower','streams','note']) doc[k] = String(fd[k] ?? '').trim();
     doc.charge = fd.charge === '1'; if(os.length){ doc.o = os[0]; if(os.length > 1) doc.os = os; }
     if(isNew) arr.push(doc); else arr[idx] = doc;
     return await put('releases', rid, {camps: arr}) ? undefined : false;
   }, extra);
+  document.querySelectorAll('#sheetForm [data-campapv]').forEach(b => b.onclick = async () => {
+    const cur = [...campsOf(S.releases[rid])], c = {...cur[idx]};
+    c.apv = {...(c.apv || {}), [mk]: {v: b.dataset.campapv, by: account?.name || '', at: new Date().toISOString(), amt: c.budget ?? ''}};
+    cur[idx] = c;
+    if(await put('releases', rid, {camps: cur})){ toast(b.dataset.campapv === 'ok' ? 'Genehmigt' : 'Abgelehnt'); S.releases[rid] = {...S.releases[rid], camps: cur}; sheetCamp(rid, idx); }
+  });
   const d = $('#delCamp'); if(d) d.onclick = async () => { if(d.dataset.sure){ arr.splice(idx, 1); await put('releases', rid, {camps: arr}); $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
 }
 function campaignOverview(){
@@ -1452,7 +1472,7 @@ function campaignOverview(){
   list.forEach(({x}) => { const m = (x.from || x.to || '').slice(0,7); if(m) byM[m] = (byM[m] || 0) + (num(x.spent) || num(x.budget)); });
   const months = Object.keys(byM).sort().slice(-4);
   return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kampagnen</h2><span class="small">${run.filter(({x}) => x.status === 'Läuft').length} LAUFEN · ${run.filter(({x}) => x.status !== 'Läuft').length} GEPLANT</span></div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${run.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.to ? ' · BIS ' + fmt(x.to) : ''} · ${eur(num(x.spent) || num(x.budget))}</span></span>${icon.chev}</button>`).join('') || '<span class="small">Keine laufende oder geplante Kampagne.</span>'}
+    <div class="pad stack" style="gap:8px;padding-top:10px">${run.map(({x, r}) => `<button class="vrow" data-act="campedit" data-id="${esc(r.id)}|${campsOf(r).indexOf(x)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())} · ${esc((x.status||'Geplant').toUpperCase())}${x.to ? ' · BIS ' + fmt(x.to) : ''} · ${eur(num(x.spent) || num(x.budget))} · <span style="color:${campApvState(x).c}">${campApvState(x).l}</span></span></span>${icon.chev}</button>`).join('') || '<span class="small">Keine laufende oder geplante Kampagne.</span>'}
     ${months.map(m => `<div class="between small"><span>${ymLabel(m).toUpperCase()}</span><b>${eur(byM[m])}</b></div>`).join('')}</div>`;
 }
 function coopSection(r){
@@ -1826,7 +1846,7 @@ function vContent(c){
     <div class="pad" style="padding-top:18px"><h1 class="h-giant">Content</h1><div class="small" style="margin-top:6px">ALLE BEITRÄGE ALLER RELEASES</div></div>
     <div class="chips">${pendingContent().length ? `<button class="pill ${f==='freigabe'?'on':''}" data-act="cfilter" data-id="freigabe" style="border-color:#FFE14D;color:${f==='freigabe'?'':'#FFE14D'};box-shadow:0 0 10px rgba(255,225,77,.4)">Zur Freigabe · ${pendingContent().length}</button>` : chip('freigabe','Freigaben')}${chip('offen','Offen')}${chip('woche','Nächste 7 Tage')}${chip('alle','Alle')}</div>
     ${(() => { const cl = vals(S.releases).flatMap(r => campsOf(r).map(x => ({x, r}))).filter(({x}) => x.status !== 'Beendet').sort((a,b) => (a.x.from||'9').localeCompare(b.x.from||'9'));
-      return cl.length ? `<div class="pad between" style="padding-top:18px"><h2 class="h-sec">Kampagnen</h2><span class="small">${cl.filter(({x}) => x.status === 'Läuft').length} LAUFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cl.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.goal ? ' · ' + esc(x.goal.toUpperCase()) : ''}${x.from ? ' · ' + fmt(x.from) : ''}${x.to ? '–' + fmt(x.to) : ''} · ${num(x.budget) ? eur(num(x.budget)) : 'BUDGET OFFEN'}</span></span><span class="status" style="color:${CAMP_COL[x.status||'Geplant']};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span></button>`).join('')}</div>` : ''; })()}
+      return cl.length ? `<div class="pad between" style="padding-top:18px"><h2 class="h-sec">Kampagnen</h2><span class="small">${cl.filter(({x}) => x.status === 'Läuft').length} LAUFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cl.map(({x, r}) => `<button class="vrow" data-act="campedit" data-id="${esc(r.id)}|${campsOf(r).indexOf(x)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.goal ? ' · ' + esc(x.goal.toUpperCase()) : ''}${x.from ? ' · ' + fmt(x.from) : ''}${x.to ? '–' + fmt(x.to) : ''} · ${num(x.budget) ? eur(num(x.budget)) : 'BUDGET OFFEN'}</span><span class="small" style="color:${campApvState(x).c}">${campApvState(x).l}</span></span><span class="status" style="color:${CAMP_COL[x.status||'Geplant']};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span></button>`).join('')}</div>` : ''; })()}
     <div class="pad stack" style="gap:8px;padding-top:12px">${Object.keys(groups).length ? Object.entries(groups).map(([k, xs]) => `<div class="yearhead" style="margin:14px 0 4px"><span class="lbl">${esc(k.toUpperCase())}</span><i></i></div>${xs.map(x => contentRow(x, true)).join('')}`).join('') :
       `<div class="empty" style="margin:0"><b>Keine Beiträge in dieser Ansicht</b><span class="small">Content-Pläne legst du im jeweiligen Release unter „Content-Plan“ an.</span></div>`}</div>`;
 }
@@ -2360,7 +2380,8 @@ function pinItems(k){
   for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(chkHas(c,k) && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({tick:['ptoggle', x.id], src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
-  for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && chkHas(x, k)) out.push({src:'camp', id:r.id, title:'Kampagne ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + ' · ' + (x.status||'Geplant') + (x.from ? ' ab ' + fmt(x.from) : ''), due:x.to || x.from || '', go:['release', r.id]}); });
+  for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + ' · ' + (x.status||'Geplant') + (x.from ? ' ab ' + fmt(x.from) : ''), due:x.to || x.from || '', go:['release', r.id]}); });
+  if(CAMP_APPROVERS.some(([kk]) => kk === k)) for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && !campApvOf(x, k) && !chkHas(x, k)) out.push({src:'camp', id:r.id + '|' + i, title:'Kampagne freigeben · ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + (num(x.budget) ? ' · Budget ' + eur(num(x.budget)) : '') + ' · ' + campApvState(x).l, due:x.from || '', go:['release', r.id]}); });
   for(const r of vals(S.releases)) if(r.status !== 'Released' && r.rc?.meta) rcState(r).forEach(x => { if(!x.ok && chkHas(x, k)) out.push({tick:['rctoggle', r.id + '|' + x.k], src:'rc', id:r.id, title:x.l, sub:(person(r.artist)?.name||'') + ' · Release-Check ' + relName(r) + (x.note ? ' · ' + x.note : ''), due:r.date || '', go:['release', r.id]}); });
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
@@ -2989,6 +3010,7 @@ async function act(a, id){
   if(a === 'pinwho') return tab('pin', id === myKey() ? {} : {k:id});
   if(a === 'pingo'){ const {g, src, id:xid} = JSON.parse(id);
     if(src === 'todos'){ sheetTodo(xid); return; }
+    if(src === 'camp'){ const [crid, ci] = String(xid).split('|'); if(ci !== undefined && S.releases[crid]) return sheetCamp(crid, +ci); }
     if(g[0] === 'pmonth') go('pmonth', {id:g[1], m:g[2]}); else go(g[0], {id:g[1]});
     setTimeout(() => {
       if(src === 'tasks' && S.tasks[xid]) sheetTask(S.tasks[xid].release, xid);
@@ -3414,7 +3436,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132230';
+const APP_VERSION = '202611132300';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
