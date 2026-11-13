@@ -490,16 +490,47 @@ const RCHECK = [
   ['presave','Pre-Save-Link', r => !!safeUrl(r.presave), 'Unter „Details“'],
   ['pitch','Spotify-Pitch eingereicht (≥ 7 Tage vorher)', null, '']
 ];
-const rcState = r => RCHECK.map(([k, l, auto, hint]) => { const a = auto ? !!auto(r) : false, m = !!(r.vc||{})[k]; return {k, l, hint, auto: !!auto, autoOk: a, manual: m, ok: a || m}; });
+/* Release-Check anpassbar: r.rc = {hide:[keys], extra:[{k,l}], meta:{key:{os:[], o, note}}} – Standardpunkte nur ausblendbar */
+const rcCfg = r => ({hide: r?.rc?.hide || [], extra: r?.rc?.extra || [], meta: r?.rc?.meta || {}});
+const rcState = r => { const c = rcCfg(r);
+  const std = RCHECK.filter(([k]) => !c.hide.includes(k)).map(([k, l, auto, hint]) => { const a = auto ? !!auto(r) : false, m = !!(r.vc||{})[k]; return {k, l, hint, auto: !!auto, autoOk: a, manual: m, ok: a || m, ...(c.meta[k]||{})}; });
+  const ext = c.extra.filter(x => x && x.l).map(x => { const m = !!(r.vc||{})[x.k]; return {k:x.k, l:x.l, hint:'', auto:false, autoOk:false, manual:m, ok:m, own:true, ...(c.meta[x.k]||{})}; });
+  return [...std, ...ext]; };
 function releaseCheck(r){
   const st = rcState(r), n = st.filter(x => x.ok).length, all = n === st.length, team = !isPreview();
-  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Release-Check</h2>${team ? `<button class="pill" data-act="rcdetails" data-id="${esc(r.id)}">${icon.edit} Details</button>` : ''}</div>
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Release-Check</h2>${team ? `<span class="row" style="gap:6px"><button class="pill" data-act="rcedit" data-id="${esc(r.id)}">${icon.edit} Punkte</button><button class="pill" data-act="rcdetails" data-id="${esc(r.id)}">Details</button></span>` : ''}</div>
     <div class="pad" style="padding-top:10px"><details class="arch" style="margin:0;${all ? 'border-color:#39FF88;box-shadow:0 0 14px rgba(57,255,136,.25)' : ''}" ${all ? '' : 'open'}>
       <summary style="color:${all ? '#39FF88' : 'var(--ink2)'}">${all ? '✓ BEREIT FÜR DEN VERTRIEB' : `BEREIT FÜR DEN VERTRIEB · ${n}/${st.length}`}</summary>
       <div class="tc-bar" style="margin:10px 0 6px"><i style="width:${Math.round(n/st.length*100)}%;background:${all ? '#39FF88' : 'var(--sun)'}"></i></div>
-      <div class="stack" style="gap:2px">${st.map(x => `<${team ? `button data-act="rctoggle" data-id="${esc(r.id)}|${x.k}"` : 'div'} class="check ${x.ok ? 'ok' : ''}" style="width:100%;text-align:left;font:inherit;${team ? 'cursor:pointer' : ''}"><span class="box2">${x.ok ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.l)}</span>${x.auto ? `<span class="small">${x.autoOk ? 'AUTOMATISCH ERKANNT' : x.manual ? 'VON HAND ABGEHAKT' : 'WIRD AUTOMATISCH ERKANNT' + (team ? ' ODER ANTIPPEN' : '')}${x.hint && !x.autoOk ? ' · ' + esc(x.hint.toUpperCase()) : ''}</span>` : ''}</span></${team ? 'button' : 'div'}>`).join('')}</div>
+      <div class="stack" style="gap:2px">${st.map(x => `<${team ? `button data-act="rctoggle" data-id="${esc(r.id)}|${x.k}"` : 'div'} class="check ${x.ok ? 'ok' : ''}" style="width:100%;text-align:left;font:inherit;${team ? 'cursor:pointer' : ''}"><span class="box2">${x.ok ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.l)}</span>${x.auto ? `<span class="small">${x.autoOk ? 'AUTOMATISCH ERKANNT' : x.manual ? 'VON HAND ABGEHAKT' : 'WIRD AUTOMATISCH ERKANNT' + (team ? ' ODER ANTIPPEN' : '')}${x.hint && !x.autoOk ? ' · ' + esc(x.hint.toUpperCase()) : ''}</span>` : ''}${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, person(r.artist)?.name).toUpperCase())}</span>` : ''}${x.note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">✎ ${esc(x.note)}</span>` : ''}</span></${team ? 'button' : 'div'}>`).join('')}</div>
       ${r.upc || r.presave ? `<div class="small" style="margin-top:8px">${r.upc ? 'UPC ' + esc(r.upc) : ''}${r.upc && r.presave ? ' · ' : ''}${safeUrl(r.presave) ? `<a href="${esc(r.presave)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">PRE-SAVE →</a>` : ''}</div>` : ''}
     </details></div>`;
+}
+function sheetRcEdit(rid){
+  const r = S.releases[rid]; if(!r) return; const c = rcCfg(r), pn = person(r.artist)?.name;
+  const owners = (k, x) => `<div class="gchips" style="margin-top:6px">${CHK_OWNERS().filter(([v]) => v).map(([v,l]) => `<label class="gchip"><input type="checkbox" class="rco" data-k="${esc(k)}" value="${v}" ${chkOwners(x).includes(v) ? 'checked' : ''}><span>${esc(v === 'A' ? (pn || l) : l)}</span></label>`).join('')}</div>`;
+  const note = (k, x) => `<input class="rcn" data-k="${esc(k)}" value="${esc(x.note||'')}" placeholder="Notiz (optional)" style="width:100%;margin-top:6px;min-height:34px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:13px">`;
+  const stdRows = RCHECK.map(([k, l]) => { const x = c.meta[k] || {}; return `<div class="rcrow" data-k="${esc(k)}" style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <label class="row" style="gap:10px;align-items:center"><input type="checkbox" class="rcshow" data-k="${esc(k)}" ${c.hide.includes(k) ? '' : 'checked'} style="width:20px;height:20px;flex:none"><b style="font-weight:600">${esc(l)}</b></label>${owners(k, x)}${note(k, x)}</div>`; }).join('');
+  const extRow = x => `<div class="rcrow rcext" data-k="${esc(x.k)}" style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div class="row" style="gap:8px"><input class="rcl" value="${esc(x.l||'')}" placeholder="Eigener Punkt, z. B. GEMA angemeldet" style="flex:1;min-height:38px;border-radius:10px;background:var(--paper);color:var(--ink);border:1px solid var(--line2);padding:0 10px;font-size:15px"><button type="button" class="iconbtn ghost rcdel" aria-label="Punkt entfernen" style="width:34px;height:34px;flex:none">×</button></div>${owners(x.k, c.meta[x.k]||{})}${note(x.k, c.meta[x.k]||{})}</div>`;
+  const fields = `<span class="flabel">STANDARDPUNKTE (HAKEN = ANZEIGEN)</span>${stdRows}
+    <span class="flabel" style="display:block;margin-top:16px">EIGENE PUNKTE</span><div id="rcExt">${c.extra.map(extRow).join('')}</div>
+    <button class="pill" type="button" id="rcAdd" style="margin:8px 0 14px;min-height:34px">${icon.plus} Punkt</button>
+    <p class="small" style="margin:0 0 12px">Zuständige sehen offene Punkte auf ihrer Pinnwand. Gilt nur für dieses Release.</p>`;
+  const form = sheet('Release-Check · ' + relName(r), fields, async (fd, f) => {
+    const hide = [...f.querySelectorAll('input.rcshow')].filter(i => !i.checked).map(i => i.dataset.k);
+    const extra = [...f.querySelectorAll('.rcext')].map(row => ({k: row.dataset.k, l: row.querySelector('.rcl').value.trim()})).filter(x => x.l);
+    const keep = new Set([...RCHECK.map(([k]) => k), ...extra.map(x => x.k)]), meta = {};
+    for(const row of f.querySelectorAll('.rcrow')){ const k = row.dataset.k; if(!keep.has(k)) continue;
+      let os = [...row.querySelectorAll('input.rco:checked')].map(i => i.value); if(os.includes('A')) os = ['A', ...os.filter(v => v !== 'A')];
+      const n = (row.querySelector('.rcn')?.value || '').trim();
+      if(os.length || n) meta[k] = {...(os.length ? {o: os[0]} : {}), ...(os.length > 1 ? {os} : {}), ...(n ? {note: n} : {})}; }
+    return await put('releases', rid, {rc: {hide, extra, meta}}) ? undefined : false;
+  });
+  const wire = row => { row.querySelector('.rcdel').onclick = () => row.remove(); };
+  form.querySelectorAll('.rcext').forEach(wire);
+  form.querySelector('#rcAdd').onclick = () => { const k = 'x' + Math.random().toString(36).slice(2,7); form.querySelector('#rcExt').insertAdjacentHTML('beforeend', extRow({k, l:''})); const row = form.querySelector('#rcExt').lastElementChild; wire(row); row.querySelector('.rcl').focus(); };
 }
 function sheetRcDetails(rid){
   const r = S.releases[rid]; if(!r) return;
@@ -1929,6 +1960,7 @@ function pinItems(k){
   for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(chkHas(c,k) && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({tick:['ptoggle', x.id], src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
+  for(const r of vals(S.releases)) if(r.status !== 'Released' && r.rc?.meta) rcState(r).forEach(x => { if(!x.ok && chkHas(x, k)) out.push({tick:['rctoggle', r.id + '|' + x.k], src:'rc', id:r.id, title:x.l, sub:(person(r.artist)?.name||'') + ' · Release-Check ' + relName(r) + (x.note ? ' · ' + x.note : ''), due:r.date || '', go:['release', r.id]}); });
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
     if(assigned(x, k)) out.push({tick:['tododone', x.id], src:'todos', id:x.id, title:x.title, sub:'Aufgabe' + (a ? ' · ' + a : '') + checkTxt(x), due:x.due, go:null, at:x._at, by:x._by, note:x.note});
@@ -2572,6 +2604,7 @@ async function act(a, id){
   if(a === 'gigdecline'){ const n = prompt('Kurzer Grund für den Artist (optional):') || ''; if(await put('gigs', id, {req:'abgelehnt', reqNote:n.trim()})) toast('Abgelehnt'); return; }
   if(a === 'planset') return planSet(id);
   if(a === 'rcdetails') return sheetRcDetails(id);
+  if(a === 'rcedit') return sheetRcEdit(id);
   if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(!r) return; const x = rcState(r).find(y => y.k === k); if(x && x.autoOk && !x.manual) return toast('Wird automatisch erkannt – schon erledigt'); await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
   if(a === 'credits') return sheetCredits(id);
   if(a === 'pushprefs') return sheetPushPrefs();
@@ -2943,7 +2976,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131700';
+const APP_VERSION = '202611131715';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
