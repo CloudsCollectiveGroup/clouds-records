@@ -470,11 +470,13 @@ const videoCost = v => (v.locations||[]).filter(l => l.status !== 'Abgesagt').re
 /* Release-Check „Bereit für den Vertrieb“: manuelle Haken in release.vc, einige Punkte prüft die App selbst */
 const splitSum = (t, f) => (t.credits||[]).reduce((a,c) => a + num(c[f]), 0);
 const creditsOk = t => (t.credits||[]).length > 0 && Math.round(splitSum(t,'m')) === 100 && Math.round(splitSum(t,'p')) === 100;
+/* EP/Album: Tracks der Songs zählen mit */
+const rcTracks = r => [...tracksOf(r.id), ...((r.type === 'EP' || r.type === 'Album') ? vals(S.releases).filter(x => x.parent === r.id).flatMap(x => tracksOf(x.id)) : [])];
 const RCHECK = [
-  ['master','Master final (WAV, 24 Bit)', r => { const ts = tracksOf(r.id); return ts.length > 0 && ts.every(t => versionsOf(t.id).some(v => v.kind === 'Master')); }, 'Jeder Track hat eine Version „Master“'],
+  ['master','Master final (WAV, 24 Bit)', r => { const ts = rcTracks(r); return ts.length > 0 && ts.every(t => versionsOf(t.id).some(v => v.kind === 'Master')); }, 'Jeder Track hat eine Version „Master“'],
   ['cover','Cover 3000 × 3000 px', null, ''],
-  ['credits','Credits & Splits vollständig', r => { const ts = tracksOf(r.id); return ts.length > 0 && ts.every(creditsOk); }, 'Jeder Track: Master und Publishing je 100 %'],
-  ['isrc','ISRC für jeden Track', r => { const ts = tracksOf(r.id); return ts.length > 0 && ts.every(t => (t.isrc||'').trim()); }, 'Im Track unter „Credits & Splits“'],
+  ['credits','Credits & Splits vollständig', r => { const ts = rcTracks(r); return ts.length > 0 && ts.every(creditsOk); }, 'Jeder Track: Master und Publishing je 100 %'],
+  ['isrc','ISRC für jeden Track', r => { const ts = rcTracks(r); return ts.length > 0 && ts.every(t => (t.isrc||'').trim()); }, 'Im Track unter „Credits & Splits“'],
   ['lyrics','Lyrics hinterlegt', null, ''],
   ['genre','Genre & Stimmung festgelegt', null, ''],
   ['date','Release-Datum steht', r => !!r.date, 'Im Release über den Stift'],
@@ -483,14 +485,14 @@ const RCHECK = [
   ['presave','Pre-Save-Link', r => !!safeUrl(r.presave), 'Unter „Details“'],
   ['pitch','Spotify-Pitch eingereicht (≥ 7 Tage vorher)', null, '']
 ];
-const rcState = r => RCHECK.map(([k, l, auto, hint]) => ({k, l, hint, auto: !!auto, ok: auto ? auto(r) : !!(r.vc||{})[k]}));
+const rcState = r => RCHECK.map(([k, l, auto, hint]) => { const a = auto ? !!auto(r) : false, m = !!(r.vc||{})[k]; return {k, l, hint, auto: !!auto, autoOk: a, manual: m, ok: a || m}; });
 function releaseCheck(r){
   const st = rcState(r), n = st.filter(x => x.ok).length, all = n === st.length, team = !isPreview();
   return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Release-Check</h2>${team ? `<button class="pill" data-act="rcdetails" data-id="${esc(r.id)}">${icon.edit} Details</button>` : ''}</div>
     <div class="pad" style="padding-top:10px"><details class="arch" style="margin:0;${all ? 'border-color:#39FF88;box-shadow:0 0 14px rgba(57,255,136,.25)' : ''}" ${all ? '' : 'open'}>
       <summary style="color:${all ? '#39FF88' : 'var(--ink2)'}">${all ? '✓ BEREIT FÜR DEN VERTRIEB' : `BEREIT FÜR DEN VERTRIEB · ${n}/${st.length}`}</summary>
       <div class="tc-bar" style="margin:10px 0 6px"><i style="width:${Math.round(n/st.length*100)}%;background:${all ? '#39FF88' : 'var(--sun)'}"></i></div>
-      <div class="stack" style="gap:2px">${st.map(x => `<${team && !x.auto ? `button data-act="rctoggle" data-id="${esc(r.id)}|${x.k}"` : 'div'} class="check ${x.ok ? 'ok' : ''}" style="width:100%;text-align:left;font:inherit;${team && !x.auto ? 'cursor:pointer' : ''}"><span class="box2">${x.ok ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.l)}</span>${x.auto ? `<span class="small">AUTOMATISCH${x.hint ? ' · ' + esc(x.hint.toUpperCase()) : ''}</span>` : ''}</span></${team && !x.auto ? 'button' : 'div'}>`).join('')}</div>
+      <div class="stack" style="gap:2px">${st.map(x => `<${team ? `button data-act="rctoggle" data-id="${esc(r.id)}|${x.k}"` : 'div'} class="check ${x.ok ? 'ok' : ''}" style="width:100%;text-align:left;font:inherit;${team ? 'cursor:pointer' : ''}"><span class="box2">${x.ok ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.l)}</span>${x.auto ? `<span class="small">${x.autoOk ? 'AUTOMATISCH ERKANNT' : x.manual ? 'VON HAND ABGEHAKT' : 'WIRD AUTOMATISCH ERKANNT' + (team ? ' ODER ANTIPPEN' : '')}${x.hint && !x.autoOk ? ' · ' + esc(x.hint.toUpperCase()) : ''}</span>` : ''}</span></${team ? 'button' : 'div'}>`).join('')}</div>
       ${r.upc || r.presave ? `<div class="small" style="margin-top:8px">${r.upc ? 'UPC ' + esc(r.upc) : ''}${r.upc && r.presave ? ' · ' : ''}${safeUrl(r.presave) ? `<a href="${esc(r.presave)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700">PRE-SAVE →</a>` : ''}</div>` : ''}
     </details></div>`;
 }
@@ -2418,7 +2420,7 @@ async function act(a, id){
   if(a === 'vbase') return sheetVideoBase(id);
   if(a === 'planset') return planSet(id);
   if(a === 'rcdetails') return sheetRcDetails(id);
-  if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(r) await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
+  if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(!r) return; const x = rcState(r).find(y => y.k === k); if(x && x.autoOk && !x.manual) return toast('Wird automatisch erkannt – schon erledigt'); await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
   if(a === 'credits') return sheetCredits(id);
   if(a === 'pushprefs') return sheetPushPrefs();
   if(a === 'editprofile') return sheetProfile(id);
@@ -2788,7 +2790,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131600';
+const APP_VERSION = '202611131610';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
