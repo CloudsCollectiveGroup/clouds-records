@@ -2415,7 +2415,7 @@ function vArtistStart(c){
       <button class="pill" data-act="calfor" data-id="${esc(p.id)}">📅 Kalender</button>${!team ? `<button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button>${lockedArtist === p.id ? `<button class="pill sun" data-act="addnote">${icon.plus} Nachricht ans Team</button><button class="pill" data-act="tech">🛠 Technik</button>` : ''}` : ''}</div>
     ${team ? (() => { const n = notesFor(p.id).filter(x => !(x.doneBy||[]).includes(p.id)).length, o = vals(S.tasks).filter(t => !t.done && t.owner === 'A' && S.releases[t.release]?.artist === p.id).length;
       return `<button class="vrow" data-go="apin" data-id="${esc(p.id)}" style="margin:18px 16px 0;width:calc(100% - 32px);cursor:pointer;text-align:left;font:inherit"><span class="play">${icon.roster}</span><span class="stack" style="flex:1;gap:2px"><b>Pinnwand von ${esc(p.name)}</b><span class="small">${n} ${n === 1 ? 'NACHRICHT' : 'NACHRICHTEN'} · ${o} ${o === 1 ? 'AUFGABE' : 'AUFGABEN'} OFFEN</span></span>${icon.chev}</button>`; })() : ''}
-    ${!team ? vArtistPin({id:p.id}, true) : ''}
+    ${!team ? upcomingBlock(p.id) + vArtistPin({id:p.id}, true) : ''}
     ${r ? `<div class="pad" style="padding-top:22px"><span class="lbl">${team ? 'AKTUELLES RELEASE' : 'DEIN NÄCHSTER SCHRITT'}</span></div>
     ${(() => { const st = rcState(r), n = st.filter(x => x.ok).length; return `<div class="nextcard">
       <div class="between"><span class="mono" style="font-size:11px;font-weight:700"><span class="sw" style="background:${TYPE[r.type].c};margin-right:6px"></span>${esc(r.code)} · ${esc(relTitle(r).toUpperCase())}</span>${r.date?`<span class="mono" style="font-size:11px;font-weight:700">${fmt(r.date)}</span>`:''}</div>
@@ -2924,6 +2924,12 @@ const saveCalf = () => { try{ localStorage.setItem('cr_calf', JSON.stringify(CAL
 const calCat = e => (CAL_CATS.find(c => c[1] === e.c) || ['termin'])[0];
 const calOwn = (e, aid) => aid ? (e.own === true || e.a === aid) && !(e.dim && e.a !== aid) : !!e.own;
 const calPass = aid => e => !CALF.off.includes(calCat(e)) && (!CALF.mine || calOwn(e, aid));
+function upcomingBlock(aid){
+  const t0 = todayIso(), ev = calEvents(aid).filter(e => e.date >= t0 && calCat(e) !== 'content' && calOwn(e, aid)).slice(0, 6);
+  const row = e => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};flex:none"></span><span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${e.date === t0 ? 'HEUTE' : e.date === isoAdd(t0, 1) ? 'MORGEN' : parse(e.date).toLocaleDateString('de-DE',{weekday:'short', day:'2-digit', month:'2-digit'}).toUpperCase()}${e.time ? ' · ' + esc(e.time) : ''}</span></span>${icon.chev}</button>`;
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kommende Termine</h2><button class="pill" data-act="calfor" data-id="${esc(aid)}">Kalender →</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${ev.map(row).join('') || '<span class="small">Gerade keine Termine geplant.</span>'}</div>`;
+}
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
   for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r) + (!lockedArtist && r.shareCal ? ' · 🌐 Label-Kalender' : ''), a:r.artist, c:'#39FF88', go:['release', r.id]});
@@ -2934,7 +2940,7 @@ function calEvents(aid){
   if(aid && lockedArtist) for(const x of (S.labelRels||[])) if(x.date && x.artist !== aid) ev.push({date:x.date, t:'Release · ' + (x.name || '') + (x.title ? ' · ' + x.title : ''), a:x.artist, c:'#39FF88', dim:true});
   for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt', own: aid ? true : false});
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live', own: aid ? true : assigned(x, myKey())});
-  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id], own: aid ? true : assigned(x, myKey())});
+  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || (!lockedArtist && !isPreview()))))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id], own: aid ? true : assigned(x, myKey())});
   if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
   return ev.sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
 }
@@ -3009,13 +3015,13 @@ function vArtistPin(c, embed){
     ${inviteBlock(aid, own && !viewAs)}
     ${asksArtistBlock(aid)}
     ${sec('Nachrichten', notes, noteCard)}
-    ${sec('Termine', aterms, x => todoRow(x, {fresh, withArtist:false}))}
+    ${embed ? '' : sec('Termine', aterms, x => todoRow(x, {fresh, withArtist:false}))}
     ${sec('Aufgaben vom Team', atodos, x => todoRow(x, {fresh, withArtist:false}))}
     ${sec('Überfällig', over, taskRow, true)}${sec('Diese Woche', week, taskRow)}${sec('Später', later, taskRow)}
     ${sec('Planung', ptasks, t => `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:0"><button data-go="video" data-id="${esc(t.key)}" style="background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:center"><span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(t.title)}</b><span class="small">${esc(t.sub.toUpperCase())}${t.due ? ' · ' + fmt(t.due) : ''}</span></span>${icon.chev}</button>${own ? planQuick(t.key, t.kind, t.i) : ''}</div>`)}
     ${embed ? '' : sec('Studio', studio, x => studioRow(x, false))}
     ${embed ? '' : sec('Live', gigsOf(aid).filter(g => gigOpen(g) && g.status !== 'Gespielt' && g.status !== 'Abgerechnet' && (!g.date || g.date >= t0)), gigRow)}
-    ${sec('Drehs & Shootings', shoots, shootRow2)}
+    ${embed ? '' : sec('Drehs & Shootings', shoots, shootRow2)}
     ${empty && embed ? '<div class="pad small" style="padding-top:8px">Gerade liegt nichts bei dir. Nachrichten vom Team, Aufgaben und Einladungen landen hier.</div>' : ''}
     ${empty && !embed ? `<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landen Nachrichten vom Team, deine Aufgaben, Studio-Termine und Drehtage.${own ? ' Über „Nachricht“ schreibst du dem Team.' : ''}</span></div>` : ''}
     ${sent.length ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">${own ? 'Von dir gesendet' : 'Von ' + esc(p.name) + ' gesendet'}</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
@@ -3781,7 +3787,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140540';
+const APP_VERSION = '202611140600';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
