@@ -742,8 +742,8 @@ function shrinkImage(file){
 /* ---------- Navigation ---------- */
 const cur = () => stack[stack.length-1];
 let lockedArtist = null; /* gesetzt, wenn ein Artist angemeldet ist: App bleibt in seinem Bereich */
-const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video','profile','cal','search','week'].includes(r) ? r : 'artiststart';
-  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin' || ok === 'profile') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; return [ok, q]; };
+const lockP = (r, p) => { if(!lockedArtist) return [r, p]; const ok = ['artiststart','artist','release','track','tracks','recordings','market','apin','video','profile','cal','search','week','live'].includes(r) ? r : 'artiststart';
+  const q = {...p, preview: lockedArtist}; if(ok === 'artiststart' || ok === 'artist' || ok === 'recordings' || ok === 'market' || ok === 'apin' || ok === 'profile') q.id = (ok === r && p.id && S.people[p.id]) ? p.id : lockedArtist; if(ok === 'tracks') q.artist = lockedArtist; if(ok === 'live') q.a = lockedArtist; return [ok, q]; };
 function go(r, p={}){ [r, p] = lockP(r, p); stack.push({r, ...p}); render(); window.scrollTo(0,0); }
 function back(){ if(stack.length > 1) stack.pop(); render(); window.scrollTo(0,0); }
 function tab(r, p={}){ [r, p] = lockP(r, p); stack.length = 0; stack.push({r, ...p}); render(); window.scrollTo(0,0); }
@@ -757,6 +757,7 @@ function ctxArtist(c){
   if(c.r === 'tracks' && c.artist) return c.artist;
   if((c.r === 'recordings' || c.r === 'market' || c.r === 'apin' || c.r === 'profile') && S.people[c.id]) return c.id;
   if(c.r === 'video') return isGig(c.id) ? null : (planCtx(c.id).artist || null);
+  if(c.r === 'live' && c.a && c.inArtist) return c.a;
   return null;
 }
 function renderNav(){
@@ -764,13 +765,13 @@ function renderNav(){
   let items;
   if(c.preview){
     const a = c.preview;
-    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
+    items = [['artiststart','Start',icon.home,{id:a,preview:a}],['apin','Pinnwand',icon.roster,{id:a,preview:a}],['artist','Timeline',icon.timeline,{id:a,preview:a}],['tracks','Tracks',icon.tracks,{artist:a,preview:a}],['live','Live',icon.live,{a:a,preview:a}],['recordings','Recordings',icon.mic,{id:a,preview:a}],['market','Beats',icon.cockpit,{id:a,preview:a}]];
   } else {
     /* Team: Start = Artist-Kacheln; im Artist dessen Bereiche */
     const ctx = ctxArtist(c), pctx = ctxProducer(c) || (account?.role === 'producer' ? myProducer : null);
     if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
-      ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['recordings','Recordings',icon.mic,{id:ctx}]]
+      ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['live','Live',icon.live,{a:ctx, inArtist:true}],['recordings','Recordings',icon.mic,{id:ctx}]]
       : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['cal','Kalender',icon.timeline,{}],['live','Live',icon.live,{}],['market','Beats',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
@@ -1386,7 +1387,8 @@ function gigSection(p){
     ${past.length ? `<details class="arch" style="margin:4px 0 0"><summary>ARCHIV · ${past.length} VORBEI / ABGESAGT</summary><div class="stack" style="gap:8px;margin-top:8px">${past.reverse().map(gigRow).join('')}</div></details>` : ''}</div>`;
 }
 function vLive(c){
-  const f = c.f || 'kommend', a = c.a || '', t0 = todayIso(), team = !isPreview() && !lockedArtist;
+  const art = lockedArtist || (isPreview() ? cur().preview : null), team = !art;
+  const f = c.f || 'kommend', a = art || c.a || '', t0 = todayIso();
   let gs = vals(S.gigs||{}).filter(g => !a || gigIn(g, a));
   const reqs = gs.filter(g => g.req === 'offen').sort((x,y) => (x.date||'9').localeCompare(y.date||'9'));
   const upcoming = g => g.req !== 'abgelehnt' && g.req !== 'offen' && g.status !== 'Abgesagt' && g.status !== 'Gespielt' && g.status !== 'Abgerechnet' && (!g.date || g.date >= t0);
@@ -1402,14 +1404,14 @@ function vLive(c){
         <span class="small">${g.stage ? 'STAGE ' + esc(g.stage) : 'ZEIT OFFEN'}${g.venue ? ' · ' + esc(g.venue.toUpperCase()) : ''}${(g.reels||[]).length ? ' · ' + g.reels.length + ' SONGS' : ''}${team && num(fin.fee) ? ' · ' + eur(num(fin.fee)) : ''}</span></span>
       <span class="status" style="color:${st[1]};flex:none">● ${st[0]}</span></button>`; };
   const chip = (lbl, act, on) => `<button class="pill" ${act} style="${on ? 'background:var(--sun);color:var(--on-sun);border-color:var(--sun)' : ''}">${lbl}</button>`;
-  const artChips = `<div class="row" style="gap:6px;flex-wrap:wrap">${chip('Alle', `data-act="livefilter" data-id="|${f}"`, !a)}${artists().map(p => chip(esc(p.name), `data-act="livefilter" data-id="${esc(p.id)}|${f}"`, a === p.id)).join('')}</div>`;
-  const nextG = vals(S.gigs||{}).filter(upcoming).filter(g => g.date).sort((x,y) => x.date.localeCompare(y.date))[0];
-  const monthCount = vals(S.gigs||{}).filter(g => upcoming(g) && g.date && g.date.slice(0,7) === t0.slice(0,7)).length;
-  const feeSum = vals(S.gigs||{}).filter(upcoming).reduce((s, g) => s + num(gigFin(g.id).fee), 0);
+  const artChips = art || c.inArtist ? '' : `<div class="row" style="gap:6px;flex-wrap:wrap">${chip('Alle', `data-act="livefilter" data-id="|${f}"`, !a)}${artists().map(p => chip(esc(p.name), `data-act="livefilter" data-id="${esc(p.id)}|${f}"`, a === p.id)).join('')}</div>`;
+  const nextG = vals(S.gigs||{}).filter(upcoming).filter(g => g.date && (!a || gigIn(g, a))).sort((x,y) => x.date.localeCompare(y.date))[0];
+  const monthCount = vals(S.gigs||{}).filter(g => upcoming(g) && (!a || gigIn(g, a)) && g.date && g.date.slice(0,7) === t0.slice(0,7)).length;
+  const feeSum = vals(S.gigs||{}).filter(g => upcoming(g) && (!a || gigIn(g, a))).reduce((s, g) => s + num(gigFin(g.id).fee), 0);
   return `${banner()}
-    <div class="pad" style="padding-top:20px"><span class="lbl" style="color:${GIG_COL}">LIVE · AUFTRITTE & SHOWS</span><div class="between" style="margin-top:6px"><h1 class="h-big">Live</h1>${team ? `<button class="pill sun" data-act="gignew" data-id="">${icon.plus} Auftritt</button>` : ''}</div></div>
+    <div class="pad" style="padding-top:20px"><span class="lbl" style="color:${GIG_COL}">LIVE · AUFTRITTE & SHOWS</span><div class="between" style="margin-top:6px"><h1 class="h-big">${art ? 'Deine Auftritte' : c.inArtist ? esc(person(a)?.name || 'Live') : 'Live'}</h1>${team ? `<button class="pill sun" data-act="gignew" data-id="${c.inArtist ? esc(a) : ''}">${icon.plus} Auftritt</button>` : lockedArtist ? `<button class="pill sun" data-act="gigreq" data-id="${esc(lockedArtist)}">${icon.plus} Anfrage melden</button>` : ''}</div></div>
     <div class="tiles">
-      <div class="tile"><b style="font-size:24px">${vals(S.gigs||{}).filter(upcoming).length}</b><span class="lbl" style="color:var(--ink)">KOMMEND</span></div>
+      <div class="tile"><b style="font-size:24px">${vals(S.gigs||{}).filter(g => upcoming(g) && (!a || gigIn(g, a))).length}</b><span class="lbl" style="color:var(--ink)">KOMMEND</span></div>
       <div class="tile"><b style="font-size:24px">${monthCount}</b><span class="lbl" style="color:var(--ink)">DIESEN MONAT</span></div>
       <div class="tile"><b style="font-size:20px">${nextG ? fmt(nextG.date) : '—'}</b><span class="lbl" style="color:var(--ink)">${nextG ? 'NÄCHSTER · ' + esc((person(nextG.artist)?.name||'').toUpperCase()) : 'NÄCHSTER'}</span></div>
       ${team ? `<div class="tile"><b style="font-size:20px">${feeSum ? eur(feeSum) : '—'}</b><span class="lbl" style="color:var(--ink)">GAGEN KOMMEND</span></div>` : ''}
@@ -1489,8 +1491,8 @@ function vGig(c){
     <div class="pad" style="padding-top:28px"><button class="pill dash" style="width:100%;justify-content:center;color:var(--danger)" data-act="vdelete" data-id="${K}">Auftritt entfernen</button></div>` : ''}
     <div class="pad" style="padding-top:8px">${chatBox(P.chat, '', P.artist)}</div>`;
 }
-function sheetGigBase(k, pid){
-  const isNew = !k, P = k ? planCtx(k) : null, v = P?.v || {}, team = !isPreview() && !lockedArtist;
+function sheetGigBase(k, pid, preset){
+  const isNew = !k, P = k ? planCtx(k) : null, v = P?.v || (preset ? {artist: preset} : {}), team = !isPreview() && !lockedArtist;
   const T = ['', ...TIMES].map(t => [t, t || 'offen']);
   const mainId = v.artist || pid || '';
   const who = team ? `<div class="field"><span class="flabel">HAUPT-ARTIST (WESSEN AUFTRITT?)</span><div class="gchips">${artists().map(a => `<label class="gchip"><input type="radio" name="artist" value="${esc(a.id)}" ${a.id === mainId ? 'checked' : ''} required><span>${esc(a.name)}</span></label>`).join('')}</div></div>
@@ -2680,8 +2682,9 @@ async function act(a, id){
   if(a === 'vstart'){ await saveVideo(id, {status:'Idee', locations:[], days:[], crew:[], props:[]}); return go('video', {id}); }
   if(a === 'vbase') return sheetVideoBase(id);
   if(a === 'gigbase') return sheetGigBase(id);
-  if(a === 'gignew' || a === 'gigreq') return sheetGigBase(null, id || null);
-  if(a === 'livefilter'){ const [aa, ff] = id.split('|'); return tab('live', {a: aa, f: ff}); }
+  if(a === 'gigreq') return sheetGigBase(null, id || null);
+  if(a === 'gignew') return sheetGigBase(null, null, id || null);
+  if(a === 'livefilter'){ const [aa, ff] = id.split('|'); const c0 = cur(); return tab('live', {a: aa, f: ff, ...(c0.inArtist ? {inArtist:true} : {}), ...(c0.preview ? {preview:c0.preview} : {})}); }
   if(a === 'gigfin') return sheetGigFin(id);
   if(a === 'guestcopy'){ const v = planGet(id), P = planCtx(id); const list = (v.guests||[]).filter(g => g.status !== 'Abgelehnt');
     const txt = `Gästeliste ${gigNames(v)} · ${v.title || ''}${v.date ? ' · ' + fmt(v.date) : ''}\n` + list.map((g, i) => `${i+1}. ${g.name}${+g.plus ? ' +' + g.plus : ''}`).join('\n') + `\n\nGesamt: ${list.reduce((a, g) => a + 1 + (+g.plus||0), 0)} Personen`;
@@ -3062,7 +3065,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131840';
+const APP_VERSION = '202611131855';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
