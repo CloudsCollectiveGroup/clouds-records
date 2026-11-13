@@ -698,6 +698,7 @@ function relDoc(p, x){
 
 /* ---------- Schreiben ---------- */
 async function put(col, id, data, merge=true){
+  if(viewAs){ toast('Team-Sicht ist schreibgeschützt – oben „Beenden“ tippen'); return false; }
   if(!db){ toast('Speichern nicht möglich: Datenbank nicht verbunden'); return false; }
   try{
     const ref = db.collection(col).doc(id);
@@ -706,6 +707,7 @@ async function put(col, id, data, merge=true){
   }catch(e){ toast(e.code === 'not_granted' ? 'Keine Schreibrechte für diese Ansicht' : 'Nicht gespeichert: ' + (e.message||e.code)); return false; }
 }
 async function del(col, id){
+  if(viewAs){ toast('Team-Sicht ist schreibgeschützt'); return false; }
   if(!db) return false;
   try{ await db.collection(col).doc(id).delete(); return true; }catch(e){ toast('Nicht gelöscht: ' + (e.message||e.code)); return false; }
 }
@@ -828,7 +830,7 @@ function render(){
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
   let html;
   try{ html = fn(c); }catch(e){ console.error(e); html = `<div class="empty"><b>Ansicht nicht verfügbar</b><span class="small">Der Datensatz fehlt oder wurde gelöscht.</span><button class="pill" data-act="home">Zum Roster</button></div>`; }
-  $('#view').innerHTML = html;
+  $('#view').innerHTML = (viewAs ? `<div class="acct" style="position:sticky;top:0;z-index:30;background:var(--sun);color:var(--on-sun)"><span>👁 TEAM-SICHT · ${esc(ownerName(viewAs).toUpperCase())} · NUR ANSEHEN</span><button data-act="viewasend" style="color:var(--on-sun);border-color:var(--on-sun)">BEENDEN</button></div>` : '') + html;
   renderNav();
   bind();
 }
@@ -2465,7 +2467,19 @@ function sheetTodoView(id){
 }
 /* ---------- Pinnwand: alles, was bei mir liegt + Nachrichten ---------- */
 const USER_KEY = {cem:'C', kacper:'K', nikolina:'N', niki:'N', torben:'TH', thorben:'TH', torbi:'TH'};
-const myKey = () => account?.role === 'producer' ? 'P' : account?.role === 'artist' ? lockedArtist : (USER_KEY[account?.username] || null);
+let viewAs = null; /* Team-Sicht (nur Cem): App so ansehen wie ein Teammitglied – schreibgeschützt */
+const isAdmin = () => USER_KEY[account?.username] === 'C';
+const myKey = () => viewAs || (account?.role === 'producer' ? 'P' : account?.role === 'artist' ? lockedArtist : (USER_KEY[account?.username] || null));
+function sheetViewAs(){
+  const opts = [['N','Nikolina'],['TH','Thorben'],['K','Kacper']];
+  const root = $('#sheetRoot');
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="Team-Sicht"><div class="sheet"><div class="grab"></div>
+    <h2 class="h-sec" style="margin-bottom:8px">👁 Team-Sicht</h2><p class="small" style="margin:0 0 14px;text-transform:none;letter-spacing:0">Du siehst die App genau so wie die Person: Start, Freigaben, Pinnwand, Mitteilungs-Hinweise. Schreibgeschützt – in dieser Ansicht wird nichts gespeichert.</p>
+    <div class="stack" style="gap:8px">${opts.map(([k,l]) => `<button class="vrow" data-viewas="${k}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><b style="flex:1">${l}</b>${icon.chev}</button>`).join('')}</div>
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:14px">Schließen</button></div></div>`;
+  root.querySelector('[data-close]').onclick = () => { root.innerHTML = ''; };
+  root.querySelectorAll('[data-viewas]').forEach(b => b.onclick = () => { viewAs = b.dataset.viewas; root.innerHTML = ''; tab('pin', {}); toast('Team-Sicht: ' + ownerName(viewAs)); });
+}
 const assigned = (x, k) => !!k && (x.owner === k || (Array.isArray(x.helpers) && x.helpers.includes(k)));
 const notesFor = k => vals(S.notes||{}).filter(n => (n.to||[]).includes(k)).sort((a,b) => (b.at||'').localeCompare(a.at||''));
 function pinItems(k){
@@ -2567,7 +2581,7 @@ function vPin(c){
     ${startBlock(c, k, ownView && account?.role === 'team', apvItems, row)}
     ${pick}
     ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button>${ownView && !myProducer ? '<button class="pill" data-act="reqnew">🛒 Kaufanfrage</button><button class="pill" data-act="tech">🛠 Technik</button>' : ''}</div>` : ''}
-    ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
+    ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${isAdmin() && !viewAs ? '<button class="pill" data-act="viewas">👁 Team-Sicht</button>' : ''}${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
     ${apvSec}
@@ -3126,6 +3140,8 @@ async function act(a, id){
   if(a === 'fav'){ const b = S.beats?.[id]; if(!b || !me) return; const f = {...favsOf(b)}; if(f[me]) delete f[me]; else f[me] = account?.name || 'Team'; await put('beats', id, {favs:f}); return; }
   if(a === 'addnote') return sheetNote();
   if(a === 'tech') return sheetTech();
+  if(a === 'viewas') return sheetViewAs();
+  if(a === 'viewasend'){ viewAs = null; toast('Team-Sicht beendet'); return tab('pin', {}); }
   if(a === 'startday'){ const c0 = cur(); return tab('pin', {...(c0.k ? {k:c0.k} : {}), ...(id ? {d:id} : {})}); }
   if(a === 'pushon') return pushEnable();
   if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
@@ -3563,7 +3579,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140130';
+const APP_VERSION = '202611140200';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
