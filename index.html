@@ -1000,9 +1000,12 @@ function vRelease(c){
       <span class="small">${trackList ? 'Track öffnen → „Version“ → Dropbox-Link eintragen.' : 'Erst einen Track anlegen, dann darin die Versionen als Dropbox-Link eintragen.'}</span>
       ${dropboxFolder(p, `DROPBOX-ORDNER ${esc(p.name.toUpperCase())} →`)}
     </div>
+    ${songOnly || isPreview() || !r.date ? '' : (() => { const st = rcState(r), n = st.filter(x => x.ok).length;
+      return `<div class="pad" style="padding-top:22px"><button class="vrow" data-act="relshare" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${r.shareCal ? 'border-color:rgba(57,255,136,.45)' : ''}"><span class="box2" style="flex:none">${r.shareCal ? icon.check : ''}</span><span class="stack" style="flex:1;gap:2px"><b>Im Label-Kalender zeigen</b><span class="small">${r.shareCal ? 'ALLE ARTISTS SEHEN DATUM, ARTIST UND TITEL' : 'ERST HAKEN, WENN ALLES FERTIG IST'} · RELEASE-CHECK ${n}/${st.length}${n === st.length ? ' ✓' : ''}</span></span></button></div>`; })()}
     ${songOnly ? '' : releaseCheck(r)}
     ${songOnly ? '' : contentSection(r)}
     ${songOnly ? '' : videoSection(r)}
+    ${songOnly ? '' : campaignSection(r)}
     ${songOnly ? '' : coopSection(r)}
     <div class="pad" style="padding-top:22px"><button class="pill dash" style="width:100%;justify-content:center;min-height:46px" data-act="addstudio" data-id="${esc(r.id)}">${icon.plus} Studio-Slot anfragen</button></div>`;
 }
@@ -1180,6 +1183,68 @@ function videoSection(r){
       ${(() => { const done = shootsOf(r.artist).filter(shootDone); return done.length ? `<details class="arch" style="margin:4px 0 0"><summary>ARCHIV · ${done.length} ABGESCHLOSSEN</summary><div class="stack" style="gap:8px;margin-top:8px">${done.map(x => shootRow(r.artist, x)).join('')}</div></details>` : ''; })()}
       ${team && !v && !sh.length ? '<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px">Musikvideo oder Reel-Drehtag (viele Reels an einem Tag für Instagram, TikTok, Shorts) – beides mit Locations, Crew, Styling, Budget und Chat.</span>' : ''}
     </div>`;
+}
+/* Kampagnen pro Release (Werbung TikTok, Meta, YouTube, Spotify …) – Team + betroffener Artist (liest) */
+const CAMP_PLAT = ['TikTok','Instagram/Facebook (Meta)','YouTube','Spotify (Marquee/Showcase)','Playlist-Promo','Sonstiges'];
+const CAMP_GOAL = ['Streams','Follower','Pre-Saves','Video-Views','Reichweite'];
+const CAMP_ST = ['Geplant','Läuft','Beendet'];
+const CAMP_COL = {'Geplant':'var(--mute)','Läuft':'var(--sun)','Beendet':'var(--album)'};
+const campsOf = r => Array.isArray(r?.camps) ? r.camps : [];
+const campKpi = x => { const sp = num(x.spent) || num(x.budget); const parts = [];
+  if(num(x.clicks) && sp) parts.push((sp / num(x.clicks)).toFixed(2).replace('.', ',') + ' €/KLICK');
+  if(num(x.follower) && sp) parts.push((sp / num(x.follower)).toFixed(2).replace('.', ',') + ' €/FOLLOWER');
+  return parts.join(' · '); };
+function campaignSection(r){
+  if(r.type === 'Song') return '';
+  const team = !isPreview() && !lockedArtist, cs = campsOf(r);
+  if(!cs.length && !team) return '';
+  const spent = cs.reduce((a, x) => a + (num(x.spent) || 0), 0), budget = cs.reduce((a, x) => a + num(x.budget), 0);
+  const rows = cs.map((x, i) => `<button class="vrow" ${team ? `data-act="campedit" data-id="${esc(r.id)}|${i}"` : 'data-act="noop"'} style="cursor:${team ? 'pointer' : 'default'};width:100%;text-align:left;font:inherit;align-items:flex-start">
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(x.platform || 'Kampagne')}${x.goal ? ' · ' + esc(x.goal) : ''}</b>
+        <span class="small">${x.from ? fmt(x.from) : 'START OFFEN'}${x.to ? '–' + fmt(x.to) : ''} · BUDGET ${num(x.budget) ? eur(num(x.budget)) : 'OFFEN'}${num(x.spent) ? ' · AUSGEGEBEN ' + eur(num(x.spent)) : ''}${x.charge ? ' · MIT ARTIST VERRECHNEN' : ''}</span>
+        ${num(x.views) || num(x.clicks) || num(x.follower) || num(x.streams) ? `<span class="small" style="color:var(--album)">${[num(x.views) ? num(x.views).toLocaleString('de-DE') + ' VIEWS' : '', num(x.clicks) ? num(x.clicks).toLocaleString('de-DE') + ' KLICKS' : '', num(x.follower) ? '+' + num(x.follower).toLocaleString('de-DE') + ' FOLLOWER' : '', num(x.streams) ? '+' + num(x.streams).toLocaleString('de-DE') + ' STREAMS' : ''].filter(Boolean).join(' · ')}${campKpi(x) ? ' · ' + campKpi(x) : ''}</span>` : ''}
+        ${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, person(r.artist)?.name).toUpperCase())}</span>` : ''}
+        ${x.note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(x.note)}</span>` : ''}</span>
+      <span class="status" style="color:${CAMP_COL[x.status||'Geplant']};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span></button>`).join('');
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Kampagnen</h2>${team ? `<button class="pill" data-act="campnew" data-id="${esc(r.id)}">${icon.plus} Kampagne</button>` : ''}</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${rows || '<span class="small">Bezahlte Werbung zu diesem Release – TikTok, Instagram, YouTube, Spotify. Mit Budget, Zeitraum, Creative und Ergebnis.</span>'}
+    ${cs.length ? `<div class="between small" style="padding:4px 2px"><span>GESAMT</span><b>${eur(spent || 0)} AUSGEGEBEN${budget ? ' VON ' + eur(budget) : ''}</b></div>` : ''}</div>`;
+}
+function sheetCamp(rid, idx){
+  const r = S.releases[rid]; if(!r) return; const arr = [...campsOf(r)], isNew = idx == null, x = isNew ? {status:'Geplant', os:['K'], o:'K'} : arr[idx] || {};
+  const cont = [['','—'], ...contentOf(rid).map(c => [c.id, (c.kind || 'Post') + ' · ' + (c.title || '') + (c.date ? ' · ' + fmt(c.date) : '')])];
+  const ownerChips = `<div class="field"><span class="flabel">ZUSTÄNDIG (MEHRFACH)</span><div class="gchips">${[['K','Kasper'],['N','Nikolina'],['C','Cem'],['TH','Thorben']].map(([v,l]) => `<label class="gchip"><input type="checkbox" name="cown" value="${v}" ${chkOwners(x).includes(v) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>`;
+  const fields = `<div class="grid2">${Sel('platform','PLATTFORM',CAMP_PLAT,x.platform||'TikTok')}${Sel('goal','ZIEL',CAMP_GOAL,x.goal||'Streams')}</div>
+    <div class="grid2">${F('from','START',x.from||'','date')}${F('to','ENDE',x.to||'','date')}</div>
+    <div class="grid2">${Sel('status','STATUS',CAMP_ST,x.status||'Geplant')}${Sel('charge','MIT ARTIST VERRECHNEN',[['','Nein'],['1','Ja']],x.charge ? '1' : '')}</div>
+    <div class="grid2">${F('budget','BUDGET (€)',x.budget||'','text','inputmode="decimal" placeholder="z. B. 150"')}${F('spent','AUSGEGEBEN (€)',x.spent||'','text','inputmode="decimal"')}</div>
+    ${Sel('creative','CREATIVE AUS DEM CONTENT-PLAN',cont,x.creative||'')}
+    ${F('audience','ZIELGRUPPE',x.audience||'','text','placeholder="z. B. 18–28, DE/AT, Deutschrap, Hamburg"')}
+    ${F('link','LINK ZUR KAMPAGNE / ANZEIGE',x.link||'','url','placeholder="https://…"')}
+    ${ownerChips}
+    <span class="flabel" style="display:block;margin:4px 0 6px">ERGEBNIS (NACH ENDE EINTRAGEN)</span>
+    <div class="grid2">${F('views','VIEWS',x.views||'','text','inputmode="numeric"')}${F('clicks','KLICKS',x.clicks||'','text','inputmode="numeric"')}</div>
+    <div class="grid2">${F('follower','NEUE FOLLOWER',x.follower||'','text','inputmode="numeric"')}${F('streams','STREAM-ZUWACHS',x.streams||'','text','inputmode="numeric"')}</div>
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2" placeholder="Learnings, was lief gut/schlecht">${esc(x.note||'')}</textarea></div>`;
+  const extra = isNew ? '' : `<button class="btn danger" type="button" id="delCamp" style="width:100%;margin-top:10px">Kampagne löschen</button>`;
+  sheet((isNew ? 'Neue Kampagne · ' : 'Kampagne · ') + relTitle(r), fields, async (fd, f) => {
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const os = [...f.querySelectorAll('input[name=cown]:checked')].map(i => i.value);
+    const doc = {id: x.id || uid('cp')}; for(const k of ['platform','goal','from','to','status','budget','spent','creative','audience','link','views','clicks','follower','streams','note']) doc[k] = String(fd[k] ?? '').trim();
+    doc.charge = fd.charge === '1'; if(os.length){ doc.o = os[0]; if(os.length > 1) doc.os = os; }
+    if(isNew) arr.push(doc); else arr[idx] = doc;
+    return await put('releases', rid, {camps: arr}) ? undefined : false;
+  }, extra);
+  const d = $('#delCamp'); if(d) d.onclick = async () => { if(d.dataset.sure){ arr.splice(idx, 1); await put('releases', rid, {camps: arr}); $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
+function campaignOverview(){
+  const list = vals(S.releases).flatMap(r => campsOf(r).map(x => ({x, r}))); if(!list.length) return '';
+  const run = list.filter(({x}) => x.status === 'Läuft'), byM = {};
+  list.forEach(({x}) => { const m = (x.from || x.to || '').slice(0,7); if(m) byM[m] = (byM[m] || 0) + (num(x.spent) || num(x.budget)); });
+  const months = Object.keys(byM).sort().slice(-4);
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kampagnen</h2><span class="small">${run.length} LAUFEN</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${run.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.to ? ' · BIS ' + fmt(x.to) : ''} · ${eur(num(x.spent) || num(x.budget))}</span></span>${icon.chev}</button>`).join('') || '<span class="small">Gerade läuft keine Kampagne.</span>'}
+    ${months.map(m => `<div class="between small"><span>${ymLabel(m).toUpperCase()}</span><b>${eur(byM[m])}</b></div>`).join('')}</div>`;
 }
 function coopSection(r){
   const c = r.coop, team = !isPreview();
@@ -1772,7 +1837,8 @@ function vCockpit(){
     ${radar.length ? '' : '<div class="pad small" style="padding-top:8px">Noch kein Release mit Datum in den nächsten 90 Tagen. Datum im Release über den Stift setzen.</div>'}
     <div class="pad between" style="padding-top:24px"><h2 class="h-sec">Verträge</h2><span class="small">VERÖFFENTLICHT / LÄUFT</span></div>
     <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
-    ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}`;
+    ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}
+    ${campaignOverview()}`;
 }
 
 /* Produzent */
@@ -2044,6 +2110,7 @@ function pinItems(k){
   for(const x of vals(S.pplan||{})) if(!x.done && !assigned(x, k)) checksOf(x).forEach(c => { if(chkHas(c,k) && !c.d) out.push({src:'pplan', id:x.id, title:c.t, sub:'Punkt aus „' + x.title + '“ · Monatsplan ' + ymLabel(x.month), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by}); });
   for(const x of vals(S.pplan||{})) if(!x.done && assigned(x, k)) out.push({tick:['ptoggle', x.id], src:'pplan', id:x.id, title:x.title, sub:(person(x.producer)?.name||'') + ' · Monatsplan ' + ymLabel(x.month) + checkTxt(x), due:x.due, go:['pmonth', x.producer, x.month], at:x._at, by:x._by, note:x.note});
   for(const x of vals(S.content||{})) if(x.status !== 'Live' && assigned(x, k)){ const r = S.releases[x.release]; out.push({src:'content', id:x.id, title:x.title || x.kind, sub:(person(x.artist)?.name||'') + ' · Content' + (r ? ' · ' + relName(r) : ''), due:x.date, go:['release', x.release], at:x._at, by:x._by, note:x.note}); }
+  for(const r of vals(S.releases)) campsOf(r).forEach((x, i) => { if(x.status !== 'Beendet' && chkHas(x, k)) out.push({src:'camp', id:r.id, title:'Kampagne ' + (x.platform || '') + ' · ' + relTitle(r), sub:(person(r.artist)?.name||'') + ' · ' + (x.status||'Geplant') + (x.from ? ' ab ' + fmt(x.from) : ''), due:x.to || x.from || '', go:['release', r.id]}); });
   for(const r of vals(S.releases)) if(r.status !== 'Released' && r.rc?.meta) rcState(r).forEach(x => { if(!x.ok && chkHas(x, k)) out.push({tick:['rctoggle', r.id + '|' + x.k], src:'rc', id:r.id, title:x.l, sub:(person(r.artist)?.name||'') + ' · Release-Check ' + relName(r) + (x.note ? ' · ' + x.note : ''), due:r.date || '', go:['release', r.id]}); });
   for(const t of planTasks()) if(t.o === k) out.push({src:'plan', id:t.key, title:t.title, sub:t.sub, due:t.due, go:['video', t.key]});
   for(const x of vals(S.todos||{})) if(!isTermin(x) && !x.done){ const a = person(x.artist)?.name;
@@ -2273,6 +2340,7 @@ function calEvents(aid){
   for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && mine(x.artist)) ev.push({date:x.date, time:x.time, t:'Studio · ' + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t: isPhoto(x) ? 'Fotoshooting · ' + (x.title||'') + (x.purpose ? ' · ' + x.purpose : '') : 'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c: isPhoto(x) ? PHOTO_COL : '#C2407A', go:['video', shootKey(p.id, x.id)]}));
+  if(aid && lockedArtist) for(const x of (S.labelRels||[])) if(x.date && x.artist !== aid) ev.push({date:x.date, t:'Release · ' + (x.name || '') + (x.title ? ' · ' + x.title : ''), a:x.artist, c:'#39FF88', dim:true});
   for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt'});
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
   for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id]});
@@ -2687,6 +2755,9 @@ async function act(a, id){
   if(a === 'gignew') return sheetGigBase(null, null, id || null);
   if(a === 'livefilter'){ const [aa, ff] = id.split('|'); const c0 = cur(); return tab('live', {a: aa, f: ff, ...(c0.inArtist ? {inArtist:true} : {}), ...(c0.preview ? {preview:c0.preview} : {})}); }
   if(a === 'gigfin') return sheetGigFin(id);
+  if(a === 'campnew') return sheetCamp(id);
+  if(a === 'campedit'){ const [rid, i] = id.split('|'); return sheetCamp(rid, +i); }
+  if(a === 'relshare'){ const r = S.releases[id]; if(!r) return; if(!r.shareCal && !r.date){ toast('Erst ein Release-Datum eintragen'); return; } if(await put('releases', id, {shareCal: !r.shareCal})) toast(r.shareCal ? 'Aus dem Label-Kalender genommen' : 'Für alle Artists im Kalender sichtbar'); return; }
   if(a === 'guestcopy'){ const v = planGet(id), P = planCtx(id); const list = (v.guests||[]).filter(g => g.status !== 'Abgelehnt');
     const txt = `Gästeliste ${gigNames(v)} · ${v.title || ''}${v.date ? ' · ' + fmt(v.date) : ''}\n` + list.map((g, i) => `${i+1}. ${g.name}${+g.plus ? ' +' + g.plus : ''}`).join('\n') + `\n\nGesamt: ${list.reduce((a, g) => a + 1 + (+g.plus||0), 0)} Personen`;
     try{ await navigator.clipboard.writeText(txt); toast('Gästeliste kopiert – z. B. in WhatsApp einfügen'); }catch(_){ if(navigator.share) navigator.share({text: txt}).catch(() => {}); else toast('Kopieren nicht möglich'); } return; }
@@ -3043,6 +3114,7 @@ async function boot(session){
   if(pushSupported()) navigator.serviceWorker.register('sw.js').then(() => pushState()).then(() => render()).catch(() => {});
   if(lockedArtist){ stack.length = 0; stack.push({r:'artiststart', id: lockedArtist, preview: lockedArtist}); }
   else if(mem.role === 'producer' && mem.person){ myProducer = mem.person; stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
+  if(lockedArtist) sb.rpc('label_releases').then(({data}) => { S.labelRels = data || []; render(); }).catch(() => {});
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
     const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
     S[c] = o; loaded.add(c); render(); if(c === 'chat') refreshChats();
@@ -3066,7 +3138,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131910';
+const APP_VERSION = '202611131930';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
