@@ -64,6 +64,7 @@ h1,h2{margin:0;text-wrap:balance}
 .ahead .brand i,.starthero .brand i{color:rgba(255,255,255,.85)}
 .sticker.tilt3{background:var(--sun);color:var(--on-sun)}
 .back{min-height:44px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-size:14px;font-weight:500;color:var(--ink2);background:none;border:0;padding:0 4px 0 0;cursor:pointer}
+.topacts .iconbtn{width:40px;height:40px;min-width:40px}
 .iconbtn{width:40px;height:40px;border-radius:20px;border:0;background:var(--raise);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .iconbtn.ghost{background:transparent;border:1px solid var(--line2)}
 .sticker{font-family:var(--mono);font-size:11px;font-weight:600;padding:4px 8px;background:var(--sun-bg);color:var(--sun);border:0;border-radius:6px;display:inline-block;white-space:nowrap}
@@ -773,7 +774,7 @@ function renderNav(){
     if(pctx) items = [account?.role === 'producer' ? ['pin','Pinnwand',icon.roster,{}] : ['roster','Artists',icon.roster,{}],['pmonth','Monat',icon.home,{id:pctx}],['beats','Beats',icon.tracks,{id:pctx}],['pcontent','Content',icon.mic,{id:pctx}],['sessions','Sessions',icon.timeline,{id:pctx}]];
     else items = ctx
       ? [['roster','Artists',icon.roster,{}],['artiststart','Dashboard',icon.home,{id:ctx}],['artist','Release-Plan',icon.timeline,{id:ctx}],['tracks','Tracks',icon.tracks,{artist:ctx}],['live','Live',icon.live,{a:ctx, inArtist:true}],['recordings','Recordings',icon.mic,{id:ctx}]]
-      : [['roster','Artists',icon.roster,{}],['pin','Pinnwand',icon.home,{}],['cal','Kalender',icon.timeline,{}],['live','Live',icon.live,{}],['market','Beats',icon.tracks,{}],['content','Content',icon.mic,{}],['cockpit','Label',icon.cockpit,{}]];
+      : [['pin','Start',icon.home,{}],['cal','Kalender',icon.timeline,{}],['live','Live',icon.live,{}],['roster','Artists',icon.roster,{}],['content','Content',icon.mic,{}],['market','Beats',icon.tracks,{}],['cockpit','Label',icon.cockpit,{}]];
   }
   nav.style.gridTemplateColumns = `repeat(${items.length},minmax(0,1fr))`;
   const active = c.r === 'video' && isGig(c.id) ? 'live' : ({release:'artist', video:'artist', track:'tracks', producer:'roster'}[c.r] || c.r);
@@ -847,7 +848,7 @@ function vRoster(){
       <div class="avatar" style="background:var(--sun);color:var(--on-sun)">${avIn(p)}</div>
       <div class="stack" style="flex:1;gap:4px"><span style="font-weight:700;font-size:19px">${esc(p.name)}</span><span class="mono" style="font-size:11px;color:var(--soft)">${beatsOf(p.id).length} BEATS · ${beatsOf(p.id).filter(b => b.status === 'Neu').length} NEU · ${openFor('P')} OFFEN</span></div>${icon.chev}</button>`).join('');
   return `${cloudSvg}
-    <div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></span></div>
+    <div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row topacts" style="gap:6px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="addperson" aria-label="Artist oder Produzent anlegen">${icon.plus}</button></span></div>
     ${banner()}
     <div class="pad row" style="padding-top:18px;align-items:flex-end;gap:12px;position:relative"><h1 class="h-giant">Artists</h1><span class="sticker tilt" style="margin-bottom:10px">NUR TEAM</span></div>
     <div class="pad legend" style="padding-top:16px"><span><i class="sw" style="background:var(--single)"></i>SINGLE</span><span><i class="sw" style="background:var(--ep)"></i>EP</span><span><i class="sw" style="background:var(--album)"></i>ALBUM</span><span><i class="box wip c-single" style="width:10px;height:10px"></i>LÄUFT</span></div>
@@ -2457,11 +2458,33 @@ function pinItems(k){
   for(const x of vals(S.pcontent||{})) if(x.status !== 'Live' && assigned(x, k)){ const b = S.beats?.[x.beat]; out.push({src:'pcontent', id:x.id, title:x.kind + (b ? ' · ' + b.title : ''), sub:(person(x.producer)?.name||'') + ' · Content', due:x.date, go:['pcontent', x.producer], at:x._at, by:x._by, note:x.note}); }
   return out.sort((a,b) => (a.due||'9999').localeCompare(b.due||'9999'));
 }
+/* Team-Start: Wochenleiste + Heute & morgen + Wartet auf dich */
+function startBlock(c, k, on, apvItems, row){
+  if(!on) return apvItems.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Wartet auf Freigabe</h2><span class="small">${apvItems.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${apvItems.map(row).join('')}</div>` : '';
+  const t0 = todayIso(), [y0, m0, d0] = t0.split('-').map(Number), days = Array.from({length:7}, (_, i) => { const d = new Date(y0, m0-1, d0+i); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }), ev = calEvents(null).filter(e => e.date >= t0 && e.date <= days[6]);
+  const by = {}; ev.forEach(e => (by[e.date] ||= []).push(e));
+  const sel = c.d && days.includes(c.d) ? c.d : null;
+  const strip = `<div class="pad" style="padding-top:18px"><div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">${days.map(d => { const dt = parse(d), es = by[d] || [];
+    return `<button class="calday ${d === t0 ? 'today' : ''} ${d === sel ? 'sel' : ''}" data-act="startday" data-id="${d === sel ? '' : d}" style="flex-direction:column;gap:2px;min-height:58px;min-width:0;width:100%;padding:6px 0;box-sizing:border-box"><span class="small" style="font-size:10px">${dt.toLocaleDateString('de-DE',{weekday:'short'}).replace('.','').toUpperCase()}</span><span style="font-weight:700">${dt.getDate()}</span><span class="dots">${es.slice(0,4).map(e => `<i style="background:${e.c}"></i>`).join('')}</span></button>`; }).join('')}</div></div>`;
+  const list = sel ? (by[sel] || []) : [...(by[t0] || []), ...(by[days[1]] || [])];
+  const evRow = e => `<button class="vrow" data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${e.dim ? 'opacity:.55' : ''}"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};flex:none"></span><span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${sel ? '' : (e.date === t0 ? 'HEUTE' : 'MORGEN') + ' · '}${e.time ? esc(e.time) + ' · ' : ''}${e.a ? esc((person(e.a)?.name || '').toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
+  return `${strip}
+    <div class="pad between" style="padding-top:16px"><h2 class="h-sec">${sel ? parse(sel).toLocaleDateString('de-DE',{weekday:'long', day:'2-digit', month:'2-digit'}) : 'Heute & morgen'}</h2><button class="pill" data-go="cal">Kalender →</button></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${list.map(evRow).join('') || `<span class="small">${sel ? 'Nichts an diesem Tag.' : 'Heute und morgen steht nichts im Kalender.'}${!sel && ev.length ? ' Diese Woche: ' + ev.length + ' Termin' + (ev.length === 1 ? '' : 'e') + ' – Tag oben antippen.' : ''}</span>`}</div>
+    ${apvItems.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec" style="color:var(--sun)">Wartet auf dich</h2><span class="small">${apvItems.length} FREIGABE${apvItems.length === 1 ? '' : 'N'}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${apvItems.map(row).join('')}</div>` : ''}`;
+}
+function artistStrip(){
+  const as = artists(); if(!as.length) return '';
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Artists</h2><button class="pill" data-go="roster">Alle →</button></div>
+    <div class="pad" style="padding-top:10px"><div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory">${as.map(p => { const r = currentRelease(p.id) || nextPlanned(p.id), ph = photoOf(p);
+      return `<button data-go="artist" data-id="${esc(p.id)}" style="flex:none;width:112px;scroll-snap-align:start;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer"><span style="display:block;width:112px;height:112px;border-radius:18px;overflow:hidden;background:var(--card) center/cover no-repeat${ph ? ` url('${esc(ph)}')` : ''};border:1px solid var(--line)"></span><b style="display:block;margin-top:6px;font-size:14px">${esc(p.name)}</b><span class="small" style="display:block">${r ? esc(relTitle(r).toUpperCase()) + ' · ' + esc((r.status||'').toUpperCase()) : 'KEIN RELEASE GEPLANT'}</span></button>`; }).join('')}</div></div>`;
+}
 function vPin(c){
   const k = c.k || myKey();
   const since = SEEN.__pin || '';
   const isNew = x => x.at && x.by && x.by !== me && x.at > since;
-  const items = k ? pinItems(k) : [];
+  const all0 = k ? pinItems(k) : [], isApv = x => /^(Kampagne|Kaufanfrage) freigeben/.test(x.title || '');
+  const apvItems = all0.filter(isApv), items = all0.filter(x => !isApv(x));
   const t0 = todayIso(), wk = isoAdd(t0, 7);
   const terms = k ? vals(S.todos||{}).filter(x => isTermin(x) && (!x.date || x.date >= t0) && assigned(x, k)).sort((a,b) => (a.date||'9').localeCompare(b.date||'9')) : [];
   const over = items.filter(x => x.due && x.due < t0), today = items.filter(x => x.due === t0), week = items.filter(x => x.due && x.due > t0 && x.due <= wk), later = items.filter(x => !x.due || x.due > wk);
@@ -2505,7 +2528,7 @@ function vPin(c){
   const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
-  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button>${!lockedArtist && !myProducer ? '<button class="iconbtn" data-act="reqnew" aria-label="Kaufanfrage" title="Kaufanfrage">🛒</button>' : ''}<button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
+  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button>${!lockedArtist && !myProducer ? '' : '<button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button>'}<button class="iconbtn" data-act="addnote" aria-label="Neue Nachricht" title="Neue Nachricht" style="background:var(--sun);color:var(--on-sun);border-color:var(--sun)">${icon.plus}</button></span></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">${k && ownView ? (new Date().getHours() < 11 ? 'Moin' : new Date().getHours() < 18 ? 'Hey' : 'N\'Abend') + ' ' + esc(ownerName(k).split(' ')[0]) + '.' : k ? esc(ownerName(k)) : 'Pinnwand'}</h1><div class="small" style="margin-top:6px">${k ? (ownView ? esc(new Date().toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'}).toUpperCase()) + ' · DEINE PINNWAND' : 'PINNWAND VON ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${k ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
       <button class="tile ${over.length ? 'hot' : ''}" data-act="pinjump" data-id="pinOver" style="text-align:left;cursor:pointer;color:inherit;font:inherit${over.length ? ';border-color:rgba(255,90,110,.5);background:rgba(255,90,110,.12)' : ''}"><b ${over.length ? 'style="color:#FF5A6E"' : ''}>${over.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></button>
@@ -2513,8 +2536,9 @@ function vPin(c){
       <button class="tile" data-act="pinjump" data-id="pinWeek" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${week.length}</b><span class="lbl" style="color:var(--ink)">DIESE WOCHE</span></button>
       <button class="tile" data-act="pinjump" data-id="pinTerms" style="text-align:left;cursor:pointer;color:inherit;font:inherit"><b>${termsWk}</b><span class="lbl" style="color:var(--ink)">TERMINE · 7 TAGE</span></button></div>
     <div class="pad small" style="padding-top:8px">${doneWk ? '✓ ' + doneWk + ' IN DEN LETZTEN 7 TAGEN ERLEDIGT · ' : ''}${items.length} OFFEN INSGESAMT</div>` : ''}
+    ${startBlock(c, k, ownView && account?.role === 'team', apvItems, row)}
     ${pick}
-    ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button></div>` : ''}
+    ${team ? `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill sun" data-act="addtodo" data-id="Aufgabe|">${icon.plus} Aufgabe</button><button class="pill sun" data-act="addtodo" data-id="Termin|">${icon.plus} Termin</button>${ownView && !myProducer ? '<button class="pill" data-act="reqnew">🛒 Kaufanfrage</button><button class="pill" data-act="tech">🛠 Technik</button>' : ''}</div>` : ''}
     ${c.k && c.k !== myKey() ? '' : `<div class="row" style="gap:8px;margin:12px 20px 0;flex-wrap:wrap"><button class="pill" data-go="week">📊 Wochenbericht</button>${pushOn ? '<button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button>' : ''}</div>`}
     ${c.k && c.k !== myKey() ? '' : pushBanner()}
     ${studioSec}
@@ -2523,6 +2547,7 @@ function vPin(c){
     ${terms.length ? `<div class="pad between" id="pinTerms" style="padding-top:22px"><h2 class="h-sec">Termine</h2><span class="small">${terms.length}</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${terms.map(x => todoRow(x)).join('')}</div>` : ''}
     <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
     ${!notes.length && !items.length && !sReq.length && !cPend.length && !terms.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
+    ${ownView && account?.role === 'team' ? artistStrip() : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
 }
 /* Technik-Meldung: jeder (Team, Produzent, Artist) → Pinnwand Cem */
@@ -3073,6 +3098,7 @@ async function act(a, id){
   if(a === 'fav'){ const b = S.beats?.[id]; if(!b || !me) return; const f = {...favsOf(b)}; if(f[me]) delete f[me]; else f[me] = account?.name || 'Team'; await put('beats', id, {favs:f}); return; }
   if(a === 'addnote') return sheetNote();
   if(a === 'tech') return sheetTech();
+  if(a === 'startday'){ const c0 = cur(); return tab('pin', {...(c0.k ? {k:c0.k} : {}), ...(id ? {d:id} : {})}); }
   if(a === 'pushon') return pushEnable();
   if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
   if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
@@ -3484,6 +3510,7 @@ async function boot(session){
   if(pushSupported()) navigator.serviceWorker.register('sw.js').then(() => pushState()).then(() => render()).catch(() => {});
   if(lockedArtist){ stack.length = 0; stack.push({r:'artiststart', id: lockedArtist, preview: lockedArtist}); }
   else if(mem.role === 'producer' && mem.person){ myProducer = mem.person; stack.length = 0; stack.push({r:'pmonth', id: mem.person}); }
+  else if(stack.length === 1 && stack[0].r === 'roster'){ stack.length = 0; stack.push({r:'pin'}); }  /* Team startet auf „Start“ (Pinnwand + Kalender) */
   if(lockedArtist) sb.rpc('label_releases').then(({data}) => { S.labelRels = data || []; render(); }).catch(() => {});
   COLS.forEach(c => db.collection(c).limit(1000).onSnapshot(snap => {
     const o = {}; snap.docs.forEach(d => o[d.id] = {id:d.id, ...d.data()});
@@ -3508,7 +3535,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140020';
+const APP_VERSION = '202611140100';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
