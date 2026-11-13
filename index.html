@@ -1455,6 +1455,7 @@ function sheetCamp(rid, idx){
     const os = [...f.querySelectorAll('input[name=cown]:checked')].map(i => i.value);
     const doc = {id: x.id || uid('cp'), ...(x.apv ? {apv: x.apv} : {})}; for(const k of ['platform','goal','from','to','status','budget','spent','creative','audience','link','views','clicks','follower','streams','note']) doc[k] = String(fd[k] ?? '').trim();
     doc.charge = fd.charge === '1'; if(os.length){ doc.o = os[0]; if(os.length > 1) doc.os = os; }
+    if(doc.status === 'Läuft' && (x.status !== 'Läuft' || doc.budget !== String(x.budget ?? '').trim()) && campApvState(doc).k !== 'ok'){ toast(isNew ? 'Neue Kampagne erst als „Geplant“ speichern – Cem und Thorben geben sie frei' : 'Erst starten, wenn Cem und Thorben genehmigt haben (' + campApvState(doc).l + ')'); return false; }
     if(isNew) arr.push(doc); else arr[idx] = doc;
     return await put('releases', rid, {camps: arr}) ? undefined : false;
   }, extra);
@@ -2552,13 +2553,14 @@ function sheetProfile(pid){
   });
 }
 /* ---------- Mitteilungen pro Person (im eigenen Konto gespeichert) ---------- */
-const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
+const PUSH_CATS = [['note','Nachrichten an mich'],['task','Neue Aufgaben & Checklisten-Punkte'],['chat','Chat-Nachrichten'],['studio','Studio-Anfragen & Bestätigungen'],['gig','Live · Auftritte & Änderungen'],['camp','Kampagnen & Freigaben'],['morning','Morgen-Erinnerung (täglich)'],['weekly','Wochenbericht (freitags)']];
+const pushCats = () => PUSH_CATS.filter(([k]) => k !== 'camp' || !['artist','producer'].includes(account?.role));
 async function sheetPushPrefs(){
   let cur0 = {}; try{ const {data} = await sb.auth.getUser(); cur0 = data?.user?.user_metadata?.push || {}; }catch(_){}
-  const fields = `<div class="field"><span class="flabel">WORÜBER WILLST DU BENACHRICHTIGT WERDEN?</span><div class="stack" style="gap:6px">${PUSH_CATS.map(([k,l]) => `<label class="check" style="cursor:pointer"><input type="checkbox" name="pp_${k}" ${cur0[k] === false ? '' : 'checked'} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="tt">${esc(l)}</span></label>`).join('')}</div></div>
+  const fields = `<div class="field"><span class="flabel">WORÜBER WILLST DU BENACHRICHTIGT WERDEN?</span><div class="stack" style="gap:6px">${pushCats().map(([k,l]) => `<label class="check" style="cursor:pointer"><input type="checkbox" name="pp_${k}" ${cur0[k] === false ? '' : 'checked'} style="width:20px;height:20px;flex:none;accent-color:var(--sun)"><span class="tt">${esc(l)}</span></label>`).join('')}</div></div>
     <span class="small" style="display:block;margin-bottom:12px">Gilt für alle deine Geräte. Ausgeschaltetes landet trotzdem auf der Pinnwand.</span>`;
   sheet('Mitteilungen', fields, async (fd, f) => {
-    const push = {}; PUSH_CATS.forEach(([k]) => push[k] = !!f.querySelector(`[name=pp_${k}]`).checked);
+    const push = {}; PUSH_CATS.forEach(([k]) => { const el = f.querySelector(`[name=pp_${k}]`); if(el) push[k] = !!el.checked; else if(k in cur0) push[k] = cur0[k]; });
     const {error} = await sb.auth.updateUser({data:{push}}); if(error){ toast('Nicht gespeichert: ' + error.message); return false; } toast('Gespeichert');
   });
 }
@@ -3436,7 +3438,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132300';
+const APP_VERSION = '202611132330';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

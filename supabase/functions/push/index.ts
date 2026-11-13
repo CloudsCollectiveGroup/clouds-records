@@ -181,6 +181,29 @@ Deno.serve(async (req) => {
     for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!ob.has(`${x.t}|${o}`))
       out.push({ keys: [o === "A" ? d.artist : o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${ev}“`, tag: "gig" });
   }
+  // Kampagnen: Freigabe durch Cem + Thorben
+  if (col === "releases" && op === "UPDATE") {
+    const APPR: Record<string, string> = { C: "Cem", TH: "Thorben" };
+    const oc: any[] = old?.camps || [], nc: any[] = d.camps || [];
+    const a = await personName(d.artist), rt = d.title || d.code || "Release";
+    const ok = (c: any, k: string) => { const x = c?.apv?.[k]; return x && String(x.amt ?? "") === String(c.budget ?? "") ? x : null; };
+    for (const c of nc) {
+      const o = oc.find((x: any) => x.id === c.id);
+      const label = `${a} · ${rt} · ${c.platform || "Kampagne"}${c.budget ? " · " + c.budget + " €" : ""}`;
+      if (!o) { out.push({ keys: ["C", "TH"], title: "Kampagne zur Freigabe", body: label, tag: "camp" }); continue; }
+      if (String(o.budget ?? "") !== String(c.budget ?? "") && (ok(o, "C") || ok(o, "TH")))
+        out.push({ keys: ["C", "TH"], title: "Budget geändert · neu freigeben", body: label, tag: "camp" });
+      for (const k of Object.keys(APPR)) {
+        const n = c.apv?.[k], p = o.apv?.[k];
+        if (n && n.at !== p?.at) {
+          const other = Object.keys(APPR).filter(x => x !== k);
+          out.push({ keys: [...owners(c), ...other], title: `Kampagne ${n.v === "ok" ? "genehmigt" : "abgelehnt"} von ${APPR[k]}`, body: label, tag: "camp" });
+        }
+      }
+      if (ok(c, "C")?.v === "ok" && ok(c, "TH")?.v === "ok" && !(ok(o, "C")?.v === "ok" && ok(o, "TH")?.v === "ok"))
+        out.push({ keys: owners(c).length ? owners(c) : ["K"], title: "Kampagne freigegeben ✓", body: label + " · kann starten", tag: "camp" });
+    }
+  }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
   if (col === "chat" && op === "INSERT") {
