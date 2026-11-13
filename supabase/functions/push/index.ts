@@ -74,7 +74,7 @@ async function morning() {
       for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} ${x.type === "photo" ? "Fotoshooting" : "Reel-Dreh"} ${x.time || ""}`.trim());
       for (const r of rels) for (const vd of (r.video?.days || [])) if (vd.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${vd.time || ""}`.trim());
       for (const x of todos) if (x.kind === "Termin" && x.date === day && todoKeys(x).includes(key)) ev.push(`${tag} ${x.title}${x.time ? " " + x.time : ""}`);
-      for (const g of gigs) if (g.date === day && g.req !== "offen" && g.req !== "abgelehnt" && g.status !== "Abgesagt" && (isArtist ? g.artist === key : true)) ev.push(`${tag} Live: ${g.title || "Auftritt"}${g.stage ? " · Stage " + g.stage : ""}`);
+      for (const g of gigs) if (g.date === day && g.req !== "offen" && g.req !== "abgelehnt" && g.status !== "Abgesagt" && (isArtist ? (g.artist === key || (g.co || []).includes(key)) : true)) ev.push(`${tag} Live: ${g.title || "Auftritt"}${g.stage ? " · Stage " + g.stage : ""}`);
       if (day === today) for (const r of rels) if (r.date === day && (isArtist ? r.artist === key : true)) ev.push(`Heute Release: ${r.title || r.code}`);
     }
     if (!isArtist) { const posts = content.filter((c: any) => c.date === today && c.status !== "Live" && (c.owner === key || (c.helpers || []).includes(key))).length; if (posts) ev.push(`${posts} Post${posts > 1 ? "s" : ""} heute`); }
@@ -172,8 +172,11 @@ Deno.serve(async (req) => {
     else if (op === "INSERT") out.push({ keys: [d.artist], title: `Neuer Auftritt: ${ev}`, body: when, tag: "gig" });
     if (op === "UPDATE" && old?.req === "offen" && d.req === "ok") out.push({ keys: [d.artist], title: `Auftritt angenommen: ${ev}`, body: when, tag: "gig" });
     if (op === "UPDATE" && old?.req === "offen" && d.req === "abgelehnt") out.push({ keys: [d.artist], title: `Auftritt abgelehnt: ${ev}`, body: d.reqNote || when, tag: "gig" });
+    const co: string[] = (d.co || []), coOld: string[] = op === "UPDATE" ? (old?.co || []) : [];
+    if (d.req !== "offen" && d.req !== "abgelehnt") for (const c of co) if (!coOld.includes(c) || (op === "UPDATE" && old?.req === "offen" && d.req === "ok"))
+      out.push({ keys: [c], title: `Du bist dabei: ${a} · ${ev}`, body: `${(d.coRole || {})[c] || "Co-Artist"} · ${when}`, tag: "gig" });
     if (op === "UPDATE" && d.req !== "offen" && (old?.date !== d.date || old?.stage !== d.stage || old?.getin !== d.getin || old?.venue !== d.venue))
-      out.push({ keys: [d.artist, "C", "TH"], title: `Auftritt geändert: ${ev}`, body: when, tag: "gig" });
+      out.push({ keys: [d.artist, ...co.filter((c: string) => coOld.includes(c)), "C", "TH"], title: `Auftritt geändert: ${ev}`, body: when, tag: "gig" });
     const ob = new Set(((old?.checks) || []).flatMap((x: any) => owners(x).map((o: string) => `${x.t}|${o}`)));
     for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!ob.has(`${x.t}|${o}`))
       out.push({ keys: [o === "A" ? d.artist : o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${ev}“`, tag: "gig" });
@@ -194,7 +197,7 @@ Deno.serve(async (req) => {
     else if (kind === "gig") {
       const { data: gd } = await sb.from("docs").select("data").eq("col", "gigs").eq("id", rid).maybeSingle();
       const g: any = gd?.data || {};
-      title = g.title || "Auftritt"; keys.add("C"); keys.add("TH"); if (d.artist) keys.add(d.artist);
+      title = g.title || "Auftritt"; keys.add("C"); keys.add("TH"); if (d.artist) keys.add(d.artist); for (const c of (g.co || [])) keys.add(c);
       for (const x of (g.checks || [])) for (const o of owners(x)) keys.add(o === "A" ? d.artist : o);
     }
     else if (kind === "shoot") {
