@@ -384,7 +384,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -468,6 +468,7 @@ const studioText = x => { const r = S.releases[x.release], a = person(x.artist);
 const VSTAGES = ['Idee','Planung','Dreh','Schnitt','Fertig'];
 const VLOC_STATUS = ['Idee','Angefragt','Bestätigt','Abgesagt'];
 const VCREW_ROLES = ['Regie','Kamera','Fotograf','Licht','Schnitt','Styling','Make-up','Produktion','Sonstiges'];
+const GCREW_ROLES = ['DJ','Backup-Vocals','Host','Fotograf','Videograf','Begleitung','Fahrer','Technik','Sonstiges'];
 const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; };
 const eur = n => (Math.round(n*100)/100).toLocaleString('de-DE', {minimumFractionDigits:0, maximumFractionDigits:2}) + ' €';
 const videoCost = v => (v.locations||[]).filter(l => l.status !== 'Abgesagt').reduce((s,l) => s + num(l.cost), 0) + (v.crew||[]).reduce((s,c) => s + num(c.cost), 0) + num(v.other) + num(v.foodCost);
@@ -1053,12 +1054,14 @@ function planTasks(){
   const scan = (key, v, artist, label, due) => { for(const kind of ['locations','crew','reels']) (v?.[kind]||[]).forEach((x, i) => { if(x.o && planOpen(kind, x)) out.push({key, kind, i, o: x.o === 'A' ? artist : x.o, title: (kind === 'reels' && isPhoto(v) ? 'Motiv vorbereiten' : PLAN_VERB[kind]) + ': ' + (x.name || x.title || ''), sub: label, due}); }); };
   for(const r of vals(S.releases)) if(r.video) scan(r.id, r.video, r.artist, (person(r.artist)?.name||'') + ' · Musikvideo ' + relName(r), (r.video.days||[]).map(d => d.date).filter(Boolean).sort()[0] || '');
   for(const p of artists()) for(const x of (p.shoots||[])) scan(shootKey(p.id, x.id), x, p.id, p.name + ' · ' + (x.title || (isPhoto(x) ? 'Fotoshooting' : 'Content-Drehtag')), x.date || '');
+  for(const g of vals(S.gigs||{})) if(gigOpen(g) && g.status !== 'Gespielt' && g.status !== 'Abgerechnet') scan(gigKey(g.id), g, g.artist, (person(g.artist)?.name||'') + ' · Live · ' + (g.title || 'Auftritt'), g.date || '');
   return out;
 }
 const PLAN_QUICK = {locations:[['Bestätigt','✓ Bestätigt','#39FF88'],['Abgesagt','✕ Abgesagt','#FF3B5C']], crew:[['Zugesagt','✓ Zugesagt','#39FF88'],['Abgesagt','✕ Abgesagt','#FF3B5C']], reels:[['Gedreht','✓ Gedreht','#39FF88']]};
 const planQuick = (key, kind, i) => kind === 'reels' && isPhoto(planGet(key)) ? '' : `<div class="row" style="gap:8px;margin-top:8px">${(PLAN_QUICK[kind]||[]).map(([st, l, c]) => `<button type="button" class="apvbtn" style="--n:${c};min-height:38px;font-size:13px" data-act="planset" data-id="${esc(key)}|${kind}|${i}|${esc(st)}">${l}</button>`).join('')}</div>`;
 async function planSet(id){
   const [key, kind, i, st] = id.split('|');
+  if(isGig(key)){ const arr = [...(planGet(key)[kind]||[])]; if(!arr[+i]) return; arr[+i] = {...arr[+i], status: st}; if(await planSave(key, {[kind]: arr})) toast(st); return; }
   const {error} = await sb.rpc('plan_set_status', {p_key: key, p_kind: kind, p_idx: +i, p_status: st});
   if(error){ toast('Nicht gespeichert: ' + error.message); return; }
   toast(st); await db.refresh(); render();
@@ -1066,8 +1069,19 @@ async function planSet(id){
 const ownerOpts = artistName => [['','Niemand zugewiesen'],['A', artistName || 'Artist'],['C','Cem'],['K','Kasper'],['N','Nikolina'],['TH','Thorben'],['P',ownerName('P')]];
 const REEL_COL = {'Geplant':'var(--mute)','Gedreht':'var(--single)','Geschnitten':'var(--sun)','Gepostet':'var(--album)'};
 const isShoot = k => String(k||'').startsWith('S~');
+/* Live: Auftritte & Shows – Planung wie Drehtage, Schlüssel G~<id>, Daten in col 'gigs', Gage in 'gigfin' (nur Team) */
+const isGig = k => String(k||'').startsWith('G~');
+const gigKey = gid => 'G~' + gid;
+const GSTAGES = ['Angefragt','Zugesagt','Bestätigt','Gespielt','Abgerechnet'];
+const SET_STATUS = ['Geplant','Geprobt','Gespielt'];
+const GIG_COL = '#E5484D';
+const gigOpen = g => g && g.req !== 'abgelehnt' && g.status !== 'Abgesagt';
+const gigsOf = pid => vals(S.gigs||{}).filter(g => g.artist === pid).sort((a,b) => (a.date||'9').localeCompare(b.date||'9'));
+const gigFin = gid => (S.gigfin||{})[gid] || {};
 const shootKey = (pid, sid) => `S~${pid}~${sid}`;
 function planCtx(k){
+  if(isGig(k)){ const gid = k.slice(2), v = (S.gigs||{})[gid], p = person(v?.artist);
+    return {shoot:true, gig:true, gid, p, v, artist:v?.artist, rel:'', chat:'gig:' + gid, back:p?.name || 'Zurück', label:'LIVE · ' + (p?.name||'').toUpperCase() + (v?.organizer ? ' · ' + v.organizer.toUpperCase() : ''), title:v?.title || 'Auftritt', stages:GSTAGES, noun:'Auftritt'}; }
   if(isShoot(k)){ const [, pid, sid] = k.split('~'); const p = person(pid); const v = (p?.shoots||[]).find(x => x.id === sid);
     if(isPhoto(v)) return {shoot:true, photo:true, pid, sid, p, v, artist:pid, rel:'', chat:`shoot:${pid}:${sid}`, back:p?.name || 'Zurück', label:'FOTOSHOOTING · ' + (p?.name||'').toUpperCase() + (v.purpose ? ' · ' + v.purpose.toUpperCase() : ''), title:v?.title || 'Fotoshooting', stages:PSTAGES, noun:'Fotoshooting'};
     return {shoot:true, pid, sid, p, v, artist:pid, rel:'', chat:`shoot:${pid}:${sid}`, back:p?.name || 'Zurück', label:'REEL-DREHTAG · ' + (p?.name||'').toUpperCase(), title:v?.title || 'Reel-Drehtag', stages:SSTAGES, noun:'Drehtag'}; }
@@ -1076,6 +1090,7 @@ function planCtx(k){
 }
 const planGet = k => planCtx(k).v || {};
 function planSave(k, patch){
+  if(isGig(k)) return put('gigs', k.slice(2), patch);
   if(!isShoot(k)) return saveVideo(k, patch);
   const c = planCtx(k), arr = [...(c.p?.shoots||[])], i = arr.findIndex(x => x.id === c.sid);
   if(i < 0) return Promise.resolve(false);
@@ -1151,6 +1166,7 @@ function sheetCoop(rid){
   if(d) d.onclick = async () => { if(d.dataset.sure){ await put('releases', rid, {coop:null}); $('#sheetRoot').innerHTML=''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich entfernen? Erneut tippen'; } };
 }
 function vVideo(c){
+  if(isGig(c.id)) return vGig(c);
   const k = c.id, P = planCtx(k); if(!P.v) throw new Error('missing');
   const v = P.v, team = !isPreview(), s = videoSummary(v), t0 = todayIso(), K = esc(k);
   const cur0 = P.stages.indexOf(v.status || 'Idee');
@@ -1241,6 +1257,13 @@ function sheetVItem(k, kind, idx){
     fields = `${F('name','NAME',x.name||'','text','required placeholder="z. B. Hafen Hamburg, Studio 3"')}${F('address','ADRESSE',x.address||'')}
       <div class="grid2">${Sel('status','STATUS',VLOC_STATUS,x.status||'Idee')}${F('cost','KOSTEN (€)',x.cost||'','text','inputmode="decimal"')}</div>
       ${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name),x.o||'')}${area('note','NOTIZ',x.note,'Ansprechpartner, Genehmigung, Strom …')}`; }
+  else if(kind === 'reels' && P.gig){ title = 'Song';
+    const opts = [...new Set([...relsOf(P.artist).map(r => r.title).filter(Boolean), ...vals(S.tracks).filter(t => S.releases[t.release]?.artist === P.artist).map(t => t.title), ...vals(S.recordings||{}).filter(r => r.artist === P.artist).map(r => r.title)].filter(Boolean))];
+    fields = `${F('title','SONG',x.title||'','text','required list="gigsongs" placeholder="Titel aus Releases, Tracks oder Recordings"')}<datalist id="gigsongs">${opts.map(o => `<option value="${esc(o)}">`).join('')}</datalist>
+      <div class="grid2">${Sel('status','STATUS',SET_STATUS,x.status||'Geplant')}${F('dur','LÄNGE',x.dur||'','text','placeholder="z. B. 3:20"')}</div>
+      ${F('link','PLAYBACK / INSTRUMENTAL (DROPBOX-LINK)',x.link||'','url','placeholder="https://www.dropbox.com/…"')}
+      ${Sel('o','ZUSTÄNDIG',ownerOpts(P.p?.name),x.o||'')}
+      ${area('note','NOTIZ',x.note,'Übergang, Ansage, Feature-Gast, Effekte')}`; }
   else if(kind === 'reels' && P.photo){ title = 'Motiv';
     fields = `${F('title','MOTIV',x.title||'','text','required placeholder="z. B. Portrait vor der Backsteinwand"')}
       <div class="grid2">${Sel('status','STATUS',PHOTO_STATUS,x.status||'Geplant')}${Sel('loc','LOCATION',locs,x.loc||'')}</div>
@@ -1258,7 +1281,7 @@ function sheetVItem(k, kind, idx){
       ${area('note','NOTIZ',x.note,'Szene, Text, Song-Stelle, Kameraeinstellung')}
       ${x.cid ? '<span class="small" style="display:block;margin-bottom:12px">Steht schon im Content-Plan.</span>' : Sel('toRel','IN DEN CONTENT-PLAN VON …',rels,'')}`; }
   else { title = 'Crew';
-    fields = `<div class="grid2">${Sel('role','ROLLE',VCREW_ROLES,x.role||(P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}
+    fields = `<div class="grid2">${Sel('role','ROLLE',P.gig ? GCREW_ROLES : VCREW_ROLES,x.role||(P.gig ? 'DJ' : P.shoot ? 'Kamera' : 'Regie'))}${F('cost','GAGE (€)',x.cost||'','text','inputmode="decimal"')}</div>${F('name','NAME',x.name||'','text','required')}${F('contact','KONTAKT',x.contact||'','text','placeholder="Telefon oder Instagram"')}
       <div class="grid2">${Sel('status','STATUS',CREW_STATUS,x.status||'Angefragt')}${Sel('o','WER FRAGT AN?',ownerOpts(P.p?.name),x.o||'')}</div>`; }
   const extra = isNew ? '' : `<button class="btn danger" type="button" id="delVItem" style="width:100%;margin-top:10px">${title} löschen</button>`;
   sheet((isNew ? 'Neu: ' : '') + title, fields, async fd => {
@@ -1278,7 +1301,125 @@ function sheetVItem(k, kind, idx){
 }
 function sheetVProps(k, field='props'){
   const v = planGet(k), food = field === 'food';
-  sheet(food ? 'Verpflegung' : 'Styling & Requisiten', `${CheckList({checks: v[field]||[]})}<span class="small" style="display:block;margin-bottom:12px">${food ? 'Essen, Getränke, Snacks – wer bringt was mit? Jeder Punkt einzeln abhakbar.' : 'Outfits, Props, Make-up – jeder Punkt einzeln abhakbar.'}</span>`, async (fd, f) => await planSave(k, {[field]: readChecks(f)}) ? undefined : false);
+  const gig = isGig(k), todo = field === 'checks';
+  sheet(todo ? 'To-dos zum Auftritt' : gig ? (food ? 'Hospitality & Gästeliste' : 'Technik & Rider') : food ? 'Verpflegung' : 'Styling & Requisiten', `${CheckList({checks: v[field]||[]})}<span class="small" style="display:block;margin-bottom:12px">${todo ? 'Alles, was vor dem Auftritt erledigt sein muss – mit Zuständigen (mehrere möglich). Landet auf deren Pinnwand.' : gig ? (food ? 'Getränke, Essen, Backstage, Gästeliste (Name + Begleitung) – jeder Punkt abhakbar.' : 'Mikros, In-Ear, Playback/USB, DJ-Setup, Bühne, Licht – jeder Punkt abhakbar.') : food ? 'Essen, Getränke, Snacks – wer bringt was mit? Jeder Punkt einzeln abhakbar.' : 'Outfits, Props, Make-up – jeder Punkt einzeln abhakbar.'}</span>`, async (fd, f) => await planSave(k, {[field]: readChecks(f)}) ? undefined : false);
+}
+
+/* ---------- Live: Auftritte & Shows ---------- */
+function gigRow(g){
+  const fin = gigFin(g.id), team = !isPreview() && !lockedArtist, rs = g.reels||[];
+  const req = g.req === 'offen' ? '<span class="status" style="color:var(--sun)">● ANFRAGE</span>' : g.req === 'abgelehnt' ? '<span class="status" style="color:var(--danger)">● ABGELEHNT</span>' : `<span class="status" style="color:${g.status === 'Abgesagt' ? 'var(--danger)' : 'var(--sun)'}">● ${esc((g.status||'Zugesagt').toUpperCase())}</span>`;
+  return `<button class="vrow" data-go="video" data-id="${esc(gigKey(g.id))}" style="cursor:pointer;width:100%;text-align:left;font:inherit;${g.req === 'offen' ? 'border-color:rgba(255,204,0,.45);background:var(--sun-bg)' : ''}">
+    <span class="play" style="background:${GIG_COL};color:#fff;font-size:17px">🎤</span>
+    <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${esc(g.title || 'Auftritt')}</b>
+      <span class="small">${g.date ? fmt(g.date) : 'DATUM OFFEN'}${g.stage ? ' · STAGE ' + esc(g.stage) : ''}${g.venue ? ' · ' + esc(g.venue.toUpperCase()) : ''}${rs.length ? ' · ' + rs.length + ' SONGS' : ''}${team && num(fin.fee) ? ' · ' + eur(num(fin.fee)) : ''}</span></span>
+    ${req}</button>`;
+}
+function gigSection(p){
+  const team = !isPreview() && !lockedArtist, t0 = todayIso();
+  const all = gigsOf(p.id), open = all.filter(g => g.req !== 'abgelehnt' && g.status !== 'Gespielt' && g.status !== 'Abgerechnet' && g.status !== 'Abgesagt' && (!g.date || g.date >= t0 || g.req === 'offen'));
+  const past = all.filter(g => !open.includes(g));
+  const btn = team ? `<button class="pill" data-act="gignew" data-id="${esc(p.id)}">${icon.plus} Auftritt</button>` : (lockedArtist === p.id ? `<button class="pill" data-act="gigreq" data-id="${esc(p.id)}">${icon.plus} Anfrage melden</button>` : '');
+  if(!all.length && !btn) return '';
+  return `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Live</h2>${btn}</div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${open.map(gigRow).join('') || `<span class="small">${team ? 'Auftritte & Shows – unabhängig von Releases. Setlist, Zeitplan, Crew, Technik, Gästeliste, Gage.' : 'Noch keine Auftritte. Wirst du angefragt? Über „Anfrage melden“ schickst du sie ans Team.'}</span>`}
+    ${past.length ? `<details class="arch" style="margin:4px 0 0"><summary>ARCHIV · ${past.length} VORBEI / ABGESAGT</summary><div class="stack" style="gap:8px;margin-top:8px">${past.reverse().map(gigRow).join('')}</div></details>` : ''}</div>`;
+}
+function vGig(c){
+  const k = c.id, P = planCtx(k); if(!P.v) throw new Error('missing');
+  const v = P.v, gid = P.gid, team = !isPreview() && !lockedArtist, canEdit = team || lockedArtist === v.artist, K = esc(k), fin = gigFin(gid);
+  const cur0 = GSTAGES.indexOf(v.status || 'Zugesagt');
+  const stage = v.req === 'offen' ? '' : `<div class="vstage">${GSTAGES.map((x,i) => `<button ${team ? `data-act="vstage" data-id="${K}|${esc(x)}"` : 'disabled'} class="${i === cur0 ? 'on' : i < cur0 ? 'done' : ''}">${esc(x.toUpperCase())}</button>`).join('')}</div>`;
+  const head = (t, extra='') => `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">${t}</h2>${extra}</div>`;
+  const list = (html, emptyTxt) => `<div class="pad stack" style="gap:8px;padding-top:10px">${html || `<span class="small">${canEdit ? emptyTxt : 'Noch nichts eingetragen.'}</span>`}</div>`;
+  const who = x => chkOwners(x).length ? ` · <span style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : '';
+  const row = (kind, i, main, sub, right='', note='') => `<button class="vrow" ${canEdit ? `data-act="vedit" data-id="${K}|${kind}|${i}"` : 'data-act="noop"'} style="cursor:${canEdit ? 'pointer' : 'default'};width:100%;text-align:left;font:inherit;align-items:flex-start">
+      <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${main}</b><span class="small">${sub}</span>${note ? `<span class="small" style="text-transform:none;letter-spacing:0;font-family:Inter,system-ui,sans-serif;font-size:13px;color:var(--ink2);white-space:pre-line">${esc(note)}</span>` : ''}</span>${right}</button>`;
+  const SCOL = {'Geplant':'var(--mute)','Geprobt':'var(--sun)','Gespielt':'var(--album)'}, CCOL = {'Angefragt':'var(--sun)','Zugesagt':'var(--album)','Abgesagt':'var(--danger)'};
+  const rs = v.reels||[], mins = rs.reduce((a, x) => { const m = String(x.dur||'').match(/^(\d+)[:.](\d{1,2})$/); return a + (m ? +m[1] + +m[2]/60 : 0); }, 0);
+  const setlist = rs.map((x,i) => row('reels', i, `${i+1}. ${esc(x.title || 'Song')}`, `${x.dur ? esc(x.dur) : 'LÄNGE OFFEN'}${safeUrl(x.link) ? ' · PLAYBACK DA' : ' · PLAYBACK FEHLT'}${who(x)}`, `<span class="status" style="color:${SCOL[x.status]||'var(--mute)'};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span>`, x.note)).join('');
+  const crew = (v.crew||[]).map((x,i) => row('crew', i, esc(x.name), `${esc((x.role||'').toUpperCase())}${x.contact ? ' · ' + esc(x.contact.toUpperCase()) : ''}${team && num(x.cost) ? ' · ' + eur(num(x.cost)) : ''}${x.o ? ` · <span style="color:var(--sun)">→ ${esc((x.o === 'A' ? (P.p?.name || 'Artist') : ownerName(x.o)).toUpperCase())}</span>` : ''}`, `<span class="status" style="color:${CCOL[x.status||'Angefragt']};flex:none">● ${esc((x.status||'Angefragt').toUpperCase())}</span>`)).join('');
+  const checks = field => (v[field]||[]).map((x,i) => canEdit
+    ? `<button class="check ${x.d ? 'ok' : ''}" data-act="vprop" data-id="${K}|${i}|${field}"><span class="box2">${x.d ? icon.check : ''}</span><span class="stack" style="gap:1px"><span class="tt">${esc(x.t)}</span>${chkOwners(x).length ? `<span class="small" style="color:var(--sun)">→ ${esc(chkNames(x, P.p?.name).toUpperCase())}</span>` : ''}</span></button>`
+    : `<div class="check ${x.d ? 'ok' : ''}"><span class="box2">${x.d ? icon.check : ''}</span><span class="tt">${esc(x.t)}</span></div>`).join('');
+  const editBtn = (act, label='Bearbeiten') => canEdit ? `<button class="pill" data-act="${act}" data-id="${K}">${icon.edit} ${label}</button>` : '';
+  const plan = [['GET-IN', v.getin], ['SOUNDCHECK', v.soundcheck], ['STAGE', v.stage], ['SET', v.setlen ? v.setlen + ' MIN' : '']].filter(([,x]) => x);
+  const maps = v.address ? 'https://maps.apple.com/?q=' + encodeURIComponent(v.address) : '';
+  const reqBox = v.req === 'offen' ? `<div class="pad" style="padding-top:14px"><div class="vrow" style="flex-direction:column;align-items:stretch;gap:10px;border-color:rgba(255,204,0,.45);background:var(--sun-bg)">
+      <b>Anfrage von ${esc(v.by || P.p?.name || 'Artist')}</b><span class="small">${team ? 'Annehmen trägt den Auftritt ein – danach Gage, Setlist und Ablauf planen.' : 'Wartet auf Antwort vom Team. Du bekommst eine Mitteilung.'}</span>
+      ${team ? `<div class="row" style="gap:8px"><button class="apvbtn" style="--n:#39FF88;flex:1" data-act="gigaccept" data-id="${esc(gid)}">✓ Annehmen</button><button class="apvbtn" style="--n:#FF3B5C;flex:1" data-act="gigdecline" data-id="${esc(gid)}">✕ Ablehnen</button></div>` : ''}</div></div>`
+    : v.req === 'abgelehnt' ? `<div class="pad" style="padding-top:14px"><div class="vrow" style="border-color:rgba(255,59,92,.45)"><span class="small" style="color:var(--danger)">ABGELEHNT${v.reqNote ? ' · ' + esc(v.reqNote.toUpperCase()) : ''}</span></div></div>` : '';
+  return `${banner()}${previewBanner()}
+    <div class="between" style="padding:12px 16px 0"><button class="back" data-act="back">${icon.back}${esc(P.back)}</button><span class="small">${esc(P.p?.name?.toUpperCase()||'')}</span></div>
+    <div class="pad" style="padding-top:14px"><span class="lbl" style="color:${GIG_COL}">${esc(P.label)}</span><h1 class="h-big" style="margin-top:6px">${esc(P.title)}</h1></div>
+    ${reqBox}${stage}
+    <div class="tiles">
+      <div class="tile"><b style="font-size:24px">${v.date ? fmt(v.date) : '—'}</b><span class="lbl" style="color:var(--ink)">${v.stage ? 'STAGE ' + esc(v.stage) : 'DATUM'}</span></div>
+      <div class="tile"><b style="font-size:24px">${rs.length}${mins ? ' · ' + Math.round(mins) + "'" : ''}</b><span class="lbl" style="color:var(--ink)">SONGS IM SET</span></div>
+      <div class="tile"><b style="font-size:24px">${(v.crew||[]).filter(x => (x.status||'Angefragt') !== 'Abgesagt').length}</b><span class="lbl" style="color:var(--ink)">CREW</span></div>
+      ${team ? `<div class="tile"><b style="font-size:24px">${num(fin.fee) ? eur(num(fin.fee)) : '—'}</b><span class="lbl" style="color:var(--ink)">GAGE${fin.paid ? ' · BEZAHLT' : ''}</span></div>` : `<div class="tile"><b style="font-size:24px">${(v.checks||[]).filter(x => x.d).length}/${(v.checks||[]).length}</b><span class="lbl" style="color:var(--ink)">TO-DOS</span></div>`}
+    </div>
+    ${head('Eckdaten', editBtn('gigbase'))}
+    <div class="pad stack" style="gap:8px;padding-top:10px">
+      <div class="vrow" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="between small"><span>VERANSTALTER</span><b>${esc(v.organizer || 'offen')}</b></div>
+        ${v.contact ? `<div class="between small"><span>KONTAKT</span><b>${esc(v.contact)}</b></div>` : ''}
+        <div class="between small"><span>LOCATION</span><b>${esc(v.venue || 'offen')}</b></div>
+        ${v.address ? `<div class="between small"><span>ADRESSE</span><a href="${esc(maps)}" target="_blank" rel="noopener" style="color:var(--sun);font-weight:700;text-align:right">${esc(v.address)} ↗</a></div>` : ''}
+        ${plan.length ? plan.map(([l, x]) => `<div class="between small"><span>${l}</span><b>${esc(x)}</b></div>`).join('') : '<span class="small">Zeitplan offen – Get-in, Soundcheck, Stage-Time, Set-Länge.</span>'}
+      </div>
+      ${v.concept ? `<div class="vrow" style="white-space:pre-line;line-height:1.45;font-size:15px">${esc(v.concept)}</div>` : ''}
+      ${(v.refs||'').split('\n').map(x => x.trim()).filter(Boolean).map(x => safeUrl(x) ? `<a class="vrow" href="${esc(x)}" target="_blank" rel="noopener" style="font-size:14px;color:var(--sun);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">↗ ${esc(x.replace(/^https:\/\/(www\.)?/,''))}</a>` : `<span class="small">• ${esc(x)}</span>`).join('')}
+    </div>
+    ${head('To-dos', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|checks">${icon.edit} Liste</button>` : '')}${list(checks('checks'), 'Playback schicken, Promo-Post, Gästeliste melden … – mit Zuständigen.')}
+    ${head('Setlist', canEdit ? `<button class="pill" data-act="vadd" data-id="${K}|reels">${icon.plus} Song</button>` : '')}${list(setlist, 'Songs in Reihenfolge – mit Länge und Playback-Link.')}
+    ${head('Crew', canEdit ? `<button class="pill" data-act="vadd" data-id="${K}|crew">${icon.plus} Person</button>` : '')}${list(crew, 'DJ, Backup, Fotograf, Videograf, Begleitung …')}
+    ${head('Technik & Rider', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|props">${icon.edit} Liste</button>` : '')}${list(checks('props'), 'Mikros, In-Ear, Playback/USB, DJ-Setup, Bühne – als Checkliste.')}
+    ${head('Hospitality & Gästeliste', canEdit ? `<button class="pill" data-act="vprops" data-id="${K}|food">${icon.edit} Liste</button>` : '')}${list(checks('food'), 'Getränke, Backstage, Gästeliste – als Checkliste.')}
+    ${team ? `${head('Gage & Abrechnung', `<button class="pill" data-act="gigfin" data-id="${esc(gid)}">${icon.edit} Bearbeiten</button>`)}
+    <div class="pad stack" style="gap:6px;padding-top:10px">
+      <div class="between small"><span>GAGE</span><b>${num(fin.fee) ? eur(num(fin.fee)) : 'OFFEN'}</b></div>
+      ${fin.terms ? `<div class="between small"><span>KONDITIONEN</span><b style="text-align:right">${esc(fin.terms)}</b></div>` : ''}
+      <div class="between small"><span>KOSTEN (CREW + SONSTIGES)</span><b>${eur((v.crew||[]).reduce((a,x) => a + num(x.cost), 0) + num(fin.costs))}</b></div>
+      <div class="between small"><span>RECHNUNG</span><b>${esc(fin.invoice || 'NOCH KEINE')}${fin.paid ? ' · BEZAHLT' : ''}</b></div>
+      <span class="small">Nur das Team sieht diesen Bereich.</span></div>
+    <div class="pad" style="padding-top:28px"><button class="pill dash" style="width:100%;justify-content:center;color:var(--danger)" data-act="vdelete" data-id="${K}">Auftritt entfernen</button></div>` : ''}
+    <div class="pad" style="padding-top:8px">${chatBox(P.chat, '', P.artist)}</div>`;
+}
+function sheetGigBase(k, pid){
+  const isNew = !k, P = k ? planCtx(k) : null, v = P?.v || {}, team = !isPreview() && !lockedArtist;
+  const T = ['', ...TIMES].map(t => [t, t || 'offen']);
+  const fields = `${F('title','EVENT / SHOW',v.title||'','text','required placeholder="z. B. Unreleased Vol. 4"')}
+    <div class="grid2">${F('organizer','VERANSTALTER',v.organizer||'')}${F('contact','KONTAKT',v.contact||'','text','placeholder="Telefon, Mail oder Instagram"')}</div>
+    <div class="grid2">${F('date','DATUM',v.date||'','date', isNew ? 'required' : '')}${F('setlen','SET-LÄNGE (MIN)',v.setlen||'','text','inputmode="numeric" placeholder="z. B. 20"')}</div>
+    <div class="grid3">${Sel('getin','GET-IN',T,v.getin||'')}${Sel('soundcheck','SOUNDCHECK',T,v.soundcheck||'')}${Sel('stage','STAGE',[['','offen'], ...[...TIMES, '00:00','00:30','01:00','01:30','02:00','02:30','03:00'].map(t => [t,t])],v.stage||'')}</div>
+    <div class="grid2">${F('venue','LOCATION',v.venue||'','text','placeholder="z. B. Mojo Club"')}${F('address','ADRESSE',v.address||'')}</div>
+    ${team && !isNew ? Sel('status','STATUS',[...GSTAGES, 'Abgesagt'],v.status||'Zugesagt') : ''}
+    <div class="field"><label for="f-concept">INFOS</label><textarea id="f-concept" name="concept" rows="3" placeholder="Line-up, Dresscode, Einlass, Parken, Ansprechpartner vor Ort">${esc(v.concept||'')}</textarea></div>
+    <div class="field"><label for="f-refs">LINKS (EIN LINK PRO ZEILE)</label><textarea id="f-refs" name="refs" rows="2" placeholder="Flyer, Tickets, Event-Seite">${esc(v.refs||'')}</textarea></div>
+    ${isNew && !team ? '<p class="small" style="margin:-4px 0 12px">Geht als Anfrage ans Team. Du bekommst eine Mitteilung, sobald sie angenommen ist.</p>' : ''}`;
+  sheet(isNew ? (team ? 'Neuer Auftritt' : 'Auftritt anfragen') : 'Auftritt bearbeiten', fields, async fd => {
+    const doc = {}; for(const kk of ['title','organizer','contact','date','setlen','getin','soundcheck','stage','venue','address','concept','refs']) doc[kk] = String(fd[kk] ?? '').trim();
+    if(fd.status) doc.status = fd.status;
+    if(!doc.title) return false;
+    if(!isNew) return await planSave(k, doc) ? undefined : false;
+    const gid = uid('g');
+    Object.assign(doc, {artist:pid, status: team ? 'Zugesagt' : 'Angefragt', req: team ? 'ok' : 'offen', byId: me || '', by: account?.name || '', reels:[], crew:[], props:[], food:[], checks:[]});
+    if(!await put('gigs', gid, doc, false)) return false;
+    toast(team ? 'Auftritt angelegt' : 'Anfrage ans Team geschickt');
+    $('#sheetRoot').innerHTML = ''; go('video', {id: gigKey(gid)}); return true;
+  });
+}
+function sheetGigFin(gid){
+  const f = gigFin(gid);
+  const fields = `<div class="grid2">${F('fee','GAGE (€)',f.fee||'','text','inputmode="decimal" placeholder="z. B. 500"')}${F('costs','SONSTIGE KOSTEN (€)',f.costs||'','text','inputmode="decimal" placeholder="Fahrt, Hotel"')}</div>
+    ${F('terms','KONDITIONEN',f.terms||'','text','placeholder="z. B. 50 % vorab, Rest nach Show, inkl. Fahrt"')}
+    <div class="grid2">${F('invoice','RECHNUNG',f.invoice||'','text','placeholder="RN-CR-001"')}${Sel('paid','BEZAHLT',[['','Nein'],['1','Ja']],f.paid ? '1' : '')}</div>
+    <p class="small" style="margin:-4px 0 12px">Nur für das Team sichtbar – auch nicht für Anvmal.</p>`;
+  sheet('Gage & Abrechnung', fields, async fd => {
+    const doc = {fee:(fd.fee||'').trim(), costs:(fd.costs||'').trim(), terms:(fd.terms||'').trim(), invoice:(fd.invoice||'').trim(), paid: fd.paid === '1'};
+    return await put('gigfin', gid, doc, false) ? undefined : false;
+  });
 }
 
 /* Content: Gesamtansicht für das Team (z. B. Nikolina) */
@@ -1580,6 +1721,7 @@ function vArtistStart(c){
     <div class="pad stack" style="gap:8px;padding-top:12px">${week.map(t => `<button class="check ${t.done?'ok':''}" data-act="toggle" data-id="${esc(t.id)}"><span class="box2">${t.done?icon.check:''}</span><span class="stack" style="gap:2px"><span class="tt" style="font-weight:700">${esc(t.title)}</span><span class="small">${esc(t.phase)}${taskDue(t)?' · BIS '+fmt(taskDue(t)):''}</span></span></button>`).join('') || '<span class="small">Gerade nichts offen.</span>'}</div>
     ${(() => { const list = todosOf(p.id).filter(x => (team || todoArtistIn(x)) && (isTermin(x) ? (!x.date || x.date >= todayIso()) : !x.done)).sort((a,b) => ((a.date||a.due)||'9999').localeCompare((b.date||b.due)||'9999'));
       return list.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Termine & Aufgaben</h2>${team ? `<span class="row" style="gap:6px"><button class="pill" data-act="addtodo" data-id="Termin|${esc(p.id)}">${icon.plus} Termin</button><button class="pill" data-act="addtodo" data-id="Aufgabe|${esc(p.id)}">${icon.plus} Aufgabe</button></span>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${list.map(x => todoRow(x, {withArtist:false})).join('') || '<span class="small">Termine und Aufgaben außerhalb der Releases – Fotoshooting, Pressetermin, Meeting. Der Artist sieht nur, wo er eingetragen ist.</span>'}</div>` : ''; })()}
+    ${gigSection(p)}
     ${(() => { const sh = shootsOf(p.id).filter(x => !shootDone(x)); return sh.length || team ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Drehtage & Shootings</h2>${team ? `<span class="row" style="gap:6px"><button class="pill" data-act="shootnew" data-id="${esc(p.id)}">${icon.plus} Reels</button><button class="pill" data-act="photonew" data-id="${esc(p.id)}">${icon.plus} Fotos</button></span>` : ''}</div><div class="pad stack" style="gap:8px;padding-top:10px">${sh.map(x => shootRow(p.id, x)).join('') || '<span class="small">Noch nichts geplant. Reel-Drehtag (viele Reels an einem Tag) oder Fotoshooting (Pressefotos, Cover, Social) – mit Locations, Crew, Styling und Budget.</span>'}</div>` : ''; })()}
     <div class="pad between" style="padding-top:26px"><h2 class="h-sec">Studio</h2><button class="pill" data-act="addstudioartist" data-id="${esc(p.id)}">${icon.plus} Anfragen</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${studioOf(p.id).filter(x => x.status !== 'Abgelehnt' || x.date >= todayIso()).slice(-4).map(x => studioRow(x, false)).join('') || '<span class="small">Keine Studio-Anfragen. Über „Anfragen“ einen Slot bei CloudStudios wünschen.</span>'}</div>
@@ -2015,6 +2157,7 @@ function calEvents(aid){
   for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && mine(x.artist)) ev.push({date:x.date, time:x.time, t:'Studio · ' + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t: isPhoto(x) ? 'Fotoshooting · ' + (x.title||'') + (x.purpose ? ' · ' + x.purpose : '') : 'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c: isPhoto(x) ? PHOTO_COL : '#C2407A', go:['video', shootKey(p.id, x.id)]}));
+  for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && mine(g.artist)) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt'});
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
   for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || !lockedArtist)))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id]});
   if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
@@ -2422,6 +2565,11 @@ async function act(a, id){
   if(a === 'editcoop') return sheetCoop(id);
   if(a === 'vstart'){ await saveVideo(id, {status:'Idee', locations:[], days:[], crew:[], props:[]}); return go('video', {id}); }
   if(a === 'vbase') return sheetVideoBase(id);
+  if(a === 'gigbase') return sheetGigBase(id);
+  if(a === 'gignew' || a === 'gigreq') return sheetGigBase(null, id);
+  if(a === 'gigfin') return sheetGigFin(id);
+  if(a === 'gigaccept'){ if(await put('gigs', id, {req:'ok', status:'Zugesagt'})) toast('Auftritt angenommen'); return; }
+  if(a === 'gigdecline'){ const n = prompt('Kurzer Grund für den Artist (optional):') || ''; if(await put('gigs', id, {req:'abgelehnt', reqNote:n.trim()})) toast('Abgelehnt'); return; }
   if(a === 'planset') return planSet(id);
   if(a === 'rcdetails') return sheetRcDetails(id);
   if(a === 'rctoggle'){ const [rid, k] = id.split('|'); const r = S.releases[rid]; if(!r) return; const x = rcState(r).find(y => y.k === k); if(x && x.autoOk && !x.manual) return toast('Wird automatisch erkannt – schon erledigt'); await put('releases', rid, {vc:{...(r.vc||{}), [k]: !(r.vc||{})[k]}}); return; }
@@ -2440,6 +2588,7 @@ async function act(a, id){
   if(a === 'vstage'){ const [k, st] = id.split('|'); return planSave(k, {status: st}); }
   if(a === 'vprop'){ const [k, i, field='props'] = id.split('|'); const ps = [...(planGet(k)[field]||[])]; if(ps[+i]){ ps[+i] = {...ps[+i], d: !ps[+i].d}; await planSave(k, {[field]: ps}); } return; }
   if(a === 'vdelete'){ const el = document.querySelector(`[data-act="vdelete"]`); if(el && !el.dataset.sure){ el.dataset.sure = 1; el.textContent = 'Wirklich entfernen? Erneut tippen'; setTimeout(() => { if(el.isConnected){ delete el.dataset.sure; el.textContent = planCtx(id).noun + '-Planung entfernen'; } }, 4000); return; }
+    if(isGig(id)){ const gid = id.slice(2); await del('gigs', gid); if((S.gigfin||{})[gid]) await del('gigfin', gid); back(); return; }
     if(isShoot(id)){ const P = planCtx(id); await put('people', P.pid, {shoots:(P.p?.shoots||[]).filter(x => x.id !== P.sid)}); } else await put('releases', id, {video:null}); back(); return; }
   if(a === 'addstudioartist'){ const r = currentRelease(id) || nextPlanned(id) || relsOf(id)[0]; return r ? sheetStudio(r.id) : toast('Noch kein Release angelegt'); }
   if(a === 'editstudio') return (lockedArtist || isPreview()) ? sheetStudioView(id) : sheetStudio(null, id);
@@ -2794,7 +2943,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131630';
+const APP_VERSION = '202611131700';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

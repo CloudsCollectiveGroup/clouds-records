@@ -54,7 +54,7 @@ const todoKeys = (x: any) => [x?.owner, ...((x?.helpers) || [])].filter((k: stri
 async function all(colName: string) { const { data } = await sb.from("docs").select("id,data").eq("col", colName).limit(5000); return (data || []).map((r: any) => ({ id: r.id, ...r.data })); }
 async function morning() {
   const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
-  const [tasks, rels, studio, people, content, todos] = await Promise.all([all("tasks"), all("releases"), all("studio"), all("people"), all("content"), all("todos")]);
+  const [tasks, rels, studio, people, content, todos, gigs] = await Promise.all([all("tasks"), all("releases"), all("studio"), all("people"), all("content"), all("todos"), all("gigs")]);
   const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
   const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
   const { data: members } = await sb.from("members").select("user_id,username,role,person");
@@ -74,6 +74,7 @@ async function morning() {
       for (const p of people) for (const x of (p.shoots || [])) if (x.date === day && (isArtist ? p.id === key : true)) ev.push(`${tag} ${x.type === "photo" ? "Fotoshooting" : "Reel-Dreh"} ${x.time || ""}`.trim());
       for (const r of rels) for (const vd of (r.video?.days || [])) if (vd.date === day && (isArtist ? r.artist === key : true)) ev.push(`${tag} Musikvideo-Dreh ${vd.time || ""}`.trim());
       for (const x of todos) if (x.kind === "Termin" && x.date === day && todoKeys(x).includes(key)) ev.push(`${tag} ${x.title}${x.time ? " " + x.time : ""}`);
+      for (const g of gigs) if (g.date === day && g.req !== "offen" && g.req !== "abgelehnt" && g.status !== "Abgesagt" && (isArtist ? g.artist === key : true)) ev.push(`${tag} Live: ${g.title || "Auftritt"}${g.stage ? " · Stage " + g.stage : ""}`);
       if (day === today) for (const r of rels) if (r.date === day && (isArtist ? r.artist === key : true)) ev.push(`Heute Release: ${r.title || r.code}`);
     }
     if (!isArtist) { const posts = content.filter((c: any) => c.date === today && c.status !== "Live" && (c.owner === key || (c.helpers || []).includes(key))).length; if (posts) ev.push(`${posts} Post${posts > 1 ? "s" : ""} heute`); }
@@ -162,6 +163,21 @@ Deno.serve(async (req) => {
     for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!bc.has(`${x.t}|${o}`) && (o !== "A" || d.artist))
       out.push({ keys: [o === "A" ? d.artist : o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${d.title}“`, tag: "task" });
   }
+  // Live: Auftritte & Shows
+  if (col === "gigs") {
+    const a = await personName(d.artist);
+    const when = `${fmt(d.date)}${d.stage ? " · Stage " + d.stage : ""}${d.venue ? " · " + d.venue : ""}`;
+    const ev = d.title || "Auftritt";
+    if (op === "INSERT" && d.req === "offen") out.push({ keys: ["C", "TH"], title: `Auftritts-Anfrage · ${a}`, body: `${ev} · ${when}`, tag: "gig" });
+    else if (op === "INSERT") out.push({ keys: [d.artist], title: `Neuer Auftritt: ${ev}`, body: when, tag: "gig" });
+    if (op === "UPDATE" && old?.req === "offen" && d.req === "ok") out.push({ keys: [d.artist], title: `Auftritt angenommen: ${ev}`, body: when, tag: "gig" });
+    if (op === "UPDATE" && old?.req === "offen" && d.req === "abgelehnt") out.push({ keys: [d.artist], title: `Auftritt abgelehnt: ${ev}`, body: d.reqNote || when, tag: "gig" });
+    if (op === "UPDATE" && d.req !== "offen" && (old?.date !== d.date || old?.stage !== d.stage || old?.getin !== d.getin || old?.venue !== d.venue))
+      out.push({ keys: [d.artist, "C", "TH"], title: `Auftritt geändert: ${ev}`, body: when, tag: "gig" });
+    const ob = new Set(((old?.checks) || []).flatMap((x: any) => owners(x).map((o: string) => `${x.t}|${o}`)));
+    for (const x of (d.checks || [])) if (!x.d) for (const o of owners(x)) if (!ob.has(`${x.t}|${o}`))
+      out.push({ keys: [o === "A" ? d.artist : o], title: "Neuer Punkt für dich", body: `${x.t} · aus „${ev}“`, tag: "gig" });
+  }
   // Chat: an alle, die in diesem Thread schon geschrieben haben, plus die Zuständigen der Karte
   const extraUsers: string[] = [];
   if (col === "chat" && op === "INSERT") {
@@ -175,6 +191,12 @@ Deno.serve(async (req) => {
       if (kind === "content") { keys.add("C"); keys.add("N"); if (c.fromArtist) keys.add(c.artist || d.artist); }
     } else if (kind === "video") { title = "Musikvideo"; keys.add("C"); if (d.artist) keys.add(d.artist); }
     else if (kind === "studio") { title = "Studio-Anfrage"; keys.add("C"); if (d.artist) keys.add(d.artist); }
+    else if (kind === "gig") {
+      const { data: gd } = await sb.from("docs").select("data").eq("col", "gigs").eq("id", rid).maybeSingle();
+      const g: any = gd?.data || {};
+      title = g.title || "Auftritt"; keys.add("C"); keys.add("TH"); if (d.artist) keys.add(d.artist);
+      for (const x of (g.checks || [])) for (const o of owners(x)) keys.add(o === "A" ? d.artist : o);
+    }
     else if (kind === "shoot") {
       const sid = String(d.ref || "").split(":")[2];
       const { data: pd } = await sb.from("docs").select("data").eq("col", "people").eq("id", rid).maybeSingle();
