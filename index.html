@@ -2546,8 +2546,10 @@ function sheetRecording(aid, id){
 const isTermin = x => x?.kind === 'Termin';
 const todoArtistIn = x => !!x?.artist && (x.owner === 'A' || helpersOf(x).includes('A') || checksOf(x).some(c => chkHas(c,'A')));
 const todoAMine = x => x.owner === 'A' || helpersOf(x).includes('A');
-const todoWho = x => [x.owner, ...helpersOf(x)].filter(Boolean).map(k => k === 'A' ? (person(x.artist)?.name || 'Artist') : ownerName(k)).join(' + ');
-const todosOf = aid => vals(S.todos||{}).filter(x => !aid || x.artist === aid);
+const todoWho = x => [x.owner, ...helpersOf(x)].filter(Boolean).map(k => k === 'A' ? (todoArtistNames(x) || 'Artist') : ownerName(k)).join(' + ');
+const todoHas = (x, aid) => x.artist === aid || (Array.isArray(x.artists) && x.artists.includes(aid));
+const todoArtistNames = x => [...new Set([x.artist, ...(x.artists||[])].filter(Boolean))].map(a => person(a)?.name || '').filter(Boolean).join(' + ');
+const todosOf = aid => vals(S.todos||{}).filter(x => !aid || todoHas(x, aid));
 const todoWhen = x => isTermin(x) ? (x.date ? fmt(x.date) : 'DATUM OFFEN') + (x.time ? ' · ' + x.time + (x.end ? '–' + x.end : '') : '') + (x.place ? ' · ' + x.place.toUpperCase() : '') : (x.due ? (x.due < todayIso() && !x.done ? '<b style="color:var(--danger)">ÜBERFÄLLIG ' + fmt(x.due) + '</b>' : 'BIS ' + fmt(x.due)) : '');
 function todoRow(x, opt = {}){
   const a = person(x.artist), n = chatOf('todos:' + x.id).length, canTick = !isTermin(x) && (!lockedArtist || todoAMine(x));
@@ -2556,7 +2558,7 @@ function todoRow(x, opt = {}){
   return `<div class="vrow" style="align-items:flex-start">${lead}
     <button data-act="todoview" data-id="${esc(x.id)}" class="stack" style="flex:1;gap:3px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer">
       <b style="font-weight:600;${x.done ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(x.title)}${opt.fresh && opt.fresh(x) ? ' <span class="tc-new" style="position:static;margin-left:6px">NEU</span>' : ''}</b>
-      <span class="small">${isTermin(x) ? 'TERMIN' : 'AUFGABE'}${a && opt.withArtist !== false ? ' · ' + esc(a.name.toUpperCase()) : ''}${todoWho(x) ? ' · ' + esc(todoWho(x).toUpperCase()) : ''}${checkTxt(x)}${todoWhen(x) ? ' · ' + todoWhen(x) : ''}</span>
+      <span class="small">${isTermin(x) ? 'TERMIN' : 'AUFGABE'}${a && opt.withArtist !== false ? ' · ' + esc(todoArtistNames(x).toUpperCase()) : ''}${todoWho(x) ? ' · ' + esc(todoWho(x).toUpperCase()) : ''}${checkTxt(x)}${todoWhen(x) ? ' · ' + todoWhen(x) : ''}</span>
       ${x.note ? `<span class="small" style="color:var(--sun);text-transform:none;letter-spacing:0;font-family:Questrial,Inter,system-ui,sans-serif;font-size:13px">✎ ${esc(x.note.length > 90 ? x.note.slice(0,90) + ' …' : x.note)}</span>` : ''}</button>
     ${safeUrl(x.link) ? `<a class="pill" href="${esc(x.link)}" target="_blank" rel="noopener" style="min-height:32px;flex:none">🔗</a>` : ''}${n ? `<span class="small" style="color:var(--sun);flex:none;margin-top:4px">💬 ${n}</span>` : ''}</div>`;
 }
@@ -2565,10 +2567,11 @@ function sheetTodo(id, pre = {}){
   const x = id ? S.todos?.[id] : {kind: pre.kind || 'Aufgabe', artist: pre.artist || '', owner: pre.artist ? 'A' : (myKey() || 'C'), title:''};
   if(!x) return;
   const term = isTermin(x);
-  const chips = `<div class="field"><span class="flabel">${term ? 'WER IST DABEI? (MEHRFACH)' : 'ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)'}</span><div class="gchips">${TODO_KEYS.map(k => `<label class="gchip"><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${k === 'A' ? 'Artist' : esc(ownerName(k))}</span></label>`).join('')}</div></div>`;
+  const chips = `<div class="field"><span class="flabel">${term ? 'WER IST DABEI? (MEHRFACH)' : 'ZUSÄTZLICH ZUSTÄNDIG (OPTIONAL, MEHRFACH)'}</span><div class="gchips">${TODO_KEYS.map(k => `<label class="gchip" ${k === 'A' ? 'data-tk="Aufgabe"' : ''}><input type="checkbox" name="helpers" value="${k}" ${helpersOf(x).includes(k) ? 'checked' : ''}><span>${k === 'A' ? 'Artist' : esc(ownerName(k))}</span></label>`).join('')}</div></div>`;
   const fields = `${Sel('kind','ART',[['Aufgabe','Aufgabe (mit Frist, abhakbar)'],['Termin','Termin (Datum, Uhrzeit, Ort)']],x.kind || 'Aufgabe')}
     ${F('title', term ? 'TERMIN' : 'AUFGABE', x.title, 'text', 'required placeholder="' + (term ? 'z. B. Fotoshooting Pressebilder' : 'z. B. Dropbox Team-Tarif abschließen') + '"')}
-    ${Sel('artist','ARTIST (OPTIONAL)',[['','— keiner, nur Team —'], ...artists().map(a => [a.id, a.name])], x.artist||'')}
+    <div data-tk="Aufgabe">${Sel('artist','ARTIST (OPTIONAL)',[['','— keiner, nur Team —'], ...artists().map(a => [a.id, a.name])], x.artist||'')}</div>
+    <div data-tk="Termin" class="field"><span class="flabel">ARTISTS, DIE DABEI SIND (MEHRFACH · BEKOMMEN PUSH + KALENDER)</span><div class="gchips">${artists().map(a => { const on = term ? (Array.isArray(x.artists) && x.artists.length ? x.artists.includes(a.id) : (x.artist === a.id && todoArtistIn(x))) : pre.artist === a.id; return `<label class="gchip"><input type="checkbox" name="tartists" value="${esc(a.id)}" ${on ? 'checked' : ''}><span>${esc(a.name)}</span></label>`; }).join('')}</div></div>
     ${Sel('owner', term ? 'VERANTWORTLICH' : 'ZUSTÄNDIG', Object.entries(OWNERS), x.owner || 'C')}
     ${chips}
     <div data-tk="Aufgabe">${F('due','FÄLLIG',x.due||'','date')}</div>
@@ -2580,12 +2583,14 @@ function sheetTodo(id, pre = {}){
     <p class="small" style="margin:0 0 12px;text-transform:none;letter-spacing:0;font-family:Questrial,Inter,system-ui,sans-serif;font-size:13px">Der Artist sieht die Karte nur, wenn er zuständig, dabei oder für einen Punkt eingetragen ist.</p>`;
   const extra = id ? `${chatBox('todos:' + id, '', todoArtistIn(x) ? x.artist : '')}<button class="btn danger" type="button" id="delTodo" style="width:100%;margin-top:10px">Löschen</button>` : '';
   const form = sheet(id ? (term ? 'Termin bearbeiten' : 'Aufgabe bearbeiten') : (term ? 'Neuer Termin' : 'Neue Aufgabe'), fields, async (fd, f) => {
-    const helpers = readHelpers(f, fd.owner), checks = readChecks(f);
+    let helpers = readHelpers(f, fd.owner); const checks = readChecks(f);
+    let tArtists = [];
+    if(fd.kind === 'Termin'){ tArtists = [...f.querySelectorAll('input[name=tartists]:checked')].map(i => i.value); helpers = helpers.filter(k => k !== 'A'); if(tArtists.length && fd.owner !== 'A') helpers.push('A'); fd.artist = tArtists[0] || ''; }
     const usesA = fd.owner === 'A' || helpers.includes('A') || checks.some(c => chkHas(c,'A'));
     if(usesA && !fd.artist){ toast('Bitte oben einen Artist auswählen'); return false; }
     if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
     if(fd.kind === 'Termin' && !fd.date){ toast('Bitte ein Datum eintragen'); return false; }
-    const doc = {kind:fd.kind, title:(fd.title||'').trim(), artist:fd.artist||'', owner:fd.owner, helpers, checks, link:safeUrl(fd.link), note:(fd.note||'').trim(),
+    const doc = {kind:fd.kind, title:(fd.title||'').trim(), artist:fd.artist||'', artists: fd.kind === 'Termin' ? tArtists : [], owner:fd.owner, helpers, checks, link:safeUrl(fd.link), note:(fd.note||'').trim(),
       due: fd.kind === 'Aufgabe' ? (fd.due||'') : '', date: fd.kind === 'Termin' ? fd.date : '', time: fd.kind === 'Termin' ? (fd.time||'') : '', end: fd.kind === 'Termin' ? (fd.end||'') : '', place: fd.kind === 'Termin' ? (fd.place||'').trim() : ''};
     if(!doc.title) return false;
     if(id) return await put('todos', id, {...doc, done: fd.kind === 'Aufgabe' ? !!f.querySelector('[name=done]')?.checked : false}) ? undefined : false;
@@ -2940,7 +2945,7 @@ function calEvents(aid){
   if(aid && lockedArtist) for(const x of (S.labelRels||[])) if(x.date && x.artist !== aid) ev.push({date:x.date, t:'Release · ' + (x.name || '') + (x.title ? ' · ' + x.title : ''), a:x.artist, c:'#39FF88', dim:true});
   for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt', own: aid ? true : false});
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live', own: aid ? true : assigned(x, myKey())});
-  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (x.artist === aid && (todoArtistIn(x) || (!lockedArtist && !isPreview()))))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id], own: aid ? true : assigned(x, myKey())});
+  for(const x of vals(S.todos||{})) if(isTermin(x) && x.date && (!aid || (todoHas(x, aid) && (todoArtistIn(x) || (!lockedArtist && !isPreview()))))) ev.push({date:x.date, time:x.time, t:'Termin · ' + x.title + (x.place ? ' · ' + x.place : ''), a:x.artist, c:'#22D3EE', act:['todoview', x.id], own: aid ? true : assigned(x, myKey())});
   if(!aid) for(const x of vals(S.sessions||{})) if(x.date) ev.push({date:x.date, time:x.time, t:'Listening-Session', a:'', c:'#A78BFA', go:['sessions', x.producer]});
   return ev.sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
 }
@@ -3787,7 +3792,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140600';
+const APP_VERSION = '202611140620';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});

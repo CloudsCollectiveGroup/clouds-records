@@ -50,7 +50,7 @@ async function allowed(uid: string, tag: string) {
 const PHASE_WEEKS: Record<string, number> = { "T-12": 12, "T-10": 10, "T-8": 8, "T-6": 6, "T-4": 4, "T-2": 2, "T-0": 0, "Nach Release": -2 };
 const ymd = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
 // Aufgaben & Termine ohne Release: Beteiligte (A = Artist der Karte)
-const todoKeys = (x: any) => [x?.owner, ...((x?.helpers) || [])].filter((k: string) => k && k !== "T" && (k !== "A" || x?.artist)).map((k: string) => k === "A" ? x.artist : k);
+const todoKeys = (x: any) => [...new Set([x?.owner, ...((x?.helpers) || [])].filter((k: string) => k && k !== "T" && (k !== "A" || x?.artist)).flatMap((k: string) => k === "A" ? ((x.artists || []).length ? x.artists : [x.artist]) : [k]))] as string[];
 async function all(colName: string) { const { data } = await sb.from("docs").select("id,data").eq("col", colName).limit(5000); return (data || []).map((r: any) => ({ id: r.id, ...r.data })); }
 async function morning() {
   const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
