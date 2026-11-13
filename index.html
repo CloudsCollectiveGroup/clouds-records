@@ -239,6 +239,33 @@ h1,h2{margin:0;text-wrap:balance}
 .calday{aspect-ratio:1/1.05;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0}
 .calday.today{border-color:var(--sun);color:var(--sun);font-weight:700}
 .calday.sel{background:var(--sun);color:var(--on-sun);border-color:var(--sun)}
+/* ---------- Team-Design: Neon-Hintergrund + „Liquid Glass“ (nur interne Konten, 13.11.2026) ---------- */
+body.teamui{background:transparent}
+body.teamui::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(6,16,31,.10) 0%,rgba(6,16,31,.22) 40%,rgba(6,16,31,.55) 100%),url('img/bg-portrait.jpg') center 40%/cover no-repeat}
+@media (min-aspect-ratio:4/5){body.teamui::before{background:linear-gradient(180deg,rgba(6,16,31,.10) 0%,rgba(6,16,31,.25) 45%,rgba(6,16,31,.55) 100%),url('img/bg-landscape.jpg') center 40%/cover no-repeat}}
+body.teamui .app{background:transparent}
+body.teamui{--glass:rgba(24,44,78,.24);--glass-strong:rgba(14,30,56,.78);--glass-line:rgba(255,255,255,.14);--glass-hi:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(255,255,255,.04),0 8px 28px rgba(0,0,0,.28)}
+body.teamui .vrow,body.teamui .tile,body.teamui .rrow,body.teamui .calday,body.teamui .empty,body.teamui .upl,body.teamui .stxt.cur,body.teamui .mini{
+  background:var(--glass);border-color:var(--glass-line);box-shadow:var(--glass-hi);
+  -webkit-backdrop-filter:blur(10px) saturate(190%);backdrop-filter:blur(10px) saturate(190%)}
+body.teamui .pill:not(.sun):not(.on),body.teamui .iconbtn{background:rgba(255,255,255,.08);border-color:var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%)}
+body.teamui .navbar{background:rgba(16,32,58,.45);border-color:var(--glass-line);box-shadow:var(--glass-hi);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%)}
+body.teamui .navbar button.on{background:rgba(255,255,255,.12)}
+body.teamui .sheet{background:var(--glass-strong);border-color:var(--glass-line);box-shadow:var(--glass-hi);
+  -webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%)}
+body.teamui .scrim{background:rgba(0,0,0,.45)}
+body.teamui .field input,body.teamui .field select,body.teamui .field textarea{background:rgba(6,16,31,.55);border-color:var(--glass-line)}
+body.teamui .calday.sel{background:var(--sun);border-color:var(--sun)}
+body.teamui .calday.today{border-color:var(--sun)}
+[data-act=startday].calday{aspect-ratio:auto}
+body.teamui .tile.hot{border-color:rgba(255,204,0,.45)}
+body.teamui .h-giant,body.teamui .h-big,body.teamui .h-sec{text-shadow:0 2px 14px rgba(0,0,0,.55)}
+body.teamui .small{text-shadow:0 1px 6px rgba(0,0,0,.5)}
+@media (prefers-reduced-transparency:reduce){body.teamui .vrow,body.teamui .tile,body.teamui .rrow,body.teamui .sheet,body.teamui .navbar{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}}
+
 .calday .dots{display:flex;gap:2px;height:6px}.calday .dots i{width:5px;height:5px;border-radius:50%;display:block}
 .arch{margin:18px 0 6px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card)}
 .arch>summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);list-style:none}
@@ -795,6 +822,7 @@ function render(){
   if(ae && $('#view').contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ pendingRender = true; return; }
   pendingRender = false;
   const c = cur();
+  document.body.classList.toggle('teamui', !!account && !lockedArtist && !myProducer && account?.role !== 'artist' && account?.role !== 'producer' && !c.preview);
   const fn = {roster:vRoster, artist:vArtist, release:vRelease, track:vTrack, tracks:vTracks, cockpit:vCockpit, producer:vProducer, artiststart:vArtistStart, content:vContent, beats:vBeats, sessions:vSessions, recordings:vRecordings, pmonth:vPMonth, pcontent:vPContent, market:vMarket, pin:vPin, apin:vArtistPin, video:vVideo, live:vLive, profile:vProfile, cal:vCal, search:vSearch, week:vWeek}[c.r] || vRoster;
   if(me && loaded.has('people')){ for(const a of artists()) if(!SEEN[a.id]) SEEN[a.id] = new Date().toISOString(); saveSeen(); }
   const ctxA = ctxArtist(c); if(ctxA && !isPreview()) markSeen(ctxA);
@@ -3535,7 +3563,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140100';
+const APP_VERSION = '202611140130';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
