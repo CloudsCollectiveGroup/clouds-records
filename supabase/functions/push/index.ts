@@ -8,7 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const owners = (x: any): string[] => Array.isArray(x?.os) && x.os.length ? x.os : (x?.o ? [x.o] : []);
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-const TEAM: Record<string, string> = { C: "cem", K: "kasper", N: "nikolina", TH: "torben" };
+const TEAM: Record<string, string> = { C: "cem", K: "kacper", N: "nikolina", TH: "torben" };  // K: alter Login "kasper" wird in usersFor mit berücksichtigt
 const fmt = (iso?: string) => iso ? iso.split("-").reverse().join(".") : "";
 
 let cfg: Record<string, string> | null = null;
@@ -30,7 +30,7 @@ async function personName(id: string) {
 }
 // Empfänger-Schlüssel (C, K, N, TH, P oder Artist-ID) → Benutzer-IDs
 async function usersFor(keys: string[]) {
-  const names = keys.map(k => TEAM[k]).filter(Boolean);
+  const names = keys.flatMap(k => k === "K" ? ["kacper", "kasper"] : (TEAM[k] ? [TEAM[k]] : []));
   const persons = keys.filter(k => !TEAM[k] && k !== "P" && k !== "A");
   const ids = new Set<string>();
   if (names.length) (await sb.from("members").select("user_id").in("username", names)).data?.forEach((r: any) => ids.add(r.user_id));
@@ -58,7 +58,7 @@ async function morning() {
   const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
   const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
   const { data: members } = await sb.from("members").select("user_id,username,role,person");
-  const KEY: Record<string, string> = { cem: "C", kasper: "K", nikolina: "N", torben: "TH" };
+  const KEY: Record<string, string> = { cem: "C", kasper: "K", kacper: "K", nikolina: "N", torben: "TH" };
   let sent = 0;
   for (const m of members || []) {
     const key = m.role === "producer" ? "P" : m.role === "artist" ? m.person : KEY[m.username];
@@ -98,7 +98,7 @@ async function weekly() {
   const R = Object.fromEntries(rels.map((r: any) => [r.id, r]));
   const due = (t: any) => { if (t.due) return t.due; const r = R[t.release]; if (!r?.date) return ""; const d = new Date(r.date + "T12:00:00"); d.setDate(d.getDate() - 7 * (PHASE_WEEKS[t.phase] ?? 0)); return ymd(d); };
   const { data: members } = await sb.from("members").select("user_id,username,role,person");
-  const KEY: Record<string, string> = { cem: "C", kasper: "K", nikolina: "N", torben: "TH" };
+  const KEY: Record<string, string> = { cem: "C", kasper: "K", kacper: "K", nikolina: "N", torben: "TH" };
   let sent = 0;
   for (const m of members || []) {
     const key = m.role === "producer" ? "P" : m.role === "artist" ? m.person : KEY[m.username];
