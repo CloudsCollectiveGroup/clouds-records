@@ -2625,10 +2625,11 @@ function vWeek(){
 /* ---------- Kalender ---------- */
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
-  for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r), a:r.artist, c:'#39FF88', go:['release', r.id]});
+  for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r) + (!lockedArtist && r.shareCal ? ' · 🌐 Label-Kalender' : ''), a:r.artist, c:'#39FF88', go:['release', r.id]});
   for(const x of vals(S.studio||{})) if(x.date && x.status !== 'Abgelehnt' && mine(x.artist)) ev.push({date:x.date, time:x.time, t:'Studio · ' + (x.room||'') + (x.status === 'Angefragt' ? ' (angefragt)' : ''), a:x.artist, c:'#FFCC00', act:['editstudio', x.id]});
   for(const r of vals(S.releases)) if(r.video && mine(r.artist)) (r.video.days||[]).forEach(d => d.date && ev.push({date:d.date, time:d.time, t:'Musikvideo-Dreh' + (d.loc ? ' · ' + d.loc : ''), a:r.artist, c:'#F26D6D', go:['video', r.id]}));
   for(const p of artists()) if(mine(p.id)) (p.shoots||[]).forEach(x => x.date && ev.push({date:x.date, time:x.time, t: isPhoto(x) ? 'Fotoshooting · ' + (x.title||'') + (x.purpose ? ' · ' + x.purpose : '') : 'Reel-Drehtag · ' + (x.title||'') + ' (' + (x.reels||[]).length + ' Reels)', a:p.id, c: isPhoto(x) ? PHOTO_COL : '#C2407A', go:['video', shootKey(p.id, x.id)]}));
+  if(aid && !lockedArtist && isPreview()) for(const r of vals(S.releases)) if(r.shareCal && r.date && r.artist !== aid) ev.push({date:r.date, t:'Release · ' + (person(r.artist)?.name || '') + ' · ' + relTitle(r), a:r.artist, c:'#39FF88', dim:true, go:['release', r.id]}); /* Artist-Sicht: so sieht es der Artist */
   if(aid && lockedArtist) for(const x of (S.labelRels||[])) if(x.date && x.artist !== aid) ev.push({date:x.date, t:'Release · ' + (x.name || '') + (x.title ? ' · ' + x.title : ''), a:x.artist, c:'#39FF88', dim:true});
   for(const g of vals(S.gigs||{})) if(g.date && g.req !== 'abgelehnt' && (!aid || gigIn(g, aid))) ev.push({date:g.date, time:g.stage || g.getin, t:'Live · ' + (aid && g.artist !== aid ? (person(g.artist)?.name || '') + ' · ' : '') + (g.title||'Auftritt') + (g.venue ? ' · ' + g.venue : '') + (g.req === 'offen' ? ' (Anfrage)' : g.status === 'Abgesagt' ? ' (abgesagt)' : ''), a:g.artist, c:GIG_COL, go:['video', gigKey(g.id)], dim: g.status === 'Abgesagt'});
   for(const x of vals(S.content||{})) if(x.date && mine(x.artist)) ev.push({date:x.date, t:(x.kind||'Post') + ' · ' + (x.title||'') + ' · ' + (x.channel||''), a:x.artist, c:'#5B8DEF', act:['editcontent', x.id], dim: x.status === 'Live'});
@@ -3438,7 +3439,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132330';
+const APP_VERSION = '202611132345';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
