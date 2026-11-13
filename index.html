@@ -134,7 +134,7 @@ h1,h2{margin:0;text-wrap:balance}
 .yearhead i{flex:1;height:1px;background:var(--line2)}
 .rrow{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 12px 8px 8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px;color:var(--ink)}
 .rrow.now{border-color:var(--sun)}
-.rrow.done{opacity:.55}
+.rrow.done{opacity:1;border-color:rgba(57,255,136,.28)}
 .cover{width:56px;height:56px;border-radius:12px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;color:#fff;font-family:var(--mono);font-weight:600;font-size:10px}
 .cover svg{display:none}
 .rrow .t{font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -348,7 +348,7 @@ const TEMPLATE = [
   ['T-10','Fotoshooting-Tag (Cover & Pressefotos)','N'],
   ['T-8','Mix & Master final','P'],
   ['T-8','Cover fertig','N'],
-  ['T-6','Videodreh-Tag & Reels','TH'],
+  ['T-6','Videodreh-Tag & Reels (Regie Niki)','N'],
   ['T-6','Distributor-Upload, ISRC','K'],
   ['T-4','Spotify-Pitch & Promo-Plan','K'],
   ['T-2','Pre-Save-Link & Content-Snippets','N'],
@@ -888,11 +888,10 @@ function vArtist(c){
         <div class="counter"><b>${done('EP')}/${p.eps}</b><span>EPS</span></div>
         <div class="counter"><b>${done('Album')}/${p.albums}</b><span>${p.albums===1?'ALBUM':'ALBEN'}</span></div>
       </div></div>`;
-  const live = rs.filter(r => r.status !== 'Released'), arch = rs.filter(r => r.status === 'Released');
-  const body = [...new Set(live.map(relYear))].sort((a,b) => a-b).map(y => `
-    <div class="yearhead"><span class="lbl">JAHR ${y}${yearRange(p,y)}</span><i></i></div>
-    ${live.filter(r => relYear(r) === y).map(r => relRow(r, r === curR)).join('')}`).join('')
-    + (arch.length ? `<details class="arch"><summary>ARCHIV · ${arch.length} VERÖFFENTLICHT</summary><div class="stack" style="gap:0;margin-top:8px">${arch.sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(r => relRow(r, false)).join('')}</div></details>` : '');
+  /* Veröffentlichte bleiben im Jahr stehen (abgeschlossen ✓) – kein Archiv */
+  const body = [...new Set(rs.map(relYear))].sort((a,b) => a-b).map(y => { const ys = rs.filter(r => relYear(r) === y), dn = ys.filter(r => r.status === 'Released').length;
+    return `<div class="yearhead"><span class="lbl">JAHR ${y}${yearRange(p,y)}${dn ? ' · ' + dn + ' DRAUSSEN ✓' : ''}</span><i></i></div>
+    ${ys.map(r => relRow(r, r === curR)).join('')}`; }).join('');
   return `${head}${banner()}${previewBanner()}
     <div class="pad" style="padding-top:22px">
       <div class="between"><h2 class="h-sec">Projekte</h2><span class="small">${pfl} PFLICHT${vor?` + ${vor} VORAB`:''}</span></div>
@@ -922,14 +921,14 @@ function songsSection(r, kids){
 }
 function relRow(r, now){
   const T = TYPE[r.type], ts = tasksOf(r.id), dn = ts.filter(t=>t.done).length;
-  const statusTxt = r.status.toUpperCase() + (ts.length && isActive(r) ? ` · ${dn}/${ts.length}` : '');
+  const statusTxt = r.status === 'Released' ? '✓ DRAUSSEN' + (campsOf(r).some(x => x.status === 'Läuft') ? ' · KAMPAGNE LÄUFT' : '') : r.status.toUpperCase() + (ts.length && isActive(r) ? ` · ${dn}/${ts.length}` : '');
   const par = parentOf(r), kids = isProject(r) ? childrenOf(r) : [];
   const parent = par ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">${r.pos ? 'SONG ' + r.pos + ' · ' : ''}${esc(relName(par).toUpperCase())}${par.title ? ' · ' + esc(par.title.toUpperCase()) : ''}</span>`
     : kids.length ? `<span class="small" style="color:${TYPE.EP.c};font-weight:700">${projSummary(r).toUpperCase()}</span>` : '';
   return `<button class="rrow ${now?'now':''} ${r.status==='Released'?'done':''}" data-go="release" data-id="${esc(r.id)}">
     <span class="cover" style="background:${T.c}">${coverUrl(r) ? coverTag(r) : miniVinyl}<span style="position:relative">${esc(r.code)}</span></span>
     <span class="stack" style="gap:4px;min-width:0"><span class="t">${esc(relTitle(r))}${now?'<span class="sticker tilt3" style="padding:3px 6px;font-size:10px">JETZT</span>':''}</span>
-      <span class="small" style="font-weight:700;color:${isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}${r.coop?.partner ? ' · KOOP ' + esc(r.coop.partner.toUpperCase()) : ''}${r.video ? ' · VIDEO' : ''}</span>${parent}</span>
+      <span class="small" style="font-weight:700;color:${r.status === 'Released' ? '#39ff88' : isActive(r)?T.c:'var(--mute)'}">${esc(statusTxt)}${r.coop?.partner ? ' · KOOP ' + esc(r.coop.partner.toUpperCase()) : ''}${r.video ? ' · VIDEO' : ''}</span>${parent}</span>
     <span class="small" style="text-align:right">${r.date ? fmt(r.date) : 'DATUM<br>OFFEN'}</span></button>`;
 }
 
@@ -1198,10 +1197,10 @@ const campKpi = x => { const sp = num(x.spent) || num(x.budget); const parts = [
   if(num(x.follower) && sp) parts.push((sp / num(x.follower)).toFixed(2).replace('.', ',') + ' €/FOLLOWER');
   return parts.join(' · '); };
 /* Mitwirkende pro Release (Arbeit & Kosten) – Kosten: Team + betroffener Artist (col 'mwfin'), Dienstleister: col 'contacts' (nur Team) */
-const MW_ROLES = ['Produktion/Beat','Recording','Mix','Mastering','Songwriting','Feature','Arrangement','Cover/Artwork','Foto','Video','Schnitt','Content/Social','Styling','Promo/PR','Komplettpaket','Sonstiges'];
+const MW_ROLES = ['Management/A&R','Produktion/Beat','Recording','Mix','Mastering','Songwriting','Feature','Arrangement','Cover/Artwork','Foto','Video-Regie','Video','Schnitt','Content/Social','Styling','Promo/PR','Distribution/Upload','Anmeldungen (GEMA/GVL/DPMA)','Komplettpaket','Sonstiges'];
 const DL_KIND = ['Person','Firma'];
 /* Verzeichnis: intern (Team + Produzent, Kategorien in contacts 'int-<key>') und extern (contacts) */
-const DL_DEFAULT = {N:['Cover/Artwork','Foto','Content/Social'], TH:['Video'], K:['Promo/PR']};
+const DL_DEFAULT = {C:['Management/A&R'], TH:['Management/A&R'], N:['Cover/Artwork','Foto','Content/Social','Video-Regie'], K:['Promo/PR','Distribution/Upload','Anmeldungen (GEMA/GVL/DPMA)']};
 const ctCats = c => Array.isArray(c?.cats) && c.cats.length ? c.cats : (c?.role ? [c.role] : []);
 function dlInternal(){
   const team = MW_TEAM.map(([k,l]) => ({key:'t:' + k, cid:'int-' + k, name:l, sub:'Team', def: DL_DEFAULT[k] || []}));
@@ -1393,11 +1392,11 @@ function sheetCamp(rid, idx){
 }
 function campaignOverview(){
   const list = vals(S.releases).flatMap(r => campsOf(r).map(x => ({x, r}))); if(!list.length) return '';
-  const run = list.filter(({x}) => x.status === 'Läuft'), byM = {};
+  const run = list.filter(({x}) => x.status !== 'Beendet'), byM = {};
   list.forEach(({x}) => { const m = (x.from || x.to || '').slice(0,7); if(m) byM[m] = (byM[m] || 0) + (num(x.spent) || num(x.budget)); });
   const months = Object.keys(byM).sort().slice(-4);
-  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kampagnen</h2><span class="small">${run.length} LAUFEN</span></div>
-    <div class="pad stack" style="gap:8px;padding-top:10px">${run.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.to ? ' · BIS ' + fmt(x.to) : ''} · ${eur(num(x.spent) || num(x.budget))}</span></span>${icon.chev}</button>`).join('') || '<span class="small">Gerade läuft keine Kampagne.</span>'}
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kampagnen</h2><span class="small">${run.filter(({x}) => x.status === 'Läuft').length} LAUFEN · ${run.filter(({x}) => x.status !== 'Läuft').length} GEPLANT</span></div>
+    <div class="pad stack" style="gap:8px;padding-top:10px">${run.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.to ? ' · BIS ' + fmt(x.to) : ''} · ${eur(num(x.spent) || num(x.budget))}</span></span>${icon.chev}</button>`).join('') || '<span class="small">Keine laufende oder geplante Kampagne.</span>'}
     ${months.map(m => `<div class="between small"><span>${ymLabel(m).toUpperCase()}</span><b>${eur(byM[m])}</b></div>`).join('')}</div>`;
 }
 function coopSection(r){
@@ -1770,6 +1769,8 @@ function vContent(c){
   return `<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="sticker">NUR TEAM</span></div>${banner()}
     <div class="pad" style="padding-top:18px"><h1 class="h-giant">Content</h1><div class="small" style="margin-top:6px">ALLE BEITRÄGE ALLER RELEASES</div></div>
     <div class="chips">${pendingContent().length ? `<button class="pill ${f==='freigabe'?'on':''}" data-act="cfilter" data-id="freigabe" style="border-color:#FFE14D;color:${f==='freigabe'?'':'#FFE14D'};box-shadow:0 0 10px rgba(255,225,77,.4)">Zur Freigabe · ${pendingContent().length}</button>` : chip('freigabe','Freigaben')}${chip('offen','Offen')}${chip('woche','Nächste 7 Tage')}${chip('alle','Alle')}</div>
+    ${(() => { const cl = vals(S.releases).flatMap(r => campsOf(r).map(x => ({x, r}))).filter(({x}) => x.status !== 'Beendet').sort((a,b) => (a.x.from||'9').localeCompare(b.x.from||'9'));
+      return cl.length ? `<div class="pad between" style="padding-top:18px"><h2 class="h-sec">Kampagnen</h2><span class="small">${cl.filter(({x}) => x.status === 'Läuft').length} LAUFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cl.map(({x, r}) => `<button class="vrow" data-go="release" data-id="${esc(r.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(person(r.artist)?.name || '')} · ${esc(relTitle(r))}</b><span class="small">${esc((x.platform||'').toUpperCase())}${x.goal ? ' · ' + esc(x.goal.toUpperCase()) : ''}${x.from ? ' · ' + fmt(x.from) : ''}${x.to ? '–' + fmt(x.to) : ''} · ${num(x.budget) ? eur(num(x.budget)) : 'BUDGET OFFEN'}</span></span><span class="status" style="color:${CAMP_COL[x.status||'Geplant']};flex:none">● ${esc((x.status||'Geplant').toUpperCase())}</span></button>`).join('')}</div>` : ''; })()}
     <div class="pad stack" style="gap:8px;padding-top:12px">${Object.keys(groups).length ? Object.entries(groups).map(([k, xs]) => `<div class="yearhead" style="margin:14px 0 4px"><span class="lbl">${esc(k.toUpperCase())}</span><i></i></div>${xs.map(x => contentRow(x, true)).join('')}`).join('') :
       `<div class="empty" style="margin:0"><b>Keine Beiträge in dieser Ansicht</b><span class="small">Content-Pläne legst du im jeweiligen Release unter „Content-Plan“ an.</span></div>`}</div>`;
 }
@@ -2359,7 +2360,7 @@ function vPin(c){
   const apvSec = cPend.length ? `<div class="pad between" style="padding-top:22px"><h2 class="h-sec">Content-Freigaben</h2><span class="apv" style="--n:#FFE14D">${cPend.length} OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${cPend.map(x => contentRow(x, true)).join('')}</div>` : '';
   const pick = team ? `<div class="chips">${['C','K','N','TH','P'].map(x => `<button class="pill ${x===k?'on':''}" data-act="pinwho" data-id="${x}">${esc(ownerName(x))}</button>`).join('')}</div>` : '';
   setTimeout(() => { if(cur().r === 'pin' && !c.k){ SEEN.__pin = new Date().toISOString(); saveSeen(); } }, 1500);
-  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
+  return `${cloudSvg}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span><span class="row" style="gap:8px"><button class="iconbtn" data-go="search" aria-label="Suchen">${icon.search}</button><button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span></div>${banner()}
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">${k && ownView ? (new Date().getHours() < 11 ? 'Moin' : new Date().getHours() < 18 ? 'Hey' : 'N\'Abend') + ' ' + esc(ownerName(k).split(' ')[0]) + '.' : k ? esc(ownerName(k)) : 'Pinnwand'}</h1><div class="small" style="margin-top:6px">${k ? (ownView ? esc(new Date().toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'}).toUpperCase()) + ' · DEINE PINNWAND' : 'PINNWAND VON ' + esc(ownerName(k).toUpperCase())) : 'DEIN ACCOUNT IST KEINER PERSON ZUGEORDNET – OBEN EINE PERSON WÄHLEN'}</div></div>
     ${k ? `<div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))!important">
       <button class="tile ${over.length ? 'hot' : ''}" data-act="pinjump" data-id="pinOver" style="text-align:left;cursor:pointer;color:inherit;font:inherit${over.length ? ';border-color:rgba(255,90,110,.5);background:rgba(255,90,110,.12)' : ''}"><b ${over.length ? 'style="color:#FF5A6E"' : ''}>${over.length}</b><span class="lbl" style="color:var(--ink)">ÜBERFÄLLIG</span></button>
@@ -2378,6 +2379,22 @@ function vPin(c){
     <span id="pinOver"></span>${sec('Überfällig', over, true)}<span id="pinToday"></span>${sec('Heute', today)}<span id="pinWeek"></span>${sec('Diese Woche', week)}${sec('Später', later)}
     ${!notes.length && !items.length && !sReq.length && !cPend.length && !terms.length && k ? '<div class="empty" style="margin:20px"><b>Nichts offen</b><span class="small">Hier landet alles, wo du zuständig oder mit eingetragen bist – plus Nachrichten an dich.</span></div>' : ''}
     ${sent.length && !c.k ? `<div class="pad between" style="padding-top:26px"><h2 class="h-sec">Von dir gesendet</h2><span class="small">OFFEN</span></div><div class="pad stack" style="gap:8px;padding-top:10px">${sent.map(sentCard).join('')}</div>` : ''}`;
+}
+/* Technik-Meldung: jeder (Team, Produzent, Artist) → Pinnwand Cem */
+const TECH_AREA = ['Anmeldung / Login','Pinnwand','Release-Plan','Fahrplan & Checklisten','Tracks & Audio','Content','Studio-Anfragen','Live','Kalender','Push-Mitteilungen','Sonstiges'];
+function sheetTech(){
+  const fields = `<p class="small" style="margin:0 0 12px">Etwas klappt nicht oder fehlt? Kurz beschreiben – geht direkt an Cem.</p>
+    <div class="grid2">${Sel('area','WO?',TECH_AREA,'Sonstiges')}${Sel('dev','GERÄT',['iPhone','Android','iPad','Mac / PC'],'iPhone')}</div>
+    <div class="field"><label for="f-text">WAS IST PASSIERT?</label><textarea id="f-text" name="text" rows="4" required placeholder="z. B. Bei Release-Check lässt sich ‚Cover‘ nicht abhaken"></textarea></div>
+    <div class="grid2">${Sel('prio','WIE DRINGEND?',[['','Normal'],['1','Dringend – blockiert mich']],'')}${F('link','SCREENSHOT-LINK (OPTIONAL)','','url','placeholder="https://…"')}</div>`;
+  sheet('🛠 Technik-Problem melden', fields, async fd => {
+    if(fd.link && !safeUrl(fd.link)){ toast('Link muss mit https:// beginnen'); return false; }
+    const isArtist = account?.role === 'artist', mk = myKey();
+    const text = `🛠 TECHNIK${fd.prio ? ' · DRINGEND' : ''} · ${fd.area} · ${fd.dev}\n${(fd.text||'').trim()}`;
+    const ok = await put('notes', uid('n'), {text, kind:'tech', to:['C'], due:'', link:safeUrl(fd.link), from:account?.name || 'Team', fromKey: mk || '', fromId: me || '', ...(isArtist ? {fromArtist: lockedArtist} : {}), doneBy:[], at:new Date().toISOString()}, false);
+    if(ok) toast('Gemeldet · Cem kümmert sich');
+    return ok ? undefined : false;
+  });
 }
 function sheetNote(preTo){
   const mk = myKey(), isArtist = account?.role === 'artist';
@@ -2597,7 +2614,7 @@ function vArtistPin(c){
       <span class="stack" style="flex:1;gap:3px;min-width:0"><b style="font-weight:600">${d.photo ? 'Shooting' : 'Dreh'} · ${fmt(d.date)}${d.time ? ' · ' + esc(d.time) + (d.end ? '–' + esc(d.end) : '') : ''}</b><span class="small">${esc(d.lbl)}${d.loc ? ' · ' + esc(d.loc.toUpperCase()) : ''}</span></span>${icon.chev}</button>`;
   if(own) setTimeout(() => { if(cur().r === 'apin'){ SEEN['__apin_' + aid] = new Date().toISOString(); saveSeen(); } }, 1500);
   const empty = !notes.length && !tasks.length && !studio.length && !shoots.length && !gigsOf(aid).some(g => gigOpen(g) && (!g.date || g.date >= t0)) && !ptasks.length && !atodos.length && !aterms.length;
-  return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>${own ? `<button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
+  return `${cloudSvg}${previewBanner()}<div class="topbar"><span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>${own ? `<span class="row" style="gap:8px"><button class="iconbtn" data-act="tech" aria-label="Technik-Problem melden" title="Technik-Problem melden">🛠</button><button class="pill sun" data-act="addnote" style="min-height:36px">${icon.plus} Nachricht</button></span>` : `<button class="pill sun" data-act="addnoteto" data-id="${esc(aid)}" style="min-height:36px">${icon.plus} Nachricht an ${esc(p.name)}</button>`}</div>
     <div class="pad" style="padding-top:14px;position:relative"><h1 class="h-giant">Pinnwand</h1><div class="small" style="margin-top:6px">ALLES, WAS BEI ${own ? 'DIR' : esc(p.name.toUpperCase())} LIEGT</div>
       <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="pill" data-go="search">🔍 Suche</button><button class="pill" data-go="week">📊 Woche</button><button class="pill" data-act="calfor" data-id="${esc(aid)}">📅 Kalender</button><button class="pill" data-go="profile" data-id="${esc(aid)}">👤 Profil · ${profileScore(aid)} %</button></div></div>
     ${own ? pushBanner() : ''}${own && pushOn ? '<div class="row" style="margin:10px 20px 0"><button class="pill" data-act="pushprefs">🔔 Mitteilungen einstellen</button></div>' : ''}
@@ -2908,6 +2925,7 @@ async function act(a, id){
   if(a === 'pcfilter'){ const [f, pid] = id.split('|'); return tab('pcontent', {id:pid, f}); }
   if(a === 'fav'){ const b = S.beats?.[id]; if(!b || !me) return; const f = {...favsOf(b)}; if(f[me]) delete f[me]; else f[me] = account?.name || 'Team'; await put('beats', id, {favs:f}); return; }
   if(a === 'addnote') return sheetNote();
+  if(a === 'tech') return sheetTech();
   if(a === 'pushon') return pushEnable();
   if(a === 'notedone'){ const n = S.notes?.[id], k = myKey() || cur().k; if(n && k) await put('notes', id, {doneBy:[...new Set([...(n.doneBy||[]), k])]}); return; }
   if(a === 'notedel'){ const n = S.notes?.[id]; if(n) await del('notes', id); return; }
@@ -3337,7 +3355,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132100';
+const APP_VERSION = '202611132200';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
