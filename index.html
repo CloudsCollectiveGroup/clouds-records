@@ -385,7 +385,7 @@ const COLORS = [
 const SP_AUDIO = 'https://cloudsgroup.sharepoint.com/sites/CloudsRecords/Audio/';
 const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
 const dropboxFolder = (p, label, cls='small', style='font-weight:700') => safeUrl(p?.dropbox) ? `<a class="${cls}" href="${esc(p.dropbox)}" target="_blank" rel="noopener" style="${style}">${label}</a>` : '';
-const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin','mwfin','contacts'];
+const COLS = ['people','releases','tasks','tracks','versions','comments','content','studio','beats','sessions','interest','recordings','pplan','pcontent','notes','chat','profile','todos','gigs','gigfin','mwfin','contacts','expenses'];
 
 /* ---------- Zustand ---------- */
 const S = {people:{},releases:{},tasks:{},tracks:{},versions:{},comments:{}};
@@ -1296,6 +1296,62 @@ async function mwToCredits(rid){
   }
   toast(n ? n + ' Beteiligte übernommen · Anteile im Track eintragen' : 'Alle Mitwirkenden stehen schon in den Credits');
 }
+/* Ausgaben (nur Team, col 'expenses') – Übersicht; Buchhaltung bleibt im CloudStudios-System, Beleg-Nr. verbindet */
+const EXP_CAT = ['Abo / Software','Beatstars','Equipment','Distributor / Gebühren','GEMA / GVL / DPMA','Studio','Reise / Fahrt','Werbung','Dienstleister','Sonstiges'];
+const EXP_RHY = [['einmalig','Einmalig'],['monatlich','Monatlich'],['jährlich','Jährlich']];
+const monthsBetween = (a, b) => { const [y1,m1] = a.split('-').map(Number), [y2,m2] = b.split('-').map(Number); return (y2-y1)*12 + (m2-m1); };
+function expToDate(x){ /* bis heute angefallen */
+  const a = num(x.amt), st = (x.date || todayIso()).slice(0,7), en = x.end ? x.end.slice(0,7) : ymNow(), last = en < ymNow() ? en : ymNow();
+  if(x.rhy === 'monatlich') return st > last ? 0 : a * (monthsBetween(st, last) + 1);
+  if(x.rhy === 'jährlich') return st > last ? 0 : a * (Math.floor(monthsBetween(st, last) / 12) + 1);
+  return a;
+}
+const expActive = x => x.rhy !== 'einmalig' && x.rhy && (x.date || '') <= todayIso() && (!x.end || x.end >= todayIso());
+const expMonthly = x => !expActive(x) ? 0 : x.rhy === 'monatlich' ? num(x.amt) : num(x.amt) / 12;
+const expScopeName = sc => !sc || sc === 'label' ? 'Label allgemein' : sc.startsWith('r:') ? (S.releases[sc.slice(2)] ? (person(S.releases[sc.slice(2)].artist)?.name || '') + ' · ' + relTitle(S.releases[sc.slice(2)]) : 'Release') : (person(sc.slice(2))?.name || sc);
+const expOwner = sc => !sc || sc === 'label' ? 'label' : sc.startsWith('r:') ? (S.releases[sc.slice(2)]?.artist || 'label') : sc.slice(2);
+function expensesOverview(){
+  const ex = vals(S.expenses||{});
+  const fix = ex.reduce((a, x) => a + expMonthly(x), 0);
+  const mwOpen = vals(S.releases).flatMap(r => mwOf(r).map(e => mwFin(r.id, e.id))).filter(f => f && !f.paid).reduce((a, f) => a + num(f.amt), 0);
+  const exOpen = ex.filter(x => x.rhy === 'einmalig' && !x.paid).reduce((a, x) => a + num(x.amt), 0);
+  const charge = ex.filter(x => x.charge).reduce((a, x) => a + expToDate(x), 0) + vals(S.releases).flatMap(r => campsOf(r)).filter(c => c.charge).reduce((a, c) => a + (num(c.spent) || 0), 0);
+  /* pro Kopf: manuelle + Mitwirkende + Kampagnen */
+  const per = {}; const add = (k, v) => { if(v) per[k] = (per[k] || 0) + v; };
+  ex.forEach(x => add(expOwner(x.scope), expToDate(x)));
+  vals(S.releases).forEach(r => { mwOf(r).forEach(e => add(r.artist, num(mwFin(r.id, e.id)?.amt))); campsOf(r).forEach(c => add(r.artist, num(c.spent) || 0)); });
+  const heads = [...artists(), ...producers()].filter(p => per[p.id]).map(p => [p.name, per[p.id]]); if(per.label) heads.push(['Label allgemein', per.label]);
+  const subs = ex.filter(expActive).sort((a,b) => (a.title||'').localeCompare(b.title||''));
+  const ones = ex.filter(x => !expActive(x)).sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 8);
+  const row = x => `<button class="vrow" data-act="expedit" data-id="${esc(x.id)}" style="cursor:pointer;width:100%;text-align:left;font:inherit"><span class="stack" style="flex:1;gap:2px;min-width:0"><b>${esc(x.title || x.cat || 'Ausgabe')}</b><span class="small">${esc((x.cat||'').toUpperCase())} · ${esc(expScopeName(x.scope).toUpperCase())}${x.rhy && x.rhy !== 'einmalig' ? ' · ' + esc(x.rhy.toUpperCase()) : x.date ? ' · ' + fmt(x.date) : ''}${x.beleg ? ' · ' + esc(x.beleg.toUpperCase()) : ''}${x.charge ? ' · VERRECHNEN' : ''}</span></span><span class="stack" style="align-items:flex-end;gap:2px;flex:none"><b>${eur(num(x.amt))}</b>${x.rhy === 'einmalig' || !x.rhy ? `<span class="small" style="color:${x.paid ? 'var(--album)' : 'var(--sun)'}">${x.paid ? 'BEZAHLT' : 'OFFEN'}</span>` : ''}</span></button>`;
+  return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Ausgaben</h2><button class="pill" data-act="expnew">${icon.plus} Ausgabe</button></div>
+    <div class="pad" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding-top:12px">
+      <div class="tile dark"><b style="font-size:20px">${eur(fix)}</b><span class="lbl">FIXKOSTEN / MONAT</span></div>
+      <div class="tile ${mwOpen + exOpen ? 'hot' : 'dark'}"><b style="font-size:20px">${eur(mwOpen + exOpen)}</b><span class="lbl" style="color:var(--ink)">OFFEN</span></div>
+      <div class="tile dark"><b style="font-size:20px">${eur(charge)}</b><span class="lbl">VERRECHENBAR</span></div></div>
+    ${heads.length ? `<div class="pad stack" style="gap:6px;padding-top:14px"><span class="flabel">BISHER PRO KOPF (SONGS, KAMPAGNEN, AUSGABEN)</span>${heads.sort((a,b) => b[1]-a[1]).map(([n, v]) => `<div class="between small"><span>${esc(n.toUpperCase())}</span><b>${eur(v)}</b></div>`).join('')}</div>` : ''}
+    <div class="pad stack" style="gap:8px;padding-top:14px">${subs.length ? `<span class="flabel">LAUFENDE ABOS & FIXKOSTEN</span>${subs.map(row).join('')}` : ''}
+      ${ones.length ? `<span class="flabel" style="margin-top:6px">LETZTE AUSGABEN</span>${ones.map(row).join('')}` : ''}
+      ${!ex.length ? '<span class="small">Abos (z. B. Beatstars), Software, Equipment, Gebühren, Reisen – Label allgemein, pro Artist, für Anvmal oder ein Release. Song-Kosten (Mitwirkende) und Kampagnen zählen automatisch mit. Belege laufen weiter über das CloudStudios-System, hier nur Betrag + Beleg-Nr.</span>' : ''}</div>`;
+}
+function sheetExpense(id){
+  const x = id ? S.expenses?.[id] : {rhy:'einmalig', cat:'Abo / Software', scope:'label', date:todayIso()}; if(!x) return;
+  const scopes = [['label','Label allgemein'], ...artists().map(p => ['a:' + p.id, 'Artist · ' + p.name]), ...producers().map(p => ['p:' + p.id, 'Produzent · ' + p.name]), ...vals(S.releases).filter(r => r.title || r.status !== 'Idee').sort((a,b) => (a.artist+a.order).localeCompare(b.artist+b.order)).map(r => ['r:' + r.id, 'Release · ' + (person(r.artist)?.name || '') + ' · ' + relTitle(r)])];
+  const fields = `${F('title','BEZEICHNUNG',x.title||'','text','required placeholder="z. B. Beatstars Pro-Abo"')}
+    <div class="grid2">${F('amt','BETRAG (€)',x.amt||'','text','required inputmode="decimal"')}${Sel('cat','KATEGORIE',EXP_CAT,x.cat||'Sonstiges')}</div>
+    ${Sel('scope','FÜR WEN?',scopes,x.scope||'label')}
+    <div class="grid2">${Sel('rhy','RHYTHMUS',EXP_RHY,x.rhy||'einmalig')}${F('date','DATUM / START',x.date||'','date')}</div>
+    <div class="grid2">${F('end','ENDE (BEI ABOS, OPTIONAL)',x.end||'','date')}${F('beleg','BELEG-NR. (CLOUDSTUDIOS)',x.beleg||'','text','placeholder="z. B. BE-0123"')}</div>
+    <div class="grid2">${Sel('paid','BEZAHLT',[['','Nein'],['1','Ja']],x.paid ? '1' : '')}${Sel('charge','MIT ARTIST VERRECHNEN',[['','Nein'],['1','Ja']],x.charge ? '1' : '')}</div>
+    <div class="field"><label for="f-note">NOTIZ</label><textarea id="f-note" name="note" rows="2">${esc(x.note||'')}</textarea></div>`;
+  const extra = id ? `<button class="btn danger" type="button" id="delExp" style="width:100%;margin-top:10px">Ausgabe löschen</button>` : '';
+  const form = sheet(id ? 'Ausgabe bearbeiten' : 'Neue Ausgabe', fields, async fd => {
+    if(!num(fd.amt)){ toast('Betrag fehlt'); return false; }
+    const doc = {title:(fd.title||'').trim(), amt:String(fd.amt).trim(), cat:fd.cat, scope:fd.scope, rhy:fd.rhy, date:fd.date||'', end:fd.end||'', beleg:(fd.beleg||'').trim(), paid: fd.paid === '1', charge: fd.charge === '1', note:(fd.note||'').trim()};
+    return await put('expenses', id || uid('ex'), id ? doc : {...doc, at:new Date().toISOString()}, !!id) ? undefined : false;
+  }, extra);
+  const d = form.querySelector('#delExp'); if(d) d.onclick = async () => { if(d.dataset.sure){ await del('expenses', id); $('#sheetRoot').innerHTML = ''; } else { d.dataset.sure = 1; d.textContent = 'Wirklich löschen? Erneut tippen'; } };
+}
 /* Dienstleister-Verzeichnis (Label-Reiter) */
 const contactUse = key => vals(S.releases).flatMap(r => mwOf(r).filter(e => e.who === key).map(e => ({r, e})));
 let dlCat = '';
@@ -2031,6 +2087,7 @@ function vCockpit(){
     <div class="pad stack" style="gap:8px;padding-top:12px">${contracts}</div>
     ${missing.length ? `<div class="empty"><b>Vertragsbeginn fehlt</b><span class="small">${esc(missing.map(m=>m.name).join(', '))}. Ohne Beginn rechnet die Timeline keine Vertragsjahre.</span></div>` : ''}
     ${campaignOverview()}
+    ${expensesOverview()}
     ${contactsOverview()}`;
 }
 
@@ -2971,6 +3028,8 @@ async function act(a, id){
   if(a === 'ctnew') return sheetContact(null);
   if(a === 'ctedit') return sheetContact(id);
   if(a === 'ctint') return sheetContactInt(id);
+  if(a === 'expnew') return sheetExpense(null);
+  if(a === 'expedit') return sheetExpense(id);
   if(a === 'dlcat'){ dlCat = id; return render(); }
   if(a === 'campnew') return sheetCamp(id);
   if(a === 'campedit'){ const [rid, i] = id.split('|'); return sheetCamp(rid, +i); }
@@ -3355,7 +3414,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611132200';
+const APP_VERSION = '202611132230';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
