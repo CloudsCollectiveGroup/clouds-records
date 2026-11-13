@@ -833,8 +833,8 @@ function vArtist(c){
   const pfl = rs.filter(r => r.pflicht).length, vor = rs.length - pfl;
   const startTxt = p.start ? `VERTRAG ${parse(p.start).getFullYear()}–${parse(p.start).getFullYear()+p.years}` : 'VERTRAGSBEGINN OFFEN';
   const darkText = p.color === '#F2C94C';
-  const head = `<div class="ahead" style="background:${esc(p.color)};${darkText?'color:var(--ink)':''}">
-      <span class="bigini" aria-hidden="true" style="color:${esc(p.color2)};opacity:1">${esc(p.name[0])}</span>
+  const head = `<div class="ahead ${photoOf(p) ? 'hasphoto' : ''}" style="background:${esc(p.color)};${darkText && !photoOf(p) ?'color:var(--ink)':''}">
+      ${photoOf(p) ? `<img class="aheadimg" src="${esc(photoOf(p))}" alt=""><span class="aheadshade"></span>` : `<span class="bigini" aria-hidden="true" style="color:${esc(p.color2)};opacity:1">${esc(p.name[0])}</span>`}
       <div class="between" style="padding-top:12px;position:relative">
         ${isPreview() ? '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>' : `<button class="back" style="color:inherit" data-act="back">${icon.back}ARTISTS</button>`}
         ${isPreview() ? '' : `<div class="row" style="gap:8px"><button class="chip" data-act="preview" data-id="${esc(p.id)}">ARTIST-SICHT</button><button class="chip" data-act="editperson" data-id="${esc(p.id)}">VERTRAG</button></div>`}
@@ -2790,7 +2790,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611131610';
+const APP_VERSION = '202611131620';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
