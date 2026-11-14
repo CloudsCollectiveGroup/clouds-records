@@ -2951,6 +2951,36 @@ function upcomingBlock(aid){
   return `<div class="pad between" style="padding-top:24px"><h2 class="h-sec">Kommende Termine</h2><button class="pill" data-act="calfor" data-id="${esc(aid)}">Kalender →</button></div>
     <div class="pad stack" style="gap:8px;padding-top:10px">${ev.map(row).join('') || '<span class="small">Gerade keine Termine geplant.</span>'}</div>`;
 }
+/* Kalender-Abo (iCal): geheimer Link pro Person, Edge Function "ical" */
+const isLabelLead = () => !lockedArtist && ['C','TH'].includes(myKey());
+async function calLink(scope, reset){
+  const {data, error} = await sb.rpc('cal_link', {p_scope: scope, p_reset: !!reset});
+  if(error || typeof data !== 'string'){ toast('Link nicht verfügbar: ' + (error?.message || 'unbekannt')); return ''; }
+  return CFG.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/ical?t=' + data;
+}
+async function sheetCalSub(){
+  const root = $('#sheetRoot');
+  const box = (scope, title, sub) => `<div class="vrow" style="flex-direction:column;align-items:stretch;gap:10px;margin-top:12px" data-scope="${scope}">
+      <span class="stack" style="gap:3px"><b style="font-weight:600">${title}</b><span class="small">${sub}</span></span>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><a class="pill sun" data-sub="webcal" href="#" style="min-height:40px;text-decoration:none">📲 Im Kalender abonnieren</a><button type="button" class="pill" data-sub="copy" style="min-height:40px">Link kopieren</button></div>
+      <button type="button" class="small" data-sub="reset" style="background:none;border:0;color:var(--muted);text-align:left;padding:0;cursor:pointer;text-decoration:underline">Link zurücksetzen (alter Link funktioniert dann nicht mehr)</button></div>`;
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true" aria-label="Kalender abonnieren"><div class="sheet"><div class="grab"></div>
+    <h2 class="h-sec" style="margin-bottom:6px">Kalender abonnieren</h2>
+    <span class="small" style="line-height:1.5">Deine Termine aus der App automatisch in deinem Handy-Kalender (iPhone, Mac, Google, Outlook). Nur zum Lesen – ändern geht weiter in der App. Studio-Slots erscheinen, sobald sie bestätigt sind.</span>
+    ${box('mine', 'Meine Termine', lockedArtist ? 'Releases, Studio, Drehs, Shootings, Live und Termine mit dir' : 'Alles, wo du eingetragen bist: Termine, Studio als Gast, Crew-Einsätze')}
+    ${isLabelLead() ? box('label', 'Label-Kalender (alle Artists)', 'Nur für Cem &amp; Thorben – z. B. fürs Arbeitshandy') : ''}
+    <div class="small" style="margin-top:16px;line-height:1.6"><b>iPhone / Mac:</b> „Im Kalender abonnieren“ tippen → „Abonnieren“ bestätigen.<br><b>Google Kalender:</b> „Link kopieren“ → am Computer calendar.google.com → links bei „Weitere Kalender“ auf + → „Per URL“ → einfügen. Google aktualisiert Abos nur alle paar Stunden.<br><b>Wichtig:</b> Den Link nicht weitergeben – wer ihn hat, sieht deine Termine.</div>
+    <button class="btn alt" type="button" data-close style="width:100%;margin-top:16px">Schließen</button></div></div>`;
+  root.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { root.innerHTML = ''; });
+  root.querySelectorAll('[data-scope]').forEach(el => {
+    const scope = el.dataset.scope; let url = '';
+    const get = async reset => { if(!url || reset) url = await calLink(scope, reset); if(url) el.querySelector('[data-sub=webcal]').href = url.replace(/^https?:/, 'webcal:'); return url; };
+    get(false);
+    el.querySelector('[data-sub=webcal]').onclick = async e => { if(!url){ e.preventDefault(); if(await get(false)) location.href = url.replace(/^https?:/, 'webcal:'); } };
+    el.querySelector('[data-sub=copy]').onclick = async () => { const u = await get(false); if(u) copyText(u); };
+    el.querySelector('[data-sub=reset]').onclick = async () => { if(!confirm('Neuen Link erzeugen? Bereits abonnierte Kalender mit dem alten Link bekommen dann keine Termine mehr.')) return; if(await get(true)) toast('Neuer Link erstellt – bitte neu abonnieren'); };
+  });
+}
 function calEvents(aid){
   const ev = [], mine = x => !aid || x === aid;
   for(const r of vals(S.releases)) if(r.date && mine(r.artist)) ev.push({date:r.date, t:'Release · ' + relTitle(r) + (!lockedArtist && r.shareCal ? ' · 🌐 Label-Kalender' : ''), a:r.artist, c:'#39FF88', go:['release', r.id]});
@@ -2981,7 +3011,7 @@ function vCal(c){
   const row = e => `<${ro(e) ? 'div' : 'button'} class="vrow" ${ro(e) ? '' : `data-act="calgo" data-id="${esc(JSON.stringify(e.go ? {go:e.go} : {act:e.act}))}"`} style="cursor:${ro(e) ? 'default' : 'pointer'};width:100%;text-align:left;font:inherit;${e.dim ? 'opacity:.55' : ''}"><span style="width:10px;height:10px;border-radius:50%;background:${e.c};box-shadow:0 0 8px ${e.c};flex:none"></span>
     <span class="stack" style="flex:1;gap:2px;min-width:0"><b style="font-weight:600">${esc(e.t)}</b><span class="small">${e.time ? esc(e.time) + ' · ' : ''}${!aid && e.a ? esc((person(e.a)?.name||'').toUpperCase()) : ''}${ro(e) ? 'NUR INFO' : ''}</span></span>${ro(e) ? '' : icon.chev}</${ro(e) ? 'div' : 'button'}>`;
   const cats = CAL_CATS.filter(([k]) => (k !== 'session' || !aid));
-  const legend = `<div class="row" style="gap:6px;flex-wrap:wrap;width:100%"><button class="pill ${!CALF.mine ? 'on' : ''}" data-act="calmine" data-id="0" style="min-height:32px">Alle</button><button class="pill ${CALF.mine ? 'on' : ''}" data-act="calmine" data-id="1" style="min-height:32px">Nur meine</button>${CALF.off.length ? '<button class="pill" data-act="calcat" data-id="*" style="min-height:32px">Alle Arten zeigen</button>' : ''}</div>
+  const legend = `<div class="row" style="gap:6px;flex-wrap:wrap;width:100%"><button class="pill ${!CALF.mine ? 'on' : ''}" data-act="calmine" data-id="0" style="min-height:32px">Alle</button><button class="pill ${CALF.mine ? 'on' : ''}" data-act="calmine" data-id="1" style="min-height:32px">Nur meine</button>${CALF.off.length ? '<button class="pill" data-act="calcat" data-id="*" style="min-height:32px">Alle Arten zeigen</button>' : ''}${!isPreview() || lockedArtist ? '<button class="pill sun" data-act="calsub" style="min-height:32px;margin-left:auto">📲 Abonnieren</button>' : ''}</div>
     <div class="row" style="gap:6px;flex-wrap:nowrap;overflow-x:auto;width:100%;margin-top:8px;padding-bottom:4px;scrollbar-width:none">${cats.map(([k, col, l]) => { const off = CALF.off.includes(k), n = all.filter(e => calCat(e) === k && (!CALF.mine || calOwn(e, aid))).length;
       return `<button class="pill" data-act="calcat" data-id="${k}" aria-pressed="${!off}" style="min-height:30px;font-size:12px;gap:6px;flex:none;${off ? 'opacity:.4;text-decoration:line-through' : ''}"><i class="sw" style="background:${col};width:9px;height:9px;border-radius:50%;display:inline-block"></i>${l}${n ? ' · ' + n : ''}</button>`; }).join('')}</div>`;
   return `${cloudSvg}${previewBanner()}<div class="topbar">${lockedArtist || c.a ? `<button class="back" data-act="back">${icon.back}Zurück</button>` : '<span class="brand"><span><b>CLOUDS<svg class="bolt" width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M8 0L0 10h5l-2 8 9-11H7l1-7z" fill="#FFCC00"/></svg>RECORDS</b><i>Where Creativity Becomes Reality</i></span></span>'}<span class="small">${aid ? esc((person(aid)?.name||'').toUpperCase()) : 'ALLE ARTISTS'}</span></div>${banner()}
@@ -3396,6 +3426,7 @@ async function act(a, id){
   if(a === 'addstudio') return sheetStudio(id);
   if(a === 'sconfirm' || a === 'sdecline'){ const x = S.studio?.[id]; if(x){ await put('studio', id, {status: a === 'sconfirm' ? 'Bestätigt' : 'Abgelehnt'}); toast(a === 'sconfirm' ? 'Bestätigt · jetzt in TimeTree eintragen' : 'Abgelehnt'); } return; }
   if(a === 'musictab'){ const [w, aid] = id.split('|'), pv = cur().preview; return w === 'rec' ? tab('recordings', pv ? {id:aid, preview:pv} : {id:aid}) : tab('tracks', pv ? {artist:aid, preview:pv} : {artist:aid}); }
+  if(a === 'calsub') return sheetCalSub();
   if(a === 'calcat'){ CALF.off = id === '*' ? [] : CALF.off.includes(id) ? CALF.off.filter(x => x !== id) : [...CALF.off, id]; saveCalf(); render(); return; }
   if(a === 'calmine'){ CALF.mine = id === '1'; saveCalf(); render(); return; }
   if(a === 'rsvp'){ const [sid, ans] = id.split('|'); await studioRsvp(sid, ans); return; }
@@ -3808,7 +3839,7 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 /* Automatisches Update: neue Version erkennen und neu laden (umgeht den Zwischenspeicher von GitHub/iPhone) */
-const APP_VERSION = '202611140740';
+const APP_VERSION = '202611141400';
 async function checkUpdate(){
   try{
     const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
